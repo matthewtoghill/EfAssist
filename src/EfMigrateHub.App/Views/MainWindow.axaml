@@ -1,0 +1,514 @@
+﻿<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EfMigrateHub.App.ViewModels"
+        xmlns:app="using:EfMigrateHub.App"
+        xmlns:core="using:EfMigrateHub.Core"
+        xmlns:ae="using:AvaloniaEdit"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="780"
+        x:Class="EfMigrateHub.App.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Icon="/Assets/avalonia-logo.ico"
+        Width="1200" Height="780"
+        MinWidth="900" MinHeight="600"
+        Title="{Binding WindowTitle}">
+
+    <Design.DataContext>
+        <vm:MainWindowViewModel />
+    </Design.DataContext>
+
+    <Window.Styles>
+        <Style Selector="TextBlock.label">
+            <Setter Property="Opacity" Value="0.7" />
+            <Setter Property="Margin" Value="0,8,0,2" />
+        </Style>
+        <Style Selector="TextBlock.hint">
+            <Setter Property="Opacity" Value="0.6" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style Selector="TextBlock.heading">
+            <Setter Property="FontSize" Value="20" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="TextBlock.group">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,0,0,6" />
+        </Style>
+
+        <!-- The default splitter is an invisible strip, so there is nothing to aim at. This gives it
+             a grip, a resize cursor and a hover highlight. -->
+        <Style Selector="GridSplitter.pane">
+            <Setter Property="Height" Value="12" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Cursor" Value="SizeNorthSouth" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Background="{TemplateBinding Background}">
+                        <Border Name="Grip" Height="4" Width="64" CornerRadius="2"
+                                Background="{DynamicResource SplitterGripBrush}"
+                                HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="GridSplitter.pane:pointerover /template/ Border#Grip">
+            <Setter Property="Background" Value="{DynamicResource SplitterGripHoverBrush}" />
+            <Setter Property="Height" Value="5" />
+        </Style>
+
+        <!-- Console lines. Channel decides the class, the class decides the colour, and the colour
+             follows the theme. An unmatched channel keeps the theme foreground. -->
+        <Style Selector="SelectableTextBlock.channelError">
+            <Setter Property="Foreground" Value="{DynamicResource OutputErrorBrush}" />
+        </Style>
+        <Style Selector="SelectableTextBlock.channelWarn">
+            <Setter Property="Foreground" Value="{DynamicResource OutputWarnBrush}" />
+        </Style>
+        <Style Selector="SelectableTextBlock.channelInfo">
+            <Setter Property="Foreground" Value="{DynamicResource OutputMutedBrush}" />
+        </Style>
+
+        <!-- Migration state badge -->
+        <Style Selector="Border.badgeApplied">
+            <Setter Property="Background" Value="{DynamicResource StateAppliedBrush}" />
+        </Style>
+        <Style Selector="Border.badgePending">
+            <Setter Property="Background" Value="{DynamicResource StatePendingBrush}" />
+        </Style>
+        <Style Selector="Border.badgeUnknown">
+            <Setter Property="Background" Value="{DynamicResource StateUnknownBrush}" />
+        </Style>
+
+        <!-- Diagnosis panel: red for a failure, amber for something EF warned about and carried on
+             past. The two are not the same and the panel should not pretend they are. -->
+        <Style Selector="Border.diagnosis">
+            <Setter Property="Background" Value="{DynamicResource DiagnosisErrorBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource DiagnosisErrorBorderBrush}" />
+        </Style>
+        <Style Selector="Border.diagnosis.warning">
+            <Setter Property="Background" Value="{DynamicResource DiagnosisWarningBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource DiagnosisWarningBorderBrush}" />
+        </Style>
+    </Window.Styles>
+
+    <Grid RowDefinitions="Auto,Auto,*,Auto">
+
+        <!-- Preflight banner. Nothing can work without dotnet ef, so this sits above everything. -->
+        <Border Grid.Row="0"
+                IsVisible="{Binding HasPreflightProblem}"
+                Background="{DynamicResource BlockerBackgroundBrush}" Padding="12,8">
+            <StackPanel Spacing="6">
+                <TextBlock Text="dotnet ef is not available" FontWeight="SemiBold"
+                           Foreground="{DynamicResource BlockerForegroundBrush}" />
+                <TextBlock Text="{Binding PreflightProblem}" TextWrapping="Wrap"
+                           Foreground="{DynamicResource BlockerForegroundBrush}" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBox Text="{Binding InstallCommand, Mode=OneWay}"
+                             IsReadOnly="True" FontFamily="Consolas,Menlo,monospace"
+                             MinWidth="360" />
+                    <Button Content="Copy" Command="{Binding CopyInstallCommandCommand}" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- Toolbar -->
+        <Border Grid.Row="1" IsVisible="{Binding HasWorkspace}"
+                Padding="12,8" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource SubtleBorderBrush}">
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding WorkspacePath}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding EnvironmentSummary}" Classes="label" Margin="0,2,0,0" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                    <ComboBox ItemsSource="{Binding Themes}" SelectedItem="{Binding Theme}"
+                              VerticalAlignment="Center" MinWidth="96"
+                              ToolTip.Tip="Light, dark, or follow the operating system. Applies to every workspace." />
+                    <Button Content="Refresh contexts" Command="{Binding RefreshContextsCommand}" />
+                    <Button Content="Cancel" Command="{Binding Session.CancelCommand}" />
+                    <Button Content="Close workspace" Command="{Binding CloseWorkspaceCommand}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Landing: no workspace open. Nothing builds until something is picked. -->
+        <Border Grid.Row="2" IsVisible="{Binding !HasWorkspace}" Padding="32">
+            <StackPanel Spacing="16" MaxWidth="640" HorizontalAlignment="Center">
+                <TextBlock Text="EfMigrateHub" Classes="heading" />
+                <TextBlock TextWrapping="Wrap" Opacity="0.8"
+                           Text="Open a solution, or a folder containing one, to manage its Entity Framework Core migrations." />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Content="Open solution…" Command="{Binding OpenSolutionCommand}" />
+                    <Button Content="Open folder…" Command="{Binding OpenFolderCommand}" />
+                </StackPanel>
+
+                <TextBlock Text="Recent" Classes="label"
+                           IsVisible="{Binding HasRecentWorkspaces}" />
+                <ItemsControl ItemsSource="{Binding RecentWorkspaces}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:RecentWorkspace">
+                            <Button HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Left"
+                                    Margin="0,0,0,4" Padding="12,8"
+                                    CommandParameter="{Binding Path}"
+                                    Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).OpenRecentCommand}"
+                                    ToolTip.Tip="{Binding Path}">
+                                <StackPanel Spacing="1">
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding Location}" FontSize="11" Opacity="0.6"
+                                               TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <TextBlock Text="{Binding EnvironmentSummary}" Classes="label" />
+            </StackPanel>
+        </Border>
+
+        <!-- Workspace -->
+        <Grid Grid.Row="2" IsVisible="{Binding HasWorkspace}" ColumnDefinitions="320,*">
+
+            <ScrollViewer Grid.Column="0" Padding="12">
+                <StackPanel>
+                    <TextBlock Text="Startup project" Classes="label" />
+                    <ComboBox ItemsSource="{Binding Projects}"
+                              SelectedItem="{Binding StartupProject}"
+                              DisplayMemberBinding="{Binding Name}"
+                              HorizontalAlignment="Stretch" />
+                    <TextBlock Classes="hint"
+                               Text="Built and loaded by EF. Must reference Microsoft.EntityFrameworkCore.Design." />
+
+                    <TextBlock Text="Migrations project" Classes="label" />
+                    <ComboBox ItemsSource="{Binding Projects}"
+                              SelectedItem="{Binding MigrationsProject}"
+                              DisplayMemberBinding="{Binding Name}"
+                              HorizontalAlignment="Stretch" />
+                    <TextBlock Classes="hint" Text="Where migration files live." />
+
+                    <TextBlock Text="DbContext" Classes="label" />
+                    <ComboBox ItemsSource="{Binding Contexts}"
+                              SelectedItem="{Binding SelectedContext}"
+                              DisplayMemberBinding="{Binding Name}"
+                              HorizontalAlignment="Stretch" />
+                    <TextBlock Classes="hint caution" Margin="0,4,0,0"
+                               IsVisible="{Binding ShowsStaleContexts}"
+                               Text="This list could not be refreshed and may be out of date." />
+
+                    <TextBlock Text="Context discovery" Classes="label" />
+                    <ComboBox ItemsSource="{Binding DiscoveryModes}"
+                              SelectedItem="{Binding DiscoveryMode}"
+                              HorizontalAlignment="Stretch" />
+                    <TextBlock Classes="hint"
+                               Text="When to list DbContexts on open. Listing builds the startup project, so large solutions may prefer Manual." />
+
+                    <TextBlock Text="Migration list" Classes="label" />
+                    <ComboBox ItemsSource="{Binding Migrations.RefreshModes}"
+                              SelectedItem="{Binding Migrations.RefreshMode}"
+                              HorizontalAlignment="Stretch" />
+                    <TextBlock Classes="hint"
+                               Text="When to load migrations. Remembered rows always read as Unknown until refreshed — applied state is never cached." />
+
+                    <CheckBox Content="Skip build (--no-build)" IsChecked="{Binding NoBuild}" Margin="0,12,0,0" />
+                    <TextBlock Classes="hint"
+                               Text="Faster, but uses whatever was last compiled. Results can be wrong if the model has changed since." />
+
+                    <CheckBox Content="Offline (--no-connect)" IsChecked="{Binding Migrations.Offline}" Margin="0,8,0,0" />
+                    <TextBlock Classes="hint" Margin="0,0,0,8"
+                               Text="List migration names without reaching the database. Applied state shows as Unknown." />
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Tabs above, console below, draggable divider between. -->
+            <Grid Grid.Column="1" RowDefinitions="*,Auto,200" Margin="0,12,12,0">
+
+                <TabControl Grid.Row="0" SelectedIndex="{Binding SelectedTabIndex}">
+                    <TabItem Header="Migrations">
+                        <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="0,8,0,0">
+
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
+                                <Button Content="Refresh list" Command="{Binding Migrations.RefreshCommand}" />
+                                <!-- Icon only: the arrow shows which way the list currently runs. -->
+                                <Button Command="{Binding Migrations.ToggleSortOrderCommand}"
+                                        Content="{Binding Migrations.SortGlyph}"
+                                        ToolTip.Tip="{Binding Migrations.SortTooltip}"
+                                        FontSize="15" Padding="10,0" MinWidth="36"
+                                        VerticalAlignment="Stretch"
+                                        HorizontalContentAlignment="Center" />
+                                <TextBlock Text="{Binding Migrations.Summary}" VerticalAlignment="Center" Opacity="0.8" />
+                                <Border IsVisible="{Binding Migrations.ShowsStaleWarning}"
+                                        Classes="caution"
+                                        CornerRadius="3" Padding="6,2" VerticalAlignment="Center"
+                                        ToolTip.Tip="The last command failed, was cancelled, or could not be listed. Refresh to confirm what is really there.">
+                                    <TextBlock Text="May be out of date" FontSize="11" />
+                                </Border>
+                            </StackPanel>
+
+                            <Border Grid.Row="1" IsVisible="{Binding Migrations.HasConnectionWarning}"
+                                    Classes="caution"
+                                    CornerRadius="4" Padding="10,8" Margin="0,0,0,8">
+                                <TextBlock Text="{Binding Migrations.ConnectionWarning}" TextWrapping="Wrap" FontSize="12" />
+                            </Border>
+
+                            <Border Grid.Row="2" BorderThickness="1" BorderBrush="{DynamicResource SubtleBorderBrush}">
+                                <Grid>
+                                    <TextBlock IsVisible="{Binding !Migrations.HasMigrations}"
+                                               Text="No migrations to show. Refresh the list, or add the first migration below."
+                                               Opacity="0.6" Margin="16" TextWrapping="Wrap"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    <ListBox ItemsSource="{Binding Migrations.Migrations}"
+                                             SelectedItem="{Binding Migrations.SelectedMigration}"
+                                             IsVisible="{Binding Migrations.HasMigrations}">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:MigrationRow">
+                                                <Grid ColumnDefinitions="34,86,*">
+                                                    <!-- Chronological position, so it does not
+                                                         renumber when the sort order flips. -->
+                                                    <TextBlock Grid.Column="0" Text="{Binding Index}"
+                                                               HorizontalAlignment="Right" Margin="0,0,10,0"
+                                                               VerticalAlignment="Center"
+                                                               Opacity="0.55" FontSize="12"
+                                                               FontFamily="Consolas,Menlo,monospace" />
+                                                    <Border Grid.Column="1" CornerRadius="3" Padding="6,2"
+                                                            HorizontalAlignment="Left" VerticalAlignment="Center"
+                                                            Classes.badgeApplied="{Binding State, Converter={x:Static app:OutputConverters.IsApplied}}"
+                                                            Classes.badgePending="{Binding State, Converter={x:Static app:OutputConverters.IsPending}}"
+                                                            Classes.badgeUnknown="{Binding State, Converter={x:Static app:OutputConverters.IsUnknownState}}">
+                                                        <TextBlock Text="{Binding State, Converter={x:Static app:OutputConverters.StateLabel}}"
+                                                                   Foreground="{DynamicResource StateBadgeForegroundBrush}"
+                                                                   FontSize="11" />
+                                                    </Border>
+                                                    <StackPanel Grid.Column="2" Spacing="1">
+                                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                                        <TextBlock Text="{Binding Id}" FontSize="11" Opacity="0.55"
+                                                                   FontFamily="Consolas,Menlo,monospace" />
+                                                    </StackPanel>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </Grid>
+                            </Border>
+
+                            <Grid Grid.Row="3" ColumnDefinitions="*,*,*" Margin="0,10,0,0">
+
+                                <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                                    <TextBlock Text="Add migration" Classes="group" />
+                                    <TextBox Text="{Binding Migrations.NewMigrationName}"
+                                             PlaceholderText="MigrationName" />
+                                    <TextBlock Text="{Binding Migrations.NewMigrationNameError}"
+                                               IsVisible="{Binding Migrations.HasNewMigrationNameError}"
+                                               Classes="danger" FontSize="11" TextWrapping="Wrap"
+                                               Margin="0,4,0,0" />
+                                    <TextBox Text="{Binding Migrations.OutputDirectory}"
+                                             PlaceholderText="Output folder (optional)" Margin="0,6,0,0" />
+                                    <Button Content="Add" Command="{Binding Migrations.AddCommand}"
+                                            HorizontalAlignment="Stretch" Margin="0,6,0,0" />
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="1" Margin="0,0,10,0">
+                                    <TextBlock Text="Apply to database" Classes="group" />
+                                    <Button Content="Update to latest" Command="{Binding Migrations.UpdateToLatestCommand}"
+                                            HorizontalAlignment="Stretch" />
+                                    <Button Content="Update to selected" Command="{Binding Migrations.UpdateToSelectedCommand}"
+                                            HorizontalAlignment="Stretch" Margin="0,6,0,0" />
+                                    <TextBlock Classes="hint"
+                                               Text="Rolling back to an earlier migration is confirmed first, and names what would be reverted." />
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="Destructive" Classes="group danger" />
+                                    <Button Content="Remove last migration" Command="{Binding Migrations.RemoveCommand}"
+                                            HorizontalAlignment="Stretch" />
+                                    <CheckBox Content="Force (revert if applied)"
+                                              IsChecked="{Binding Migrations.ForceRemove}" Margin="0,4,0,0" />
+                                    <Button Content="Revert all migrations" Command="{Binding Migrations.RevertAllCommand}"
+                                            HorizontalAlignment="Stretch" Margin="0,6,0,0" />
+                                    <Button Content="Drop database…" Command="{Binding Migrations.DropDatabaseCommand}"
+                                            HorizontalAlignment="Stretch" Margin="0,6,0,0"
+                                            Classes="danger" />
+                                </StackPanel>
+                            </Grid>
+                        </Grid>
+                    </TabItem>
+                    <TabItem Header="Script">
+                        <Grid RowDefinitions="Auto,Auto,Auto,*" Margin="0,8,0,0">
+
+                            <!-- Range -->
+                            <Grid Grid.Row="0" ColumnDefinitions="Auto,*" Margin="0,0,0,8">
+                                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12"
+                                            VerticalAlignment="Center">
+                                    <TextBlock Text="Range" VerticalAlignment="Center" FontWeight="SemiBold" />
+                                    <ComboBox ItemsSource="{Binding Script.Ranges}"
+                                              SelectedItem="{Binding Script.Range}" MinWidth="120" />
+                                    <StackPanel Orientation="Horizontal" Spacing="6"
+                                                IsVisible="{Binding Script.IsCustomRange}">
+                                        <TextBlock Text="from" VerticalAlignment="Center" Opacity="0.7" />
+                                        <ComboBox ItemsSource="{Binding Script.FromOptions}"
+                                                  SelectedItem="{Binding Script.SelectedFrom}" MinWidth="170" />
+                                        <TextBlock Text="to" VerticalAlignment="Center" Opacity="0.7" />
+                                        <ComboBox ItemsSource="{Binding Script.ToOptions}"
+                                                  SelectedItem="{Binding Script.SelectedTo}" MinWidth="170" />
+                                    </StackPanel>
+                                </StackPanel>
+                                <CheckBox Grid.Column="1" Content="Idempotent"
+                                          HorizontalAlignment="Right" VerticalAlignment="Center"
+                                          IsChecked="{Binding Script.Idempotent}"
+                                          IsEnabled="{Binding Script.CanUseIdempotent}"
+                                          ToolTip.Tip="{Binding Script.IdempotentTooltip}" />
+                            </Grid>
+
+                            <Border Grid.Row="1" IsVisible="{Binding Script.HasRangeWarning}"
+                                    Classes="caution"
+                                    CornerRadius="4" Padding="10,8" Margin="0,0,0,8">
+                                <TextBlock Text="{Binding Script.RangeWarning}" TextWrapping="Wrap" FontSize="12" />
+                            </Border>
+
+                            <!-- Destination and actions -->
+                            <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+                                <StackPanel Grid.Column="0" Spacing="6">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="Scripts folder" VerticalAlignment="Center"
+                                                   Width="90" Opacity="0.7" />
+                                        <TextBox Text="{Binding Script.OutputFolder}" MinWidth="320"
+                                                 PlaceholderText="Not set — ask each time" />
+                                        <Button Content="Browse…" Command="{Binding Script.BrowseOutputFolderCommand}" />
+                                        <Button Content="Clear" Command="{Binding Script.ClearOutputFolderCommand}" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="File name" VerticalAlignment="Center"
+                                                   Width="90" Opacity="0.7" />
+                                        <TextBox Text="{Binding Script.FileName}" MinWidth="320" />
+                                        <Button Content="Reset" Command="{Binding Script.ResetFileNameCommand}"
+                                                ToolTip.Tip="Go back to the name suggested by the current choices." />
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding Script.DestinationHint}" Classes="hint" />
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="1" Spacing="6" VerticalAlignment="Top">
+                                    <TextBlock Classes="hint caution"
+                                               IsVisible="{Binding Script.ShowsStaleWarning}"
+                                               Text="The SQL below is from an earlier run — the last attempt failed." />
+                                    <Button Content="Generate script" Command="{Binding Script.GenerateCommand}"
+                                            HorizontalAlignment="Stretch" />
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <Button Content="Copy SQL" Command="{Binding Script.CopySqlCommand}" />
+                                        <Button Content="Open file" Command="{Binding Script.OpenCommand}" />
+                                        <Button Content="Open folder" Command="{Binding Script.RevealCommand}" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Spacing="12">
+                                        <CheckBox Content="Wrap" IsChecked="{Binding WrapSql}"
+                                                  ToolTip.Tip="Wrap long lines instead of scrolling sideways." />
+                                        <TextBlock Text="Ctrl+F to search" Classes="hint"
+                                                   VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- Viewer. AvaloniaEdit rather than a TextBox, for syntax highlighting,
+                                 line numbers and its built-in Ctrl+F panel. Read-only: editing a
+                                 generated script in here would be edits with nowhere to go, since the
+                                 file on disk is what Open file and Open folder point at.
+
+                                 The document and the syntax definition are set from code-behind —
+                                 Document needs a TextDocument rather than the view model's string, and
+                                 a definition carries literal colours, so it has to be reloaded when
+                                 the theme variant changes. See MainWindow.axaml.cs. -->
+                            <Border Grid.Row="3" BorderThickness="1" BorderBrush="{DynamicResource SubtleBorderBrush}">
+                                <Grid>
+                                    <TextBlock IsVisible="{Binding !Script.HasSql}"
+                                               Text="No script generated yet. Pick a range and choose Generate script."
+                                               Opacity="0.6" Margin="16" TextWrapping="Wrap"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    <ae:TextEditor x:Name="SqlEditor"
+                                                   IsVisible="{Binding Script.HasSql}"
+                                                   IsReadOnly="True"
+                                                   ShowLineNumbers="True"
+                                                   WordWrap="{Binding WrapSql}"
+                                                   FontFamily="Consolas,Menlo,monospace" FontSize="12"
+                                                   Background="Transparent"
+                                                   HorizontalScrollBarVisibility="Auto"
+                                                   VerticalScrollBarVisibility="Auto" />
+                                </Grid>
+                            </Border>
+                        </Grid>
+                    </TabItem>
+                </TabControl>
+
+                <GridSplitter Grid.Row="1" Classes="pane" ResizeDirection="Rows"
+                              HorizontalAlignment="Stretch"
+                              ToolTip.Tip="Drag to resize the output panel" />
+
+                <!-- Output console -->
+                <Grid Grid.Row="2" RowDefinitions="Auto,Auto,*">
+
+                    <!-- Guidance for a recognised failure. Sits directly above the raw output it
+                         explains, so the real message is never more than a glance away. -->
+                    <Border Grid.Row="0" IsVisible="{Binding Session.HasDiagnosis}"
+                            Classes="diagnosis"
+                            Classes.warning="{Binding Session.Diagnosis.IsWarning, FallbackValue=False}"
+                            BorderThickness="1"
+                            CornerRadius="4" Padding="10,8" Margin="0,0,0,8">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" Spacing="4">
+                                <TextBlock Text="{Binding Session.Diagnosis.Title}"
+                                           FontWeight="SemiBold" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding Session.Diagnosis.Guidance}"
+                                           TextWrapping="Wrap" FontSize="12" Opacity="0.85" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
+                                        VerticalAlignment="Top">
+                                <Button Content="Copy diagnostics"
+                                        Command="{Binding Session.CopyDiagnosticsCommand}" />
+                                <Button Content="Dismiss"
+                                        Command="{Binding Session.DismissDiagnosisCommand}" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
+                        <TextBlock Text="Output" VerticalAlignment="Center" FontWeight="SemiBold" />
+                        <CheckBox Content="Wrap" IsChecked="{Binding WrapOutput}" VerticalAlignment="Center"
+                                  ToolTip.Tip="Wrap long lines instead of scrolling sideways. Applies to every workspace." />
+                        <Button Content="Copy all" Command="{Binding Session.CopyOutputCommand}"
+                                ToolTip.Tip="Copy the whole console. Individual lines can also be selected directly." />
+                        <Button Content="Copy diagnostics" Command="{Binding Session.CopyDiagnosticsCommand}" />
+                        <Button Content="Clear" Command="{Binding Session.ClearOutputCommand}" />
+                        <ProgressBar IsIndeterminate="True" Width="120" VerticalAlignment="Center"
+                                     IsVisible="{Binding Session.IsRunning}" />
+                    </StackPanel>
+
+                    <Border Grid.Row="2" BorderThickness="1" BorderBrush="{DynamicResource SubtleBorderBrush}" Background="{DynamicResource PanelBackgroundBrush}">
+                        <!-- Horizontal scrolling only makes sense when lines are not wrapped. -->
+                        <ScrollViewer Name="OutputScroller" Padding="8"
+                                      HorizontalScrollBarVisibility="{Binding WrapOutput, Converter={x:Static app:OutputConverters.HorizontalScrollBar}}">
+                            <ItemsControl ItemsSource="{Binding Session.Output}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="core:OutputLine">
+                                        <!-- Selectable so a single line can be copied without reaching
+                                             for the whole diagnostics block. -->
+                                        <SelectableTextBlock
+                                            Text="{Binding Text}"
+                                            Classes.channelError="{Binding Channel, Converter={x:Static app:OutputConverters.IsErrorChannel}}"
+                                            Classes.channelWarn="{Binding Channel, Converter={x:Static app:OutputConverters.IsWarnChannel}}"
+                                            Classes.channelInfo="{Binding Channel, Converter={x:Static app:OutputConverters.IsInfoChannel}}"
+                                            FontFamily="Consolas,Menlo,monospace"
+                                            FontSize="12"
+                                            TextWrapping="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).WrapOutput, Converter={x:Static app:OutputConverters.Wrapping}}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+            </Grid>
+        </Grid>
+
+        <!-- Status bar -->
+        <Border Grid.Row="3" Padding="12,6" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource SubtleBorderBrush}">
+            <TextBlock Text="{Binding Session.StatusMessage}" TextTrimming="CharacterEllipsis" />
+        </Border>
+    </Grid>
+</Window>

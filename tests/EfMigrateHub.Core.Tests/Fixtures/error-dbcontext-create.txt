@@ -1,0 +1,4 @@
+info:    Build started...
+info:    Build succeeded.
+error:   Unable to create a 'DbContext' of type 'BlogContext'. The exception 'Unable to resolve service for type 'System.String' while attempting to activate 'SampleEfApp.BlogContext'.' was thrown while attempting to create an instance. For the different patterns supported at design time, see https://go.microsoft.com/fwlink/?linkid=851728
+exit=1

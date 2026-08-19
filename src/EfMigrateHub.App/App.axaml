@@ -1,0 +1,131 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="EfMigrateHub.App.App"
+             xmlns:local="using:EfMigrateHub.App"
+             RequestedThemeVariant="Default">
+             <!-- "Default" follows the OS. The Theme dropdown in the toolbar overrides this at
+                  runtime; see App.ApplyTheme. -->
+
+    <Application.Resources>
+        <!-- Every colour the app uses beyond the Fluent defaults lives here, once, with a value per
+             theme variant. Consume them with DynamicResource so a theme switch repaints live -
+             StaticResource would freeze whichever variant was active at load. -->
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+
+                <ResourceDictionary x:Key="Light">
+                    <!-- Structure -->
+                    <SolidColorBrush x:Key="SubtleBorderBrush" Color="#22000000" />
+                    <SolidColorBrush x:Key="PanelBackgroundBrush" Color="#08000000" />
+                    <SolidColorBrush x:Key="SplitterGripBrush" Color="#44000000" />
+                    <SolidColorBrush x:Key="SplitterGripHoverBrush" Color="#88000000" />
+
+                    <!-- Caution: an amber wash for "this may be wrong / read this first" -->
+                    <SolidColorBrush x:Key="CautionBackgroundBrush" Color="#22B87A00" />
+                    <SolidColorBrush x:Key="CautionBorderBrush" Color="#55B87A00" />
+                    <SolidColorBrush x:Key="CautionForegroundBrush" Color="#8A6100" />
+
+                    <!-- Danger: destructive actions and validation failures -->
+                    <SolidColorBrush x:Key="DangerForegroundBrush" Color="#B3261E" />
+                    <SolidColorBrush x:Key="DangerButtonBackgroundBrush" Color="#B33A3A" />
+                    <SolidColorBrush x:Key="DangerButtonForegroundBrush" Color="White" />
+
+                    <!-- Blocker banner: nothing works, shown above everything -->
+                    <SolidColorBrush x:Key="BlockerBackgroundBrush" Color="#7F1D1D" />
+                    <SolidColorBrush x:Key="BlockerForegroundBrush" Color="White" />
+
+                    <!-- Console channels -->
+                    <SolidColorBrush x:Key="OutputErrorBrush" Color="#B3261E" />
+                    <SolidColorBrush x:Key="OutputWarnBrush" Color="#8A6100" />
+                    <SolidColorBrush x:Key="OutputMutedBrush" Color="#6E6E6E" />
+
+                    <!-- Migration state badges -->
+                    <SolidColorBrush x:Key="StateAppliedBrush" Color="#2E7D32" />
+                    <SolidColorBrush x:Key="StatePendingBrush" Color="#9A6600" />
+                    <SolidColorBrush x:Key="StateUnknownBrush" Color="#6E6E6E" />
+                    <SolidColorBrush x:Key="StateBadgeForegroundBrush" Color="White" />
+
+                    <!-- Diagnosis panel -->
+                    <SolidColorBrush x:Key="DiagnosisErrorBackgroundBrush" Color="#FBEAEA" />
+                    <SolidColorBrush x:Key="DiagnosisErrorBorderBrush" Color="#D9A0A0" />
+                    <SolidColorBrush x:Key="DiagnosisWarningBackgroundBrush" Color="#FBF3E0" />
+                    <SolidColorBrush x:Key="DiagnosisWarningBorderBrush" Color="#D9BE7A" />
+                </ResourceDictionary>
+
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="SubtleBorderBrush" Color="#33FFFFFF" />
+                    <SolidColorBrush x:Key="PanelBackgroundBrush" Color="#11FFFFFF" />
+                    <SolidColorBrush x:Key="SplitterGripBrush" Color="#55FFFFFF" />
+                    <SolidColorBrush x:Key="SplitterGripHoverBrush" Color="#AAFFFFFF" />
+
+                    <SolidColorBrush x:Key="CautionBackgroundBrush" Color="#33B87A00" />
+                    <SolidColorBrush x:Key="CautionBorderBrush" Color="#66B87A00" />
+                    <SolidColorBrush x:Key="CautionForegroundBrush" Color="#D1A03C" />
+
+                    <SolidColorBrush x:Key="DangerForegroundBrush" Color="#E86C6C" />
+                    <SolidColorBrush x:Key="DangerButtonBackgroundBrush" Color="#B33A3A" />
+                    <SolidColorBrush x:Key="DangerButtonForegroundBrush" Color="White" />
+
+                    <SolidColorBrush x:Key="BlockerBackgroundBrush" Color="#5A1F1F" />
+                    <SolidColorBrush x:Key="BlockerForegroundBrush" Color="White" />
+
+                    <SolidColorBrush x:Key="OutputErrorBrush" Color="#E86C6C" />
+                    <SolidColorBrush x:Key="OutputWarnBrush" Color="#D9A62E" />
+                    <SolidColorBrush x:Key="OutputMutedBrush" Color="#9A9A9A" />
+
+                    <SolidColorBrush x:Key="StateAppliedBrush" Color="#3A8F3F" />
+                    <SolidColorBrush x:Key="StatePendingBrush" Color="#B87A00" />
+                    <SolidColorBrush x:Key="StateUnknownBrush" Color="#7A7A7A" />
+                    <SolidColorBrush x:Key="StateBadgeForegroundBrush" Color="White" />
+
+                    <SolidColorBrush x:Key="DiagnosisErrorBackgroundBrush" Color="#3A1F1F" />
+                    <SolidColorBrush x:Key="DiagnosisErrorBorderBrush" Color="#8A3A3A" />
+                    <SolidColorBrush x:Key="DiagnosisWarningBackgroundBrush" Color="#3A3018" />
+                    <SolidColorBrush x:Key="DiagnosisWarningBorderBrush" Color="#8A6A20" />
+                </ResourceDictionary>
+
+            </ResourceDictionary.ThemeDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+
+    <Application.Styles>
+        <FluentTheme />
+
+        <!-- AvaloniaEdit ships no default template, so the SQL viewer renders as an empty box
+             without this. It follows the Fluent variant, same as everything else. -->
+        <StyleInclude Source="avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml" />
+
+        <!-- Semantic classes, app-wide so both windows share them. Colour lives in the style, not at
+             the usage site, which is what makes a theme switch a one-line change. -->
+        <Style Selector="Border.caution">
+            <Setter Property="Background" Value="{DynamicResource CautionBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CautionBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+
+        <Style Selector="TextBlock.caution">
+            <Setter Property="Foreground" Value="{DynamicResource CautionForegroundBrush}" />
+        </Style>
+
+        <Style Selector="TextBlock.danger">
+            <Setter Property="Foreground" Value="{DynamicResource DangerForegroundBrush}" />
+        </Style>
+
+        <Style Selector="Button.danger">
+            <Setter Property="Background" Value="{DynamicResource DangerButtonBackgroundBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource DangerButtonForegroundBrush}" />
+        </Style>
+
+        <!-- Fluent's own pointerover/pressed setters would otherwise repaint a danger button with the
+             ordinary accent, losing the one visual cue that it is destructive. -->
+        <Style Selector="Button.danger:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource DangerButtonBackgroundBrush}" />
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource DangerButtonForegroundBrush}" />
+        </Style>
+        <Style Selector="Button.danger:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource DangerButtonBackgroundBrush}" />
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource DangerButtonForegroundBrush}" />
+            <Setter Property="Opacity" Value="0.85" />
+        </Style>
+    </Application.Styles>
+</Application>

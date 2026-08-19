@@ -1,0 +1,6 @@
+info:    Build started...
+info:    Build succeeded.
+warn:    The Entity Framework tools version '8.0.0' is older than that of the runtime '10.0.10'. Update the tools for the latest features and bug fixes. See https://aka.ms/AAc1fbw for more information.
+data:    20260818140933_InitialCreate
+data:    20260818140952_AddBlogUrl (Pending)
+exit=0

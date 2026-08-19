@@ -1,0 +1,7 @@
+info:    Build started...
+info:    Build succeeded.
+warn:    The Entity Framework tools version '10.0.10' is older than that of the runtime '10.0.11'. Update the tools for the latest features and bug fixes. See https://aka.ms/AAc1fbw for more information.
+error:   Your target project 'Data' doesn't match your migrations assembly 'App'. Either change your target project or change your migrations assembly.
+error:   Change your migrations assembly by using DbContextOptionsBuilder. E.g. options.UseSqlServer(connection, b => b.MigrationsAssembly("Data")). By default, the migrations assembly is the assembly containing the DbContext.
+error:   Change your target project to the migrations project by using the Package Manager Console's Default project drop-down list, or by executing "dotnet ef" from the directory containing the migrations project.
+exit=1
