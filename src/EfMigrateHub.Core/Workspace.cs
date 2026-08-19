@@ -134,32 +134,39 @@ public static class Workspace
     }
 
     /// <summary>
-    /// The startup project is the one EF builds and loads, so it needs
-    /// Microsoft.EntityFrameworkCore.Design. Failing that, an executable is a better guess than a
-    /// class library.
+    /// The startup project is the one EF builds and runs to get a configured DbContext, so what
+    /// matters most is that it owns the application's configuration — appsettings.json and, on a
+    /// developer machine, user secrets. That makes a runnable app the best guess, and a class
+    /// library the worst: pointing EF at a data library gives a design-time host with no
+    /// configuration at all, so the connection string comes back empty or wrong.
+    ///
+    /// Microsoft.EntityFrameworkCore.Design is only a tiebreaker. It used to be the first thing
+    /// checked, which picked the data library over the web project in the common layout where both
+    /// reference it.
     /// </summary>
     private static ProjectRef? GuessStartupProject(IReadOnlyList<ProjectRef> projects)
     {
         // ponytail: substring match on the raw project file rather than an XML/MSBuild evaluation.
         // Deliberate — it also catches central package management, where the version lives in
         // Directory.Packages.props. Upgrade to MSBuild evaluation only if false positives appear.
-        var withDesignPackage = projects.FirstOrDefault(p =>
-            ReadProject(p).Contains("Microsoft.EntityFrameworkCore.Design", StringComparison.OrdinalIgnoreCase));
+        var runnable = projects.Where(IsRunnable).ToList();
 
-        if (withDesignPackage is not null)
-        {
-            return withDesignPackage;
-        }
-
-        var executable = projects.FirstOrDefault(p =>
-        {
-            var text = ReadProject(p);
-            return text.Contains("<OutputType>Exe</OutputType>", StringComparison.OrdinalIgnoreCase)
-                || text.Contains("Microsoft.NET.Sdk.Web", StringComparison.OrdinalIgnoreCase);
-        });
-
-        return executable ?? projects.FirstOrDefault();
+        return runnable.FirstOrDefault(HasDesignPackage)
+            ?? runnable.FirstOrDefault()
+            ?? projects.FirstOrDefault(HasDesignPackage)
+            ?? projects.FirstOrDefault();
     }
+
+    private static bool IsRunnable(ProjectRef project)
+    {
+        var text = ReadProject(project);
+        return text.Contains("<OutputType>Exe</OutputType>", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("Microsoft.NET.Sdk.Web", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool HasDesignPackage(ProjectRef project) =>
+        ReadProject(project).Contains(
+            "Microsoft.EntityFrameworkCore.Design", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The migrations project is wherever migration files already live.</summary>
     private static ProjectRef? GuessMigrationsProject(IReadOnlyList<ProjectRef> projects) =>

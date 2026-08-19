@@ -74,6 +74,41 @@ A Settings window with app-wide and per-workspace sections, rather than options 
 - **Revisit when:** the option count outgrows the toolbars, or an option appears that has no natural inline home.
 - **Cost:** a few hours; the settings model already separates app-wide from per-workspace.
 
+### View a migration's Up/Down changes
+From the migrations list, select a migration and view its `Up`/`Down` diff.
+
+- **Why parked:** not scoped for v1; needs a view (read the `.cs`, or generate a per-migration script via `dotnet ef migrations script <from> <to>`) and a place to show it.
+- **Revisit when:** prioritised for a later version.
+- **Cost:** small-moderate — likely reuses the existing script viewer.
+
+### Pending model changes check
+Somewhere in the UI (new Tools tab, or folded into an existing one), check whether the model has pending changes not yet captured in a migration.
+
+- **Why parked:** not scoped for v1. `dotnet ef migrations has-pending-model-changes` (EF Core 8+) is the likely mechanism.
+- **Revisit when:** prioritised for a later version.
+- **Cost:** small — one more `dotnet ef` invocation and a status indicator.
+
+### Update dotnet-ef tool from the app
+From the home page, offer a way to update the `dotnet-ef` global/local tool.
+
+- **Why parked:** not scoped for v1; needs thought on global vs local tool installs and permission/elevation concerns.
+- **Revisit when:** prioritised for a later version.
+- **Cost:** small-moderate.
+
+### `dbcontext script` vs `migrations script`
+Explore the difference between `dotnet ef dbcontext script` and `dotnet ef migrations script`, and whether EfMigrateHub should expose both.
+
+- **Why parked:** needs investigation before it's even a feature decision.
+- **Revisit when:** someone has time to spike it.
+- **Cost:** investigation only, for now.
+
+### `dotnet-ef` config file support (.NET 11)
+.NET 11 adds config file support to the `dotnet-ef` tools, read from `<repository root>/.config/dotnet-ef.json`. EfMigrateHub may need to read/respect this file too.
+
+- **Why parked:** .NET 11 not yet released/adopted; nothing to support yet.
+- **Revisit when:** .NET 11 ships and repos start using the config file.
+- **Cost:** unknown until the config file's shape is finalised.
+
 ---
 
 ## Not planned

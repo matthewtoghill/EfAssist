@@ -57,6 +57,9 @@ public class WorkspaceTests : IDisposable
     private static string CsprojWith(string extra) =>
         $"""<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework>{extra}</PropertyGroup></Project>""";
 
+    private const string WebCsproj =
+        """<Project Sdk="Microsoft.NET.Sdk.Web"><PropertyGroup><TargetFramework>net10.0</TargetFramework><UserSecretsId>fixture</UserSecretsId></PropertyGroup></Project>""";
+
     [Fact]
     public async Task Uses_dotnet_sln_list_rather_than_parsing_the_solution_file()
     {
@@ -119,6 +122,26 @@ public class WorkspaceTests : IDisposable
         var workspace = await Workspace.DiscoverAsync(_root, new FakeRunner(0, SlnListOutput));
 
         Assert.Equal("Api", workspace.SuggestedStartupProject?.Name);
+    }
+
+    [Fact]
+    public async Task A_runnable_app_beats_a_data_library_that_also_references_Design()
+    {
+        Write("Thing.slnx", "<Solution />");
+
+        // The common layout: the data library carries the Design package and the migrations, and the
+        // web project carries the configuration — appsettings.json and the user secrets holding the
+        // real connection string. Suggesting the library here hands EF a design-time host with no
+        // configuration, so the connection string comes back empty and every refresh fails.
+        Write(@"src\Data\Data.csproj", CsprojWith(
+            """</PropertyGroup><ItemGroup><PackageReference Include="Microsoft.EntityFrameworkCore.Design" /></ItemGroup><PropertyGroup>"""));
+        Write(@"src\Data\Migrations\20260101000000_InitialCreate.cs", "// migration");
+        Write(@"src\Api\Api.csproj", WebCsproj);
+
+        var workspace = await Workspace.DiscoverAsync(_root, new FakeRunner(0, SlnListOutput));
+
+        Assert.Equal("Api", workspace.SuggestedStartupProject?.Name);
+        Assert.Equal("Data", workspace.SuggestedMigrationsProject?.Name);
     }
 
     [Fact]

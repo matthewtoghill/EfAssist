@@ -610,7 +610,6 @@ public partial class MainWindowViewModel : ObservableObject
         $"Startup:    {StartupProject?.Path}",
         $"Migrations: {MigrationsProject?.Path}",
         $"Context:    {SelectedContext?.Name}",
-        $"Environment: {EfRunner.HostEnvironment} (decides whether user secrets are read)",
         "");
 
     private static string FirstLine(string text)

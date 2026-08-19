@@ -27,20 +27,6 @@ public interface IEfRunner
 
 public sealed class EfRunner : IEfRunner
 {
-    private const string AspNetCoreEnvironment = "ASPNETCORE_ENVIRONMENT";
-    private const string DotNetEnvironment = "DOTNET_ENVIRONMENT";
-    private const string DevelopmentEnvironment = "Development";
-
-    /// <summary>
-    /// The environment name design-time commands run under: whatever the app inherited, or
-    /// <c>Development</c>. Reported in diagnostics because it decides whether the startup project's
-    /// user secrets are read at all.
-    /// </summary>
-    public static string HostEnvironment =>
-        Environment.GetEnvironmentVariable(AspNetCoreEnvironment)
-        ?? Environment.GetEnvironmentVariable(DotNetEnvironment)
-        ?? DevelopmentEnvironment;
-
     public async Task<EfResult> RunAsync(
         IReadOnlyList<string> args,
         string workingDirectory,
@@ -66,21 +52,6 @@ public sealed class EfRunner : IEfRunner
 
         // Keep EF's messages in English so the Phase 5 error mapping has something stable to match.
         startInfo.Environment["DOTNET_CLI_UI_LANGUAGE"] = "en";
-
-        // `dotnet ef` builds and runs the startup project's design-time host, and that host decides
-        // for itself whether to layer user secrets over appsettings.json: both WebApplicationBuilder
-        // and HostApplicationBuilder call AddUserSecrets only when the environment is Development.
-        // Nothing sets that here — launchSettings.json is an IDE/`dotnet run` file that the EF tools
-        // never read, and a GUI process launched from Explorer inherits no environment variable — so
-        // without this the host comes up as Production and silently uses the appsettings connection
-        // string instead of the one in user secrets. Only filled in when neither variable is already
-        // set, so launching the app from a shell that sets one still wins.
-        if (!startInfo.Environment.ContainsKey(AspNetCoreEnvironment) &&
-            !startInfo.Environment.ContainsKey(DotNetEnvironment))
-        {
-            startInfo.Environment[AspNetCoreEnvironment] = DevelopmentEnvironment;
-            startInfo.Environment[DotNetEnvironment] = DevelopmentEnvironment;
-        }
 
         var lines = new List<OutputLine>();
         var lock_ = new object();

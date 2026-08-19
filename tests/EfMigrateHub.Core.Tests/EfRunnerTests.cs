@@ -68,20 +68,6 @@ public class EfRunnerTests
     }
 
     [Fact]
-    public void Design_time_commands_run_as_Development_so_user_secrets_are_read()
-    {
-        // WebApplicationBuilder and HostApplicationBuilder only layer user secrets over
-        // appsettings.json when the environment is Development. Nothing else sets this — the EF
-        // tools never read launchSettings.json — so a Production default would silently connect to
-        // whatever appsettings says.
-        Assert.Equal(
-            Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
-            ?? Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
-            ?? "Development",
-            EfRunner.HostEnvironment);
-    }
-
-    [Fact]
     public async Task Cancellation_kills_the_process_and_reports_cancellation()
     {
         using var cancelled = new CancellationTokenSource();
