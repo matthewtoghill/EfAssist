@@ -129,6 +129,15 @@ public static class EfArgs
         return args;
     }
 
+    /// <summary>
+    /// No <c>--json</c>: the command does not support it. A clean model exits 0; pending changes
+    /// throw and exit non-zero, so callers distinguish the two by matching
+    /// <see cref="EfDiagnostics.PendingModelChangesNeedle"/> against the failure message rather than
+    /// treating every non-zero exit as an error.
+    /// </summary>
+    public static List<string> MigrationsHasPendingModelChanges(EfTarget target) =>
+        Build("migrations", "has-pending-model-changes", [], target, json: false);
+
     public static List<string> DbContextList(EfTarget target) =>
         Build("dbcontext", "list", [], target, json: true);
 

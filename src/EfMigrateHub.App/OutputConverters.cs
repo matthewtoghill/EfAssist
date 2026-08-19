@@ -1,6 +1,7 @@
 using Avalonia.Controls.Primitives;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
+using EfMigrateHub.App.ViewModels;
 using EfMigrateHub.Core;
 
 namespace EfMigrateHub.App;
@@ -52,5 +53,21 @@ public static class OutputConverters
         MigrationState.Applied => "Applied",
         MigrationState.Pending => "Pending",
         _ => "Unknown",
+    });
+
+    public static readonly FuncValueConverter<ModelCheckState, bool> IsModelUpToDate =
+        new(state => state == ModelCheckState.UpToDate);
+
+    public static readonly FuncValueConverter<ModelCheckState, bool> IsModelPending =
+        new(state => state == ModelCheckState.Pending);
+
+    public static readonly FuncValueConverter<ModelCheckState, bool> IsModelUnknown =
+        new(state => state == ModelCheckState.Unknown);
+
+    public static readonly FuncValueConverter<ModelCheckState, string> ModelCheckLabel = new(state => state switch
+    {
+        ModelCheckState.UpToDate => "Up to date",
+        ModelCheckState.Pending => "Pending changes",
+        _ => "Not checked",
     });
 }

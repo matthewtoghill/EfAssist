@@ -139,6 +139,19 @@ public static class EfDiagnostics
     ];
 
     /// <summary>
+    /// <c>migrations has-pending-model-changes</c> reports pending changes as a thrown
+    /// <c>OperationException</c> — a non-zero exit that is an expected outcome, not a failure to
+    /// diagnose. Checked against <see cref="EfResult.ErrorMessage"/> before routing a failed result
+    /// through <see cref="Diagnose"/>.
+    /// </summary>
+    public const string PendingModelChangesNeedle =
+        "changes have been made to the model since the last migration";
+
+    public static bool IsPendingModelChanges(EfResult result) =>
+        !result.Success &&
+        result.ErrorMessage.Contains(PendingModelChangesNeedle, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
     /// Returns null for a clean success, and for any failure this does not recognise.
     /// </summary>
     public static EfDiagnosis? Diagnose(EfResult result)

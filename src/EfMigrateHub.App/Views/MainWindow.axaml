@@ -435,6 +435,27 @@
                             </Border>
                         </Grid>
                     </TabItem>
+                    <TabItem Header="Tools">
+                        <StackPanel Margin="0,12,0,0" Spacing="16" MaxWidth="520">
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="Pending model changes" Classes="group" />
+                                <TextBlock Classes="hint"
+                                           Text="Checks whether the current model differs from the last migration, without adding one." />
+                                <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,4,0,0">
+                                    <Button Content="Check for pending changes"
+                                            Command="{Binding Tools.CheckPendingModelChangesCommand}" />
+                                    <Border CornerRadius="3" Padding="6,2" VerticalAlignment="Center"
+                                            Classes.badgeApplied="{Binding Tools.ModelCheckState, Converter={x:Static app:OutputConverters.IsModelUpToDate}}"
+                                            Classes.badgePending="{Binding Tools.ModelCheckState, Converter={x:Static app:OutputConverters.IsModelPending}}"
+                                            Classes.badgeUnknown="{Binding Tools.ModelCheckState, Converter={x:Static app:OutputConverters.IsModelUnknown}}">
+                                        <TextBlock Text="{Binding Tools.ModelCheckState, Converter={x:Static app:OutputConverters.ModelCheckLabel}}"
+                                                   Foreground="{DynamicResource StateBadgeForegroundBrush}"
+                                                   FontSize="11" />
+                                    </Border>
+                                </StackPanel>
+                            </StackPanel>
+                        </StackPanel>
+                    </TabItem>
                 </TabControl>
 
                 <GridSplitter Grid.Row="1" Classes="pane" ResizeDirection="Rows"

@@ -104,4 +104,30 @@ public class EfDiagnosticsTests
 
         Assert.NotNull(EfDiagnostics.Diagnose(result));
     }
+
+    [Fact]
+    public void Recognises_pending_model_changes_as_an_expected_outcome_not_a_failure()
+    {
+        var result = new EfResult(
+            1,
+            [
+                new OutputLine(
+                    OutputChannel.Error,
+                    "Changes have been made to the model since the last migration. Add a new migration."),
+            ],
+            "dotnet ef migrations has-pending-model-changes",
+            "/tmp");
+
+        Assert.True(EfDiagnostics.IsPendingModelChanges(result));
+
+        // Not a recognised failure rule, so Diagnose must not report it as one.
+        Assert.Null(EfDiagnostics.Diagnose(result));
+    }
+
+    [Fact]
+    public void Does_not_treat_a_clean_success_or_an_unrelated_failure_as_pending_changes()
+    {
+        Assert.False(EfDiagnostics.IsPendingModelChanges(Fixture.Load("migrations-list-mixed")));
+        Assert.False(EfDiagnostics.IsPendingModelChanges(Fixture.Load("error-unknown-context")));
+    }
 }

@@ -83,6 +83,7 @@ public partial class MainWindowViewModel : ObservableObject
 
         Migrations = new MigrationsViewModel(Session, BuildTargetForCommands, Persist, settings.Display);
         Script = new ScriptViewModel(Session, BuildTargetForCommands, () => Migrations.Ordered, Persist);
+        Tools = new ToolsViewModel(Session, BuildTargetForCommands);
     }
 
     /// <summary>Runs commands and owns the output console. Shared by every tab.</summary>
@@ -91,6 +92,8 @@ public partial class MainWindowViewModel : ObservableObject
     public MigrationsViewModel Migrations { get; }
 
     public ScriptViewModel Script { get; }
+
+    public ToolsViewModel Tools { get; }
 
     /// <summary>Choices for the theme dropdown, in the order they are offered.</summary>
     public static IReadOnlyList<AppTheme> Themes { get; } =
@@ -293,6 +296,7 @@ public partial class MainWindowViewModel : ObservableObject
         Contexts.Clear();
         Migrations.Clear();
         Script.Clear();
+        Tools.Clear();
         Session.Reset();
     }
 
@@ -637,6 +641,7 @@ public partial class MainWindowViewModel : ObservableObject
     {
         Migrations.NotifyTargetChanged();
         Script.NotifyTargetChanged();
+        Tools.NotifyTargetChanged();
     }
 
     partial void OnWorkspacePathChanged(string? value) => OnPropertyChanged(nameof(WindowTitle));
@@ -686,6 +691,7 @@ public partial class MainWindowViewModel : ObservableObject
         {
             Migrations.Clear();
             Script.Clear();
+            Tools.Clear();
             _ = Migrations.LoadForContextAsync();
         }
     }

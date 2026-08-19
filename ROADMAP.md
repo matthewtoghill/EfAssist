@@ -81,13 +81,6 @@ From the migrations list, select a migration and view its `Up`/`Down` diff.
 - **Revisit when:** prioritised for a later version.
 - **Cost:** small-moderate — likely reuses the existing script viewer.
 
-### Pending model changes check
-Somewhere in the UI (new Tools tab, or folded into an existing one), check whether the model has pending changes not yet captured in a migration.
-
-- **Why parked:** not scoped for v1. `dotnet ef migrations has-pending-model-changes` (EF Core 8+) is the likely mechanism.
-- **Revisit when:** prioritised for a later version.
-- **Cost:** small — one more `dotnet ef` invocation and a status indicator.
-
 ### Update dotnet-ef tool from the app
 From the home page, offer a way to update the `dotnet-ef` global/local tool.
 

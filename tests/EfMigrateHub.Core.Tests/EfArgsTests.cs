@@ -22,6 +22,7 @@ public class EfArgsTests
             EfArgs.DatabaseDrop(Target),
             EfArgs.DbContextList(Target),
             EfArgs.DbContextInfo(Target),
+            EfArgs.MigrationsHasPendingModelChanges(Target),
         ];
 
         Assert.All(commands, args =>
@@ -45,6 +46,7 @@ public class EfArgsTests
         Assert.DoesNotContain("--json", EfArgs.MigrationsAdd(Target, "X"));
         Assert.DoesNotContain("--json", EfArgs.DatabaseUpdate(Target));
         Assert.DoesNotContain("--json", EfArgs.MigrationsScript(Target, "out.sql"));
+        Assert.DoesNotContain("--json", EfArgs.MigrationsHasPendingModelChanges(Target));
     }
 
     [Fact]
