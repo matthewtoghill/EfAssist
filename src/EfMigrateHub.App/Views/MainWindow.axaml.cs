@@ -4,7 +4,9 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input.Platform;
 using Avalonia.Platform.Storage;
 using AvaloniaEdit.Document;
@@ -51,6 +53,8 @@ public partial class MainWindow : Window
             viewModel.CopyToClipboardAsync = CopyToClipboardAsync;
             viewModel.ConfirmAsync = ConfirmAsync;
             viewModel.ShowErrorAsync = ShowErrorAsync;
+            viewModel.ShowSettingsAsync = ShowSettingsAsync;
+            viewModel.RestartRequested = Restart;
             viewModel.Script.PickSaveFileAsync = PickSaveFileAsync;
             viewModel.Script.PickFolderAsync = PickFolderAsync;
             viewModel.Script.OpenFileAsync = path => OpenWithShellAsync(path, reveal: false);
@@ -174,6 +178,45 @@ public partial class MainWindow : Window
 
     private Task ShowErrorAsync(ErrorDetail detail) =>
         new ErrorWindow(detail).ShowDialog(this);
+
+    /// <summary>
+    /// Modal, and sharing this window's view model, so the Tools and Updates sections drive the same
+    /// commands the rest of the app does rather than a second copy of them.
+    /// </summary>
+    private Task ShowSettingsAsync() =>
+        new SettingsWindow { DataContext = DataContext }.ShowDialog(this);
+
+    /// <summary>
+    /// Relaunches the app so a colour change takes effect. Started before shutting down, because the
+    /// new process has to exist before this one stops holding the window.
+    /// </summary>
+    private void Restart()
+    {
+        // Null only for a single-file host that has been stripped; there is nothing to relaunch then.
+        if (Environment.ProcessPath is not { } exe)
+        {
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true });
+        }
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
+        {
+            // Could not relaunch, so do not close the one window the user still has.
+            return;
+        }
+
+        if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            desktop.Shutdown();
+        }
+        else
+        {
+            Close();
+        }
+    }
 
     private async Task<string?> PickSaveFileAsync(string suggestedName, string? startFolder)
     {

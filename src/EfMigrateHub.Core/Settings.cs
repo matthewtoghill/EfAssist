@@ -112,6 +112,45 @@ public sealed class DisplaySettings
     /// person looking at the screen, not of the solution they happen to have open.
     /// </summary>
     public AppTheme Theme { get; set; } = AppTheme.System;
+
+    /// <summary>
+    /// Which palette the colours start from. Independent of <see cref="Theme"/> — see
+    /// <see cref="ThemePreset"/>.
+    /// </summary>
+    public ThemePreset Preset { get; set; } = ThemePreset.Default;
+
+    /// <summary>
+    /// Colour overrides for the light variant. Stored per variant rather than once, because a
+    /// background that works on light is unreadable on dark and vice versa.
+    /// </summary>
+    public ThemeColours LightColours
+    {
+        get => _lightColours;
+        // A settings file with an explicit null here would otherwise deserialise to one, and every
+        // reader would need a guard. Absorb it once instead.
+        set => _lightColours = value ?? new ThemeColours();
+    }
+
+    public ThemeColours DarkColours
+    {
+        get => _darkColours;
+        set => _darkColours = value ?? new ThemeColours();
+    }
+
+    private ThemeColours _lightColours = new();
+    private ThemeColours _darkColours = new();
+
+    /// <summary>Base size for UI text, in points. Everything chrome-side scales from it.</summary>
+    public double UiFontSize { get; set; } = ThemePresets.DefaultUiFontSize;
+
+    /// <summary>
+    /// Size for the monospace panes — the migration source, the SQL preview and the output console.
+    /// Separate from <see cref="UiFontSize"/> so a large UI does not force a large code pane.
+    /// </summary>
+    public double EditorFontSize { get; set; } = ThemePresets.DefaultEditorFontSize;
+
+    /// <summary>The overrides for one variant, so callers do not repeat the light/dark branch.</summary>
+    public ThemeColours ColoursFor(bool dark) => dark ? DarkColours : LightColours;
 }
 
 public sealed class AppSettings
@@ -135,7 +174,13 @@ public sealed class AppSettings
     public string? Root { get; set; }
 
     /// <summary>Application-wide preferences, not tied to any one workspace.</summary>
-    public DisplaySettings Display { get; set; } = new();
+    public DisplaySettings Display
+    {
+        get => _display;
+        set => _display = value ?? new DisplaySettings();
+    }
+
+    private DisplaySettings _display = new();
 
     /// <summary>Most recent first.</summary>
     public List<string> RecentWorkspaces { get; set; } = [];
@@ -210,6 +255,15 @@ public static class SettingsStore
 
         var settings = ReadOrDefault<AppSettings>(path) ?? new AppSettings();
         settings.Root = root;
+
+        // A hand-edited file is the realistic source of a 400pt font, and rendering over it is not
+        // worth it. Clamp once, here, so nothing downstream has to. Null blocks are handled by the
+        // setters on DisplaySettings itself.
+        settings.Display.UiFontSize = ThemePresets.ClampFontSize(
+            settings.Display.UiFontSize, ThemePresets.DefaultUiFontSize);
+        settings.Display.EditorFontSize = ThemePresets.ClampFontSize(
+            settings.Display.EditorFontSize, ThemePresets.DefaultEditorFontSize);
+
         return settings;
     }
 

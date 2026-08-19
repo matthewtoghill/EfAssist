@@ -65,6 +65,12 @@ public partial class UpdateViewModel : ObservableObject
 
     public bool ShowBanner => IsUpdateAvailable && !Dismissed;
 
+    /// <summary>
+    /// The home page's fallback offer. The banner is dismissible, so without this a dismissed update
+    /// would have no way back short of reopening settings and checking again.
+    /// </summary>
+    public bool ShowHomeOffer => IsUpdateAvailable && Dismissed;
+
     public bool IsBusy => State is UpdateState.Checking or UpdateState.Downloading;
 
     /// <summary>
@@ -156,12 +162,17 @@ public partial class UpdateViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(IsUpdateAvailable));
         OnPropertyChanged(nameof(ShowBanner));
+        OnPropertyChanged(nameof(ShowHomeOffer));
         OnPropertyChanged(nameof(IsBusy));
         CheckCommand.NotifyCanExecuteChanged();
         UpdateNowCommand.NotifyCanExecuteChanged();
     }
 
-    partial void OnDismissedChanged(bool value) => OnPropertyChanged(nameof(ShowBanner));
+    partial void OnDismissedChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ShowBanner));
+        OnPropertyChanged(nameof(ShowHomeOffer));
+    }
 
     private static string FirstLine(string text)
     {

@@ -75,7 +75,9 @@ public partial class MainWindowViewModel : ObservableObject
             settings.RecentWorkspaces.Select(RecentWorkspace.FromPath));
         _wrapOutput = settings.Display.WrapOutput;
         _wrapSql = settings.Display.WrapSql;
-        _theme = settings.Display.Theme;
+        Appearance = new SettingsViewModel(
+            settings.Display,
+            () => SettingsStore.Save(settings, settingsPath));
 
         Session = new CommandSession(runner) { DiagnosticsHeader = BuildDiagnosticsHeader };
         Session.PropertyChanged += (_, e) =>
@@ -121,16 +123,11 @@ public partial class MainWindowViewModel : ObservableObject
     /// <summary>The in-app updater. Independent of any workspace, so it lives on the shell.</summary>
     public UpdateViewModel Update { get; }
 
-    /// <summary>Choices for the theme dropdown, in the order they are offered.</summary>
-    public static IReadOnlyList<AppTheme> Themes { get; } =
-        [AppTheme.System, AppTheme.Light, AppTheme.Dark];
-
     /// <summary>
-    /// Light, dark, or follow the OS. Applied through <see cref="App.ApplyTheme"/> rather than by
-    /// touching brushes: every colour is a theme resource, so the variant is the only switch needed.
+    /// Theme, colours and font sizes. Lives on the shell rather than inside the settings window so
+    /// the choices survive closing it, and so nothing has to be re-read on reopen.
     /// </summary>
-    [ObservableProperty]
-    private AppTheme _theme;
+    public SettingsViewModel Appearance { get; }
 
     /// <summary>
     /// Which tab is showing. The Script tab probes the provider on first sight rather than on every
@@ -751,6 +748,7 @@ public partial class MainWindowViewModel : ObservableObject
         OpenRecentCommand.NotifyCanExecuteChanged();
         RefreshContextsCommand.NotifyCanExecuteChanged();
         UpdateEfToolCommand.NotifyCanExecuteChanged();
+        RestartCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>
@@ -844,12 +842,32 @@ public partial class MainWindowViewModel : ObservableObject
         SettingsStore.Save(_settings, _settingsPath);
     }
 
-    partial void OnThemeChanged(AppTheme value)
-    {
-        App.ApplyTheme(value);
+    /// <summary>
+    /// Opens the settings modal. Supplied by the view, which owns the window it has to be modal to.
+    /// </summary>
+    public Func<Task>? ShowSettingsAsync { get; set; }
 
-        // App-wide, same as WrapOutput.
-        _settings.Display.Theme = value;
-        SettingsStore.Save(_settings, _settingsPath);
+    [RelayCommand]
+    private async Task OpenSettingsAsync()
+    {
+        if (ShowSettingsAsync is not null)
+        {
+            await ShowSettingsAsync();
+        }
     }
+
+    /// <summary>
+    /// Relaunches the app. Supplied by the view, which owns the process and the application lifetime.
+    /// </summary>
+    public Action? RestartRequested { get; set; }
+
+    /// <summary>
+    /// Restarts so that a colour change takes effect. Blocked while a command is running: a restart
+    /// kills the <c>dotnet ef</c> child process, and losing a half-finished "update database" to a
+    /// theme change would be indefensible.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanRestart))]
+    private void Restart() => RestartRequested?.Invoke();
+
+    private bool CanRestart() => !Session.IsRunning;
 }

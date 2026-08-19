@@ -10,6 +10,7 @@
         Width="460" SizeToContent="Height"
         MinHeight="180"
         CanResize="False"
+        FontSize="{DynamicResource AppFontSize}"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False">
 
@@ -19,11 +20,11 @@
         <Border IsVisible="{Binding HasDetail}"
                 Classes="caution"
                 CornerRadius="4" Padding="10,8">
-            <TextBlock Text="{Binding Detail}" TextWrapping="Wrap" FontSize="12" />
+            <TextBlock Text="{Binding Detail}" TextWrapping="Wrap" FontSize="{DynamicResource AppFontSizeSmall}" />
         </Border>
 
         <StackPanel IsVisible="{Binding RequiresTyping}" Spacing="4">
-            <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.8">
+            <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource AppFontSizeSmall}" Opacity="0.8">
                 <Run Text="Type" />
                 <Run Text="{Binding RequiredTypedValue}" FontWeight="Bold" />
                 <Run Text="to confirm." />

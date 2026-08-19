@@ -977,6 +977,109 @@ non-idempotent files never being the same path, and the command disabling once n
 
 ---
 
+## Settings screen, and theming beyond light/dark
+
+The theme dropdown lived in the workspace toolbar, so it was unreachable from the home page, and there
+was nowhere to put anything else. Added a settings modal reachable from both screens, and grew theming
+to cover palettes, three configurable colours per variant and two font sizes.
+
+- **A settings modal, not a screen.** `SettingsWindow` is modal, reachable from a gear button in the
+  workspace toolbar (where the theme dropdown was) and in the home page's action row, plus `Ctrl+,`.
+  Its `DataContext` is the shell's `MainWindowViewModel`, so the Tools and Updates tabs drive exactly
+  the same commands the rest of the app does rather than a second copy of them. Three tabs: Appearance,
+  Tools (`Update dotnet-ef`, moved off the home page), Updates (version and `Check for updates`, also
+  moved off the home page).
+- **No OK button.** Every change saves as it is made, and `Close` is the only action. The variant and
+  the font sizes also take effect immediately; the colours cannot, for the reason below.
+- **Palettes are orthogonal to the variant.** `ThemePreset` (Default, HighContrast, Solarized, Nord)
+  defines both a light and a dark half, so "Solarized" plus "follow the OS" is Solarized Light by day
+  and Solarized Dark by night. A flat list of eight themes would have made System unreachable for six
+  of them.
+- **Three colours, everything else derived.** `DisplaySettings.LightColours`/`DarkColours` hold an
+  optional background, accent and text colour per variant. `Theming.BuildPalette` expands those into
+  Fluent's whole `ColorPaletteResources` palette: the Alt family is the background at Fluent's five
+  alpha steps, the Base family is the text colour at the same steps, the Chrome family is an opaque
+  blend from background towards text at fractions read off WinUI's own light and dark values. Feeding
+  Fluent its palette is what makes a custom background reach the inside of a ComboBox dropdown rather
+  than only the window behind it.
+- **An override equal to the preset's own value is stored as no override**, so switching preset
+  afterwards still moves that colour. Matching a preset colour by hand should not pin it.
+- **`ChromeWhite` is the contrast of the accent, not white.** Fluent uses it for text and glyphs drawn
+  on the accent, and the high-contrast dark palette needs a bright accent, which white text is
+  unreadable on. It falls out as white for any ordinary dark accent, so stock themes are unchanged.
+- **Error and warning colours are not derived.** The danger red, caution amber, state badges and
+  diagnosis panels keep their per-variant values. A failure has to read as a failure whatever palette
+  is in force, which is the one thing a user-chosen accent must not be allowed to eat.
+- **Colours are applied at startup and a change asks for a restart.** This was the one genuine
+  surprise, and it took three attempts to establish. Fluent reads its palette once, while it loads:
+  assigning `fluent.Palettes[variant] = ...` afterwards, *and* setting properties on the
+  `ColorPaletteResources` already in it, both compile, run, and change nothing on screen — startup
+  worked and every live change silently did not. Overriding the base colours in
+  `Application.Resources.ThemeDictionaries` does nothing either; a probe that set `SystemRegionColor`
+  and `SystemAltHighColor` to magenta left the window untouched, which matches
+  AvaloniaUI/Avalonia#15115 ("only `SystemAccentColor` updates"). Replacing the whole `FluentTheme`
+  instance in `Application.Styles` *does* repaint — and re-applies every control template in the app,
+  which leaves each ComboBox popup's `ItemsPresenter` attached to a template that has been discarded.
+  The next time any dropdown opens, Avalonia throws `The control ItemsPresenter already has a visual
+  parent`. That is AvaloniaUI/Avalonia#17917, open, and the only suggested workaround is dropping the
+  `ScrollViewer` from the ComboBox theme — which would cost scrolling in the project, context and
+  discovery-mode lists. Deferring the swap to `DispatcherPriority.Background` so it lands outside the
+  input handler was tried and is not enough: it survived three palette switches and crashed on the
+  fourth. So `Theming.Initialise` hands Fluent the palette before the first window exists, and
+  `Theming.Apply` — the one that runs on every later change — deliberately does not touch it.
+- **A preview tile, because a colour you cannot see is a colour you cannot choose.** The Appearance tab
+  paints a sample from `Theming.Sample`, which derives surface, panel, border, accent, on-accent, body
+  and muted text by the same rules `BuildPalette` uses, so the tile cannot drift from what the restart
+  produces. The view model carries plain `Color`s and the tile converts them with
+  `OutputConverters.Brush` — the one place a brush-producing converter is right rather than wrong, since
+  the tile has to show the palette being edited and not the theme the window is painted with, and the
+  converter re-runs whenever that palette changes. Colours rather than brushes in the view model for a
+  second reason too: a brush is an `AvaloniaObject`, and constructing one claimed Avalonia's dispatcher
+  for whichever thread built the view model, which broke `SyntaxHighlightingTests` on a different thread
+  with "The calling thread cannot access this object". Every value is flattened to opaque: the
+  alpha-based members of Fluent's palette would otherwise composite over the settings window instead of
+  over the surface they describe.
+- **The restart notice sits above the tabs, not inside Appearance**, so switching to Tools cannot hide
+  the fact that a restart is owed. `SettingsViewModel.NeedsRestart` compares the current colours
+  against a signature taken at construction, so undoing a change by hand clears the notice rather than
+  leaving it up for the session. "Restart now" relaunches via `Environment.ProcessPath` and is disabled
+  while a command is running — a restart kills the `dotnet ef` child process, and losing a
+  half-finished "update database" to a theme change would be indefensible.
+- **Font sizes are named by role, not by number.** `AppFontSize`, `-Small`, `-Tiny`, `-Large`,
+  `-Heading` and `-Mono` are derived from one UI base plus a separate monospace size, and every
+  hard-coded `FontSize` in the XAML now reads one of them. `ControlContentThemeFontSize` is overridden
+  alongside, which is what scales Fluent's own buttons, tabs and text boxes. The defaults reproduce
+  the sizes the app shipped with exactly, so a first run looks unchanged.
+- **Sliders rather than `NumericUpDown`** for the font sizes: `NumericUpDown.Value` is `decimal?` and
+  the view model holds `double`, and a slider with `IsSnapToTickEnabled` needs no converter.
+- **Sizes are clamped on load, not only at the spinner.** A hand-edited settings file is the realistic
+  source of a 400pt font. `DisplaySettings.Display`/`LightColours`/`DarkColours` absorb an explicit
+  `null` in their setters for the same reason, and `ThemeColours.IsDefault` is `[JsonIgnore]` — without
+  it, System.Text.Json wrote a computed property into the settings file that read back as nothing.
+- **The home page keeps a version line, not a check button.** The startup check already surfaces
+  anything it finds as the app-wide banner, and the banner is dismissible, so the home page grew an
+  "Update now" button that appears only once the banner has been dismissed
+  (`UpdateViewModel.ShowHomeOffer`). Two offers on one screen is noise; no way back from a dismissal is
+  worse.
+
+Verified: `dotnet test` → **353 passed, 0 failed, 0 warnings** (was 325). New cases cover every preset
+defining both variants, every preset keeping enough contrast between text and background, accent text
+contrasting with the accent, overrides replacing only the slots they set, a hand-matched preset colour
+recording no override, switching preset leaving untouched colours following it, reset clearing only the
+variant on screen, an explicit variant moving the pickers, font sizes clamped on change and on load, a
+null settings block reading as defaults, the restart notice appearing for a colour or palette change and
+*not* for a variant or font change, the notice clearing when a change is undone, the preview following
+the variant being edited, and the sample staying opaque and between surface and text for every preset.
+
+Checked on screen, since neither a colour nor a crash is something these tests can confirm: High
+Contrast Light at an 18pt UI font (measured the rendered text pixels rather than trusting the
+screenshot's colour rendition), Nord Dark across the whole workspace screen with the migration badges
+and the destructive button keeping their own colours, twelve palette switches and six variant switches
+through the dropdowns that used to crash on the fourth, and "Restart now" relaunching into a palette
+that matched what the preview had shown.
+
+---
+
 ## Deliberate shortcuts
 
 Tracked so they do not rot into "later means never". Each is marked with a `ponytail:` comment at the site.
@@ -1000,3 +1103,6 @@ Tracked so they do not rot into "later means never". Each is marked with a `pony
 | Migrations tab splitter | Column widths are proportional and not persisted | Someone resizes it every session |
 | `VelopackUpdater` | A failure constructing the `UpdateManager` is swallowed, so "no updater here" and "broken updater" look the same to the UI | A user reports the update button doing nothing on an installed build |
 | `UpdateViewModel` | `CanUpdate` is read once and never raises a change notification | It could change while the app is running, which an install cannot |
+| `Theming` | Colour changes need a restart, because repainting them means reloading Fluent, which corrupts every ComboBox — AvaloniaUI/Avalonia#17917 | That issue is fixed, or `ColorPaletteResources` changes become live; either turns this into one call moving from `Initialise` to `Apply` |
+| `Theming.Sample` | The preview tile derives its own opaque approximation of the palette rather than rendering real controls under it | Live colour changes become possible, at which point the tile is unnecessary |
+| `Theming.BuildPalette` | Chrome fractions are single values averaged from WinUI's differing light and dark constants | A preset looks visibly wrong in one variant and right in the other |

@@ -612,14 +612,14 @@ public class MainWindowViewModelTests : IDisposable
     public void Theme_is_app_wide_and_saves_with_no_workspace_open()
     {
         var viewModel = NewViewModel(new RoutingRunner());
-        Assert.Equal(AppTheme.System, viewModel.Theme);
+        Assert.Equal(AppTheme.System, viewModel.Appearance.Theme);
 
-        viewModel.Theme = AppTheme.Dark;
+        viewModel.Appearance.Theme = AppTheme.Dark;
 
         // Same reasoning as word wrap: Persist() bails out with no workspace open, so the theme
         // needs its own save path or the choice is lost on the landing screen.
         Assert.Equal(AppTheme.Dark, SettingsStore.Load(SettingsPath).Display.Theme);
-        Assert.Equal(AppTheme.Dark, NewViewModel(new RoutingRunner()).Theme);
+        Assert.Equal(AppTheme.Dark, NewViewModel(new RoutingRunner()).Appearance.Theme);
     }
 
     [Fact]

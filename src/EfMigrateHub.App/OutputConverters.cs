@@ -19,6 +19,34 @@ namespace EfMigrateHub.App;
 /// </remarks>
 public static class OutputConverters
 {
+    /// <summary>
+    /// An enum member's name with spaces at the case boundaries, so <c>HighContrast</c> reads as
+    /// "High contrast" in a dropdown without a parallel list of display strings to keep in step.
+    /// </summary>
+    public static readonly FuncValueConverter<object?, string> SpacedName = new(Spaced);
+
+    private static string Spaced(object? value)
+    {
+        var name = value?.ToString();
+        if (string.IsNullOrEmpty(name))
+        {
+            return "";
+        }
+
+        var split = System.Text.RegularExpressions.Regex.Replace(name, "(?<=[a-z0-9])(?=[A-Z])", " ");
+
+        // Sentence case, so a two-word member does not read as a proper noun halfway through.
+        return char.ToUpperInvariant(split[0]) + split[1..].ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// A colour as a brush, for the settings screen's theme preview. This is the one place a
+    /// brush-producing converter is right rather than wrong: the tile has to show the palette being
+    /// edited, not the theme the window is painted with, and it re-runs whenever that palette changes.
+    /// </summary>
+    public static readonly FuncValueConverter<Color, IBrush> Brush =
+        new(colour => new SolidColorBrush(colour));
+
     public static readonly FuncValueConverter<bool, TextWrapping> Wrapping =
         new(wrap => wrap ? TextWrapping.Wrap : TextWrapping.NoWrap);
 

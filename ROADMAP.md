@@ -32,18 +32,30 @@ v1 publishes `win-x64` only.
 ### Installer packaging — Windows done, the rest still parked, signing outstanding
 Windows installer and in-app auto-update: **done** in Phase 6.
 
-- **Current state:** `build/release.ps1` runs a self-contained publish and hands the directory to Velopack (`vpk pack`), which produces `EfMigrateHub-win-Setup.exe`, a portable zip, and a delta package against the previous release. `vpk upload github` publishes them to GitHub Releases, which is the feed the app reads. In the app, `IAppUpdater`/`VelopackUpdater` back an `UpdateViewModel`: a silent check shortly after launch, a manual "Check for updates" button on the home page, and a dismissible banner offering "Update and restart". See `PROGRESS.md`.
+- **Current state:** `build/release.ps1` runs a self-contained publish and hands the directory to Velopack (`vpk pack`), which produces `EfMigrateHub-win-Setup.exe`, a portable zip, and a delta package against the previous release. `vpk upload github` publishes them to GitHub Releases, which is the feed the app reads. In the app, `IAppUpdater`/`VelopackUpdater` back an `UpdateViewModel`: a silent check shortly after launch, a manual "Check for updates" button in the settings modal, a dismissible app-wide banner offering "Update and restart", and an "Update now" button on the home page once that banner has been dismissed. See `PROGRESS.md`.
 - **Not done:** code signing. Nothing produced is signed, so SmartScreen warns on first run until download reputation builds. `vpk pack --signParams` (or `--azureTrustedSignFile`) is the hook; the work is buying and handling a certificate, not the wiring. MSIX, DMG/pkg and AppImage/deb/rpm remain parked with the platforms themselves.
 - **Revisit when:** the SmartScreen warning becomes a real obstacle to someone installing it, or macOS/Linux ship.
 - **Cost:** signing is a certificate purchase plus an afternoon. Notarisation on macOS is its own day.
 
-### Theme support — light/dark/system done, custom schemes still parked
-Light and dark themes selectable from the UI: **done**. Broader theming (accent colour, font size, custom colour schemes): still parked.
+### Theme support — done
+Light and dark, follow-the-OS, alternative palettes, configurable background/accent/text colours and
+configurable font sizes are all in, reachable from a settings modal on both screens. See `PROGRESS.md`.
 
-- **Current state:** every colour beyond the Fluent defaults is a named brush in `App.axaml`, defined twice under `ResourceDictionary.ThemeDictionaries` — one value tuned for light, one for dark — and consumed through `DynamicResource`, so a switch repaints live. Semantic style classes (`caution`, `danger`, `diagnosis`, the state badges, the console channels) mean the colour lives in the style rather than at each usage site. A System/Light/Dark dropdown in the toolbar writes `DisplaySettings.Theme` and calls `App.ApplyTheme`; System stays on `ThemeVariant.Default`, so Avalonia keeps following the OS including changes made while running.
-- **Not done:** accent colour, font size, and user-defined schemes. Those were the "more for custom schemes" half of the original estimate and remain parked — nobody has asked, and each one is a new settings surface to maintain.
-- **Revisit when:** someone wants an accent colour or a larger UI font. The groundwork is in place: both would be another `DisplaySettings` field plus a style, not another colour audit.
-- **Cost:** hours each, now that the colours are resources.
+- **Current state:** every colour beyond the Fluent defaults is a named brush in `App.axaml`, defined
+  once per variant under `ResourceDictionary.ThemeDictionaries` and consumed through `DynamicResource`.
+  On top of that, `Theming` feeds Fluent its own `ColorPaletteResources` palette, expanded from three
+  configurable colours per variant (background, accent, text) over a choice of four palettes, so custom
+  colours reach the inside of Fluent's controls rather than only the window. Font sizes are two
+  configurable bases — UI and monospace — exposed as named resources the XAML reads by role.
+- **Not done:** repainting a colour change without a restart. Fluent only reads its palette while
+  loading, and reloading it corrupts every ComboBox (AvaloniaUI/Avalonia#17917, open), so colours apply
+  at startup and the settings screen offers a restart plus a live preview tile. The variant and the font
+  sizes need no reload and do apply immediately. Also not done: per-workspace themes, and importing or
+  sharing a palette as a file.
+- **Revisit when:** AvaloniaUI/Avalonia#17917 is fixed, which turns the restart into a live repaint and
+  makes the preview tile redundant. Separately, when someone wants to carry a palette between machines —
+  the three colours per variant already in `settings.json` are most of that format.
+- **Cost:** hours to drop the restart once upstream allows it. An afternoon for import/export.
 
 ### Multi-context tree view
 Show every `DbContext` in the solution side by side with its migrations, instead of one active context selected from a dropdown.

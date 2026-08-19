@@ -11,12 +11,17 @@
         x:DataType="vm:MainWindowViewModel"
         Icon="/Assets/avalonia-logo.ico"
         Width="1200" Height="780"
+        FontSize="{DynamicResource AppFontSize}"
         MinWidth="900" MinHeight="600"
         Title="{Binding WindowTitle}">
 
     <Design.DataContext>
         <vm:MainWindowViewModel />
     </Design.DataContext>
+
+    <Window.KeyBindings>
+        <KeyBinding Gesture="Ctrl+OemComma" Command="{Binding OpenSettingsCommand}" />
+    </Window.KeyBindings>
 
     <Window.Styles>
         <Style Selector="TextBlock.label">
@@ -25,11 +30,11 @@
         </Style>
         <Style Selector="TextBlock.hint">
             <Setter Property="Opacity" Value="0.6" />
-            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontSize" Value="{DynamicResource AppFontSizeTiny}" />
             <Setter Property="TextWrapping" Value="Wrap" />
         </Style>
         <Style Selector="TextBlock.heading">
-            <Setter Property="FontSize" Value="20" />
+            <Setter Property="FontSize" Value="{DynamicResource AppFontSizeHeading}" />
             <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
         <Style Selector="TextBlock.group">
@@ -153,9 +158,9 @@
                     <TextBlock Text="{Binding EnvironmentSummary}" Classes="label" Margin="0,2,0,0" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                    <ComboBox ItemsSource="{Binding Themes}" SelectedItem="{Binding Theme}"
-                              VerticalAlignment="Center" MinWidth="96"
-                              ToolTip.Tip="Light, dark, or follow the operating system. Applies to every workspace." />
+                    <Button Content="&#x2699;" Command="{Binding OpenSettingsCommand}"
+                            FontSize="{DynamicResource AppFontSizeLarge}" Padding="10,0" MinWidth="36"
+                            ToolTip.Tip="Settings (Ctrl+,): theme, colours, font size, dotnet-ef and app updates." />
                     <Button Content="Refresh contexts" Command="{Binding RefreshContextsCommand}" />
                     <Button Content="Cancel" Command="{Binding Session.CancelCommand}" />
                     <Button Content="Close workspace" Command="{Binding CloseWorkspaceCommand}" />
@@ -172,6 +177,9 @@
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <Button Content="Open solution…" Command="{Binding OpenSolutionCommand}" />
                     <Button Content="Open folder…" Command="{Binding OpenFolderCommand}" />
+                    <Button Content="&#x2699;" Command="{Binding OpenSettingsCommand}"
+                            FontSize="{DynamicResource AppFontSizeLarge}" Padding="10,0" MinWidth="36"
+                            ToolTip.Tip="Settings (Ctrl+,): theme, colours, font size, dotnet-ef and app updates." />
                 </StackPanel>
 
                 <TextBlock Text="Recent" Classes="label"
@@ -188,7 +196,7 @@
                                 <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
                                     <StackPanel Grid.Column="0" Spacing="1">
                                         <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
-                                        <TextBlock Text="{Binding Location}" FontSize="11" Opacity="0.6"
+                                        <TextBlock Text="{Binding Location}" FontSize="{DynamicResource AppFontSizeTiny}" Opacity="0.6"
                                                    TextTrimming="CharacterEllipsis" />
                                     </StackPanel>
                                     <!-- Removes only the recent-list entry; the workspace settings file
@@ -197,7 +205,7 @@
                                          comes from the style below, not a local value here — a local
                                          value would outrank the style setter and never toggle. -->
                                     <Button Grid.Column="1" Name="RemoveRecentButton"
-                                            Content="&#x2715;" FontSize="11" Padding="6,2"
+                                            Content="&#x2715;" FontSize="{DynamicResource AppFontSizeTiny}" Padding="6,2"
                                             VerticalAlignment="Center"
                                             CommandParameter="{Binding Path}"
                                             Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).RemoveRecentCommand}"
@@ -208,40 +216,23 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
+                <!-- Both the dotnet-ef update and the app update check now live in Settings; what
+                     stays here is the state a person wants to see without opening anything. -->
                 <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                     <TextBlock Text="{Binding EnvironmentSummary}" Classes="label"
                                VerticalAlignment="Center" />
-                    <Button Content="Update dotnet-ef" Command="{Binding UpdateEfToolCommand}"
-                            IsVisible="{Binding EfToolAvailable}"
-                            ToolTip.Tip="Runs dotnet tool update dotnet-ef (local install if this solution pins one, global otherwise)." />
-                    <TextBlock Text="&#x2713;" FontWeight="Bold" VerticalAlignment="Center"
-                               Foreground="{DynamicResource StateAppliedBrush}"
-                               IsVisible="{Binding EfToolUpdateSucceeded}"
-                               ToolTip.Tip="dotnet-ef update finished." />
-                    <Button IsVisible="{Binding HasEfToolUpdateError}"
-                            Command="{Binding ShowEfToolUpdateErrorCommand}"
-                            ToolTip.Tip="Click for the full output.">
-                        <StackPanel Orientation="Horizontal" Spacing="4">
-                            <TextBlock Text="&#x2717;" FontWeight="Bold"
-                                       Foreground="{DynamicResource DangerForegroundBrush}" />
-                            <TextBlock Text="{Binding EfToolUpdateErrorSummary}"
-                                       Foreground="{DynamicResource DangerForegroundBrush}"
-                                       TextTrimming="CharacterEllipsis" MaxWidth="280" />
-                        </StackPanel>
-                    </Button>
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                     <TextBlock Classes="hint" VerticalAlignment="Center"
                                Text="{Binding Update.CurrentVersion, StringFormat='EfMigrateHub {0}'}" />
-                    <!-- Left visible but disabled for a development or portable run: there is no
-                         install to update in place, and a missing button reads as a missing
-                         feature. -->
-                    <Button Content="Check for updates" Command="{Binding Update.CheckCommand}"
-                            ToolTip.Tip="Checks GitHub for a newer release. Only available in an installed build." />
+                    <!-- Only after the banner has been dismissed: until then the banner is the offer,
+                         and two of them on one screen is noise. -->
+                    <Button Content="Update now" Classes="accent"
+                            IsVisible="{Binding Update.ShowHomeOffer}"
+                            Command="{Binding Update.UpdateNowCommand}"
+                            ToolTip.Tip="{Binding Update.Message}" />
                 </StackPanel>
-                <TextBlock Classes="hint" Text="{Binding Update.Message}"
-                           IsVisible="{Binding Update.Message, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
             </StackPanel>
         </Border>
 
@@ -322,7 +313,7 @@
                                 <Button Command="{Binding Migrations.ToggleSortOrderCommand}"
                                         Content="{Binding Migrations.SortGlyph}"
                                         ToolTip.Tip="{Binding Migrations.SortTooltip}"
-                                        FontSize="15" Padding="10,0" MinWidth="36"
+                                        FontSize="{DynamicResource AppFontSizeLarge}" Padding="10,0" MinWidth="36"
                                         VerticalAlignment="Stretch"
                                         HorizontalContentAlignment="Center" />
                                 <TextBlock Text="{Binding Migrations.Summary}" VerticalAlignment="Center" Opacity="0.8" />
@@ -330,14 +321,14 @@
                                         Classes="caution"
                                         CornerRadius="3" Padding="6,2" VerticalAlignment="Center"
                                         ToolTip.Tip="The last command failed, was cancelled, or could not be listed. Refresh to confirm what is really there.">
-                                    <TextBlock Text="May be out of date" FontSize="11" />
+                                    <TextBlock Text="May be out of date" FontSize="{DynamicResource AppFontSizeTiny}" />
                                 </Border>
                             </StackPanel>
 
                             <Border Grid.Row="1" IsVisible="{Binding Migrations.HasConnectionWarning}"
                                     Classes="caution"
                                     CornerRadius="4" Padding="10,8" Margin="0,0,0,8">
-                                <TextBlock Text="{Binding Migrations.ConnectionWarning}" TextWrapping="Wrap" FontSize="12" />
+                                <TextBlock Text="{Binding Migrations.ConnectionWarning}" TextWrapping="Wrap" FontSize="{DynamicResource AppFontSizeSmall}" />
                             </Border>
 
                             <!-- List on the left, the selected migration's detail on the right, with
@@ -365,7 +356,7 @@
                                                     <TextBlock Grid.Column="0" Text="{Binding Index}"
                                                                HorizontalAlignment="Right" Margin="0,0,10,0"
                                                                VerticalAlignment="Center"
-                                                               Opacity="0.55" FontSize="12"
+                                                               Opacity="0.55" FontSize="{DynamicResource AppFontSizeMono}"
                                                                FontFamily="Consolas,Menlo,monospace" />
                                                     <Border Grid.Column="1" CornerRadius="3" Padding="6,2"
                                                             HorizontalAlignment="Left" VerticalAlignment="Center"
@@ -374,11 +365,11 @@
                                                             Classes.badgeUnknown="{Binding State, Converter={x:Static app:OutputConverters.IsUnknownState}}">
                                                         <TextBlock Text="{Binding State, Converter={x:Static app:OutputConverters.StateLabel}}"
                                                                    Foreground="{DynamicResource StateBadgeForegroundBrush}"
-                                                                   FontSize="11" />
+                                                                   FontSize="{DynamicResource AppFontSizeTiny}" />
                                                     </Border>
                                                     <StackPanel Grid.Column="2" Spacing="1">
                                                         <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
-                                                        <TextBlock Text="{Binding Id}" FontSize="11" Opacity="0.55"
+                                                        <TextBlock Text="{Binding Id}" FontSize="{DynamicResource AppFontSizeMono}" Opacity="0.55"
                                                                    FontFamily="Consolas,Menlo,monospace" />
                                                     </StackPanel>
                                                 </Grid>
@@ -440,7 +431,7 @@
                                                        IsReadOnly="True"
                                                        ShowLineNumbers="True"
                                                        WordWrap="{Binding WrapSql}"
-                                                       FontFamily="Consolas,Menlo,monospace" FontSize="12"
+                                                       FontFamily="Consolas,Menlo,monospace" FontSize="{DynamicResource AppFontSizeMono}"
                                                        Background="Transparent"
                                                        HorizontalScrollBarVisibility="Auto"
                                                        VerticalScrollBarVisibility="Auto" />
@@ -457,7 +448,7 @@
                                              PlaceholderText="MigrationName" />
                                     <TextBlock Text="{Binding Migrations.NewMigrationNameError}"
                                                IsVisible="{Binding Migrations.HasNewMigrationNameError}"
-                                               Classes="danger" FontSize="11" TextWrapping="Wrap"
+                                               Classes="danger" FontSize="{DynamicResource AppFontSizeTiny}" TextWrapping="Wrap"
                                                Margin="0,4,0,0" />
                                     <TextBox Text="{Binding Migrations.OutputDirectory}"
                                              PlaceholderText="Output folder (optional)" Margin="0,6,0,0" />
@@ -515,7 +506,7 @@
                             <Border Grid.Row="1" IsVisible="{Binding Script.HasRangeWarning}"
                                     Classes="caution"
                                     CornerRadius="4" Padding="10,8" Margin="0,0,0,8">
-                                <TextBlock Text="{Binding Script.RangeWarning}" TextWrapping="Wrap" FontSize="12" />
+                                <TextBlock Text="{Binding Script.RangeWarning}" TextWrapping="Wrap" FontSize="{DynamicResource AppFontSizeSmall}" />
                             </Border>
 
                             <!-- Destination and actions -->
@@ -579,7 +570,7 @@
                                                    IsReadOnly="True"
                                                    ShowLineNumbers="True"
                                                    WordWrap="{Binding WrapSql}"
-                                                   FontFamily="Consolas,Menlo,monospace" FontSize="12"
+                                                   FontFamily="Consolas,Menlo,monospace" FontSize="{DynamicResource AppFontSizeMono}"
                                                    Background="Transparent"
                                                    HorizontalScrollBarVisibility="Auto"
                                                    VerticalScrollBarVisibility="Auto" />
@@ -602,7 +593,7 @@
                                             Classes.badgeUnknown="{Binding Tools.ModelCheckState, Converter={x:Static app:OutputConverters.IsModelUnknown}}">
                                         <TextBlock Text="{Binding Tools.ModelCheckState, Converter={x:Static app:OutputConverters.ModelCheckLabel}}"
                                                    Foreground="{DynamicResource StateBadgeForegroundBrush}"
-                                                   FontSize="11" />
+                                                   FontSize="{DynamicResource AppFontSizeTiny}" />
                                     </Border>
                                 </StackPanel>
                             </StackPanel>
@@ -629,7 +620,7 @@
                                 <TextBlock Text="{Binding Session.Diagnosis.Title}"
                                            FontWeight="SemiBold" TextWrapping="Wrap" />
                                 <TextBlock Text="{Binding Session.Diagnosis.Guidance}"
-                                           TextWrapping="Wrap" FontSize="12" Opacity="0.85" />
+                                           TextWrapping="Wrap" FontSize="{DynamicResource AppFontSizeSmall}" Opacity="0.85" />
                             </StackPanel>
                             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
                                         VerticalAlignment="Top">
@@ -668,7 +659,7 @@
                                             Classes.channelWarn="{Binding Channel, Converter={x:Static app:OutputConverters.IsWarnChannel}}"
                                             Classes.channelInfo="{Binding Channel, Converter={x:Static app:OutputConverters.IsInfoChannel}}"
                                             FontFamily="Consolas,Menlo,monospace"
-                                            FontSize="12"
+                                            FontSize="{DynamicResource AppFontSizeMono}"
                                             TextWrapping="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).WrapOutput, Converter={x:Static app:OutputConverters.Wrapping}}" />
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>

@@ -8,6 +8,7 @@
         x:DataType="vm:ErrorDetail"
         Title="{Binding Title}"
         Width="560" Height="360"
+        FontSize="{DynamicResource AppFontSize}"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False">
 

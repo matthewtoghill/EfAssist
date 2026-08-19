@@ -11,6 +11,16 @@
              theme variant. Consume them with DynamicResource so a theme switch repaints live -
              StaticResource would freeze whichever variant was active at load. -->
         <ResourceDictionary>
+            <!-- Font sizes, by role rather than by number. Theming.ApplyFontSizes overwrites these at
+                 startup from the user's chosen base; the values here are what the XAML previewer and
+                 a first run before that call see, and they match the sizes the app shipped with. -->
+            <x:Double x:Key="AppFontSize">14</x:Double>
+            <x:Double x:Key="AppFontSizeSmall">12</x:Double>
+            <x:Double x:Key="AppFontSizeTiny">11</x:Double>
+            <x:Double x:Key="AppFontSizeLarge">15</x:Double>
+            <x:Double x:Key="AppFontSizeHeading">20</x:Double>
+            <x:Double x:Key="AppFontSizeMono">12</x:Double>
+
             <ResourceDictionary.ThemeDictionaries>
 
                 <ResourceDictionary x:Key="Light">
@@ -94,6 +104,9 @@
         <!-- AvaloniaEdit ships no default template, so the SQL viewer renders as an empty box
              without this. It follows the Fluent variant, same as everything else. -->
         <StyleInclude Source="avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml" />
+
+        <!-- Same story for the colour pickers on the settings screen. -->
+        <StyleInclude Source="avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml" />
 
         <!-- Semantic classes, app-wide so both windows share them. Colour lives in the style, not at
              the usage site, which is what makes a theme switch a one-line change. -->
