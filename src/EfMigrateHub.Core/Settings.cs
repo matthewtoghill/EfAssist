@@ -167,6 +167,13 @@ public sealed class AppSettings
             RecentWorkspaces.RemoveRange(keep, RecentWorkspaces.Count - keep);
         }
     }
+
+    /// <summary>Drops a workspace from the recent list only. Its settings file, if any, is untouched.</summary>
+    public void RemoveRecent(string workspacePath)
+    {
+        var key = Path.GetFullPath(workspacePath);
+        RecentWorkspaces.RemoveAll(p => string.Equals(p, key, StringComparison.OrdinalIgnoreCase));
+    }
 }
 
 /// <summary>

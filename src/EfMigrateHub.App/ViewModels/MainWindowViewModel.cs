@@ -341,6 +341,19 @@ public partial class MainWindowViewModel : ObservableObject
     private bool CanOpen() => !IsRunning;
 
     [RelayCommand]
+    private void RemoveRecent(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        _settings.RemoveRecent(path);
+        SettingsStore.Save(_settings, _settingsPath);
+        SyncRecentWorkspaces();
+    }
+
+    [RelayCommand]
     private void CloseWorkspace()
     {
         Session.CancelCommand.Execute(null);

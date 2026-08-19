@@ -58,6 +58,16 @@
             <Setter Property="Height" Value="5" />
         </Style>
 
+        <!-- Recent-workspace row: the remove button only shows while the row is hovered. Both
+             states are style setters, not one style setter fighting a local value, so hover can
+             actually override the default. -->
+        <Style Selector="Button.recentItem Button#RemoveRecentButton">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="Button.recentItem:pointerover Button#RemoveRecentButton">
+            <Setter Property="IsVisible" Value="True" />
+        </Style>
+
         <!-- Console lines. Channel decides the class, the class decides the colour, and the colour
              follows the theme. An unmatched channel keeps the theme foreground. -->
         <Style Selector="SelectableTextBlock.channelError">
@@ -169,17 +179,30 @@
                 <ItemsControl ItemsSource="{Binding RecentWorkspaces}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:RecentWorkspace">
-                            <Button HorizontalAlignment="Stretch"
-                                    HorizontalContentAlignment="Left"
+                            <Button Classes="recentItem" HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Stretch"
                                     Margin="0,0,0,4" Padding="12,8"
                                     CommandParameter="{Binding Path}"
                                     Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).OpenRecentCommand}"
                                     ToolTip.Tip="{Binding Path}">
-                                <StackPanel Spacing="1">
-                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
-                                    <TextBlock Text="{Binding Location}" FontSize="11" Opacity="0.6"
-                                               TextTrimming="CharacterEllipsis" />
-                                </StackPanel>
+                                <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                    <StackPanel Grid.Column="0" Spacing="1">
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                        <TextBlock Text="{Binding Location}" FontSize="11" Opacity="0.6"
+                                                   TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                    <!-- Removes only the recent-list entry; the workspace settings file
+                                         beside it is left alone. Hidden until the row is hovered, so
+                                         the list does not read as a list of delete buttons. Visibility
+                                         comes from the style below, not a local value here — a local
+                                         value would outrank the style setter and never toggle. -->
+                                    <Button Grid.Column="1" Name="RemoveRecentButton"
+                                            Content="&#x2715;" FontSize="11" Padding="6,2"
+                                            VerticalAlignment="Center"
+                                            CommandParameter="{Binding Path}"
+                                            Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).RemoveRecentCommand}"
+                                            ToolTip.Tip="Remove from recent" />
+                                </Grid>
                             </Button>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
