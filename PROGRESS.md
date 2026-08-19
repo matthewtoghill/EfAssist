@@ -753,6 +753,113 @@ wording alone:
 
 ---
 
+## View a migration's Up/Down changes (roadmap item)
+
+The Migrations tab now has a detail pane beside the list: the selected migration's `.cs` file, and
+on request the SQL that migration alone would run.
+
+### Answers that shaped this
+- **Where?** To the right of the list, with a draggable divider — the selection and what it means
+  stay on screen together.
+- **Where does the SQL come from?** `dotnet ef migrations script <previous> <this>` into a temp file,
+  cached by migration id for the session. `migrations script` can only write to a file, so viewing
+  one requires producing one.
+- **How much of the `.cs`?** The whole file, read-only. Up and Down are adjacent and nothing has to
+  be parsed to find them.
+- **When is the SQL generated?** On an explicit button, never on selection — it builds.
+
+### Built
+- `MigrationFiles` in Core: finds the `.cs` for a migration id, and decides the temp path for a
+  generated preview. No package references added; it is `Directory`/`Path`/`SHA256`.
+- `MigrationDetailViewModel`: source, SQL, which of the two is showing, and the commands. Owned by
+  `MigrationsViewModel`, which calls `Show` on every selection change.
+- `Highlighting/CSharp-Light.xshd` and `CSharp-Dark.xshd`, and `SqlHighlighting` generalised into
+  `SyntaxHighlighting` with `Sql(variant)` and `CSharp(variant)`.
+- Migrations tab restructured into `list | GridSplitter | detail`, with a `Source` / `SQL` /
+  `Copy` / `Open file` toolbar over one `ae:TextEditor`.
+
+### Decisions worth recording
+- **The file is found by convention, not asked for.** `migrations list --json` returns an id and a
+  name but no path, and no CLI command reports where a migration file lives — `--output-dir` is an
+  input only. So the migrations project is searched for `<id>.cs`, skipping `bin`, `obj`, `.git` and
+  `node_modules`. Skipping build output is not an optimisation: a stale copy of the source sits in
+  `obj` after any build, and showing that as the migration would be a silently wrong answer.
+- **The `.Designer.cs` sibling is not offered.** It holds the model snapshot rather than Up and
+  Down, and its name does not match the search, so it is excluded for free.
+- **SQL is behind a button and the source is not.** Reading a file is free; `migrations script`
+  builds the project. Arrowing down a twenty-migration list must not queue twenty builds.
+- **The cache is keyed by migration id and dropped whenever the list reloads.** That is the moment
+  migration files may have been added, removed or edited, so anything generated from them stops
+  being trustworthy. A failed generation is never cached.
+- **Switching selection drops out of the SQL view unless the new migration's SQL is already
+  cached.** Otherwise the pane would keep showing one migration's SQL under another's name.
+- **The temp path is keyed by a hash of project and context.** Two contexts in one solution can have
+  identically named migrations, and reading one context's SQL under the other's name is exactly the
+  wrong-answer class this feature exists to avoid.
+- **One editor for both languages, not two.** The search panel, the wrap setting and the scroll
+  behaviour are then identical in both views, and the definition is swapped alongside the document.
+  The C# definitions are per-variant for the same reason the SQL ones are: a `HighlightingColor`
+  holds a literal colour, so a theme switch can only be answered by loading a different definition.
+- **The C# definition is deliberately smaller than AvaloniaEdit's bundled one.** Migration files are
+  generated code with a narrow vocabulary; comments, strings, keywords, built-in types and numbers
+  cover them. Verbatim strings needed care: `@"..."` doubles its quotes, so the escape is consumed
+  by an inner rule set rather than by a lookahead on the end pattern — the lookahead version ends
+  the string on the second quote of the pair, which the test caught.
+
+### Verified
+- `dotnet test EfMigrateHub.slnx` → **299 passed, 0 failed, 0 warnings** (was 249).
+- `MigrationFilesTests` covers the conventional folder, a custom `--output-dir` location, the
+  Designer file being ignored, a stale `obj` copy losing to the real source, and a stale copy alone
+  yielding nothing rather than a wrong answer.
+- `MigrationDetailViewModelTests` drives a fake runner that writes to the `--output` path it is
+  given, so the cache, the "0"-for-the-first-migration range, the previous-migration range, the
+  temp destination and the never-show-the-previous-migration's-SQL rule are all asserted against
+  the real argument list.
+- `SyntaxHighlightingTests` runs a real `DocumentHighlighter` over C# fragments, including the
+  doubled-quote verbatim string.
+- `dotnet build` clean with compiled bindings on, so the new detail-pane bindings resolve at compile
+  time. The app launches with the second editor and its `SearchPanel.Install` in the constructor.
+
+### Not done
+- **No visual review of the pane.** Nobody has opened a real workspace, selected a migration and
+  looked at it in either theme variant.
+- **The splitter position is not remembered between sessions.** The columns are proportional
+  (`2*` / `3*`), so it comes back sensible at any window size, but a dragged width is lost on close.
+- **No Up/Down split and no diff between two migrations.** The whole file is shown; Up and Down are
+  found by reading. A structured diff stays out of scope — see the roadmap's "Not planned".
+- **Editing a migration file mid-session does not invalidate its cached SQL.** Refreshing the
+  migrations list does. There is no file watcher.
+
+### Idempotent option moved to the shared workspace pane
+The migration detail pane's SQL preview initially ignored the idempotent flag entirely — `migrations
+script` was always called without `--idempotent`. Fixed by sharing the option rather than adding a
+second one.
+
+- **One flag, not two.** `Idempotent` moved off `ScriptViewModel` and onto `MainWindowViewModel`,
+  persisted per workspace next to `NoBuild` and `Offline`, and shown as a checkbox in the same
+  left-hand options pane. Both the Script tab and the detail pane's `SQL` button read it through a
+  `Func<bool>`, so there is nowhere for the two to disagree.
+- **The provider gate is shared too, not duplicated.** `CanUseIdempotent`/`IdempotentTooltip`/the
+  provider probe stay on `ScriptViewModel` — it is where the probe has always run, lazily, on first
+  visit to the Script tab. `MigrationDetailViewModel` reads `Script.CanUseIdempotent` and calls
+  `Script.EnsureProviderKnownAsync()` before its own first generation, rather than probing a second
+  time for a capability that depends only on the context. `MainWindowViewModel` constructs `Script`
+  before `Migrations` for this reason — a code comment marks why the order matters.
+- **The SQL cache is keyed by migration id and the idempotent flag together.** Flipping the option
+  and pressing `SQL` again must not serve back the other variant's result; flipping it back finds
+  the earlier result still cached rather than rebuilding a third time.
+- **Unticking on an unsupported provider is now a callback, not a direct property write.**
+  `ScriptViewModel` no longer owns the flag, so it cannot null it itself; it calls
+  `onIdempotentUnsupported`, which the shell wires to `Idempotent = false`.
+
+Verified: `dotnet test` → **303 passed, 0 failed** (was 299). `ScriptViewModelTests` updated for the
+new constructor shape; `MigrationDetailViewModelTests` gained cases for the ticked-and-supported,
+ticked-and-unsupported, provider-probed-first-generation, and separately-cached-by-flag behaviour.
+Not done: no visual check that the shared checkbox's enabled/disabled state updates promptly when
+switching context on the Migrations tab without ever having visited the Script tab.
+
+---
+
 ## Deliberate shortcuts
 
 Tracked so they do not rot into "later means never". Each is marked with a `ponytail:` comment at the site.
@@ -771,3 +878,6 @@ Tracked so they do not rot into "later means never". Each is marked with a `pony
 | `ScriptViewModel` provider probe | Skipped silently if a command is already running; retries next visit | It proves confusing in practice |
 | `Highlighting/Sql-*.xshd` | The ~580-keyword list is duplicated across both variant files | Never, most likely — it is machine-generated and inert. Revisit only if the two files start diverging in rules as well as colours |
 | `MainWindow.axaml.cs` SQL document | Rebuilt from scratch on every `Sql` change rather than diffed into the existing document | Scripts get large enough that reallocating the document is visible; a few thousand lines is not |
+| `MigrationFiles.FindSource` | Walks the migrations project for `<id>.cs` on every selection, with no cache | A project is big enough that the walk is noticeable; it is a directory scan against a warm OS cache |
+| `MigrationDetailViewModel` | Cached SQL is invalidated by a list refresh, not by watching the migration files | Editing a migration and re-reading its SQL without refreshing proves confusing |
+| Migrations tab splitter | Column widths are proportional and not persisted | Someone resizes it every session |

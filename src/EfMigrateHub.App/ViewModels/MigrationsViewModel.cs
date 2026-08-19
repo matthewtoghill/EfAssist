@@ -35,13 +35,18 @@ public partial class MigrationsViewModel : ObservableObject
         CommandSession session,
         Func<EfTarget?> target,
         Action persist,
-        DisplaySettings? display = null)
+        DisplaySettings? display = null,
+        Func<bool>? idempotentRequested = null,
+        Func<bool>? canUseIdempotent = null,
+        Func<Task>? ensureProviderKnownAsync = null)
     {
         _session = session;
         _target = target;
         _persist = persist;
         _display = display ?? new DisplaySettings();
         _sortNewestFirst = _display.SortNewestFirst;
+        Detail = new MigrationDetailViewModel(
+            session, target, () => _ordered, idempotentRequested, canUseIdempotent, ensureProviderKnownAsync);
 
         _session.PropertyChanged += (_, e) =>
         {
@@ -51,6 +56,11 @@ public partial class MigrationsViewModel : ObservableObject
             }
         };
     }
+
+    /// <summary>
+    /// The pane beside the list: the selected migration's source, and on request its SQL.
+    /// </summary>
+    public MigrationDetailViewModel Detail { get; }
 
     /// <summary>Supplied by the view: shows a modal confirmation and reports what the user chose.</summary>
     public Func<ConfirmRequest, Task<bool>>? ConfirmAsync { get; set; }
@@ -159,6 +169,7 @@ public partial class MigrationsViewModel : ObservableObject
 
         _ordered.Clear();
         _ordered.AddRange(saved.KnownMigrations.Select(m => m with { Applied = null }));
+        Detail.Clear();
         RebuildDisplay();
     }
 
@@ -185,6 +196,7 @@ public partial class MigrationsViewModel : ObservableObject
         IsStale = false;
         NewMigrationName = "";
         ForceRemove = false;
+        Detail.Clear();
         NotifyListChanged();
     }
 
@@ -603,6 +615,10 @@ public partial class MigrationsViewModel : ObservableObject
         _ordered.Clear();
         _ordered.AddRange(migrations);
         IsStale = false;
+
+        // The files behind the list may have changed since the SQL was generated from them.
+        Detail.InvalidateSql();
+
         RebuildDisplay();
         _persist();
 
@@ -661,6 +677,7 @@ public partial class MigrationsViewModel : ObservableObject
         UpdateToSelectedCommand.NotifyCanExecuteChanged();
         RevertAllCommand.NotifyCanExecuteChanged();
         DropDatabaseCommand.NotifyCanExecuteChanged();
+        Detail.NotifyTargetChanged();
     }
 
     partial void OnSortNewestFirstChanged(bool value)
@@ -677,8 +694,11 @@ public partial class MigrationsViewModel : ObservableObject
 
     partial void OnIsStaleChanged(bool value) => OnPropertyChanged(nameof(ShowsStaleWarning));
 
-    partial void OnSelectedMigrationChanged(MigrationRow? value) =>
+    partial void OnSelectedMigrationChanged(MigrationRow? value)
+    {
         UpdateToSelectedCommand.NotifyCanExecuteChanged();
+        Detail.Show(value);
+    }
 
     partial void OnNewMigrationNameChanged(string value)
     {

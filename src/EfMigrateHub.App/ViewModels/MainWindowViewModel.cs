@@ -81,8 +81,25 @@ public partial class MainWindowViewModel : ObservableObject
             }
         };
 
-        Migrations = new MigrationsViewModel(Session, BuildTargetForCommands, Persist, settings.Display);
-        Script = new ScriptViewModel(Session, BuildTargetForCommands, () => Migrations.Ordered, Persist);
+        // Script is constructed first: it owns the provider probe (CanUseIdempotent), which
+        // Migrations.Detail's SQL preview shares rather than probing a second time. The Func
+        // arguments below are lambdas, so the forward reference to Script inside Migrations'
+        // construction only ever runs after both fields are assigned.
+        Script = new ScriptViewModel(
+            Session,
+            BuildTargetForCommands,
+            () => Migrations.Ordered,
+            Persist,
+            idempotentRequested: () => Idempotent,
+            onIdempotentUnsupported: () => Idempotent = false);
+        Migrations = new MigrationsViewModel(
+            Session,
+            BuildTargetForCommands,
+            Persist,
+            settings.Display,
+            idempotentRequested: () => Idempotent,
+            canUseIdempotent: () => Script.CanUseIdempotent,
+            ensureProviderKnownAsync: Script.EnsureProviderKnownAsync);
         Tools = new ToolsViewModel(Session, BuildTargetForCommands);
     }
 
@@ -201,6 +218,15 @@ public partial class MainWindowViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _noBuild;
+
+    /// <summary>
+    /// Generate scripts that check the migrations history table, so they are safe to run more than
+    /// once. Lives here rather than on the Script tab because the migration detail pane's SQL
+    /// preview needs the same flag — one option in the shared workspace pane, not two independent
+    /// ones that could disagree.
+    /// </summary>
+    [ObservableProperty]
+    private bool _idempotent;
 
     // ---- Command execution ----
 
@@ -422,6 +448,7 @@ public partial class MainWindowViewModel : ObservableObject
         {
             DiscoveryMode = saved.Discovery;
             NoBuild = saved.NoBuild;
+            Idempotent = saved.Idempotent;
             _savedContextName = saved.Context;
 
             StartupProject = Match(saved.StartupProject) ?? workspace.SuggestedStartupProject;
@@ -476,6 +503,7 @@ public partial class MainWindowViewModel : ObservableObject
         saved.Context = SelectedContext?.Name ?? _savedContextName;
         saved.Discovery = DiscoveryMode;
         saved.NoBuild = NoBuild;
+        saved.Idempotent = Idempotent;
 
         // Only overwrite the remembered list when we actually have one; clearing it on an incidental
         // save would force a build on the next open.
@@ -699,6 +727,12 @@ public partial class MainWindowViewModel : ObservableObject
     partial void OnDiscoveryModeChanged(DiscoveryMode value) => Persist();
 
     partial void OnNoBuildChanged(bool value) => Persist();
+
+    partial void OnIdempotentChanged(bool value)
+    {
+        Script.NotifyIdempotentChanged();
+        Persist();
+    }
 
     partial void OnWrapOutputChanged(bool value)
     {

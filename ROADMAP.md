@@ -74,12 +74,13 @@ A Settings window with app-wide and per-workspace sections, rather than options 
 - **Revisit when:** the option count outgrows the toolbars, or an option appears that has no natural inline home.
 - **Cost:** a few hours; the settings model already separates app-wide from per-workspace.
 
-### View a migration's Up/Down changes
-From the migrations list, select a migration and view its `Up`/`Down` diff.
+### View a migration's Up/Down changes — done, per-migration diffing still parked
+From the migrations list, select a migration and read what it does. **Done.**
 
-- **Why parked:** not scoped for v1; needs a view (read the `.cs`, or generate a per-migration script via `dotnet ef migrations script <from> <to>`) and a place to show it.
-- **Revisit when:** prioritised for a later version.
-- **Cost:** small-moderate — likely reuses the existing script viewer.
+- **Current state:** the Migrations tab is split into the list, a draggable divider and a detail pane. Selecting a migration reads its `.cs` file straight off disk and shows it read-only with C# highlighting — Up and Down are adjacent, so nothing is parsed to separate them. A `SQL` button generates the SQL for that migration alone (`migrations script <previous> <this>`, or `0` as the start for the first one) into a temp file and shows it in the same editor, with the SQL definition swapped in. That costs a build, which is why it is a button rather than something that happens on selection; the result is cached by migration id for the session and dropped whenever the migrations list is reloaded. The file is located by convention — the migrations project is searched for `<id>.cs`, skipping `bin` and `obj` so a stale build-output copy can never be shown as the migration. See `PROGRESS.md`.
+- **Not done:** splitting Up from Down into separate panes, and diffing two migrations against each other. The first needs a brace parser that is not fooled by strings and comments; the second is closer to the "migration diffing" item under Not planned. The splitter position is also not remembered between sessions.
+- **Revisit when:** someone wants to read Up without Down beside it. Ctrl+F in the pane covers the "find the bit I want" case in the meantime.
+- **Cost:** a day for a reliable Up/Down split.
 
 ### Update dotnet-ef tool from the app
 From the home page, offer a way to update the `dotnet-ef` global/local tool.

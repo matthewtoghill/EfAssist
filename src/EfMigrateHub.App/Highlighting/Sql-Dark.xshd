@@ -4,7 +4,7 @@
      Derived from AvaloniaEdit's bundled TSQL-Mode.xshd. There is a file per variant rather than one
      shared definition because a HighlightingColor carries a literal colour, not a theme resource, so
      the only way a theme switch can repaint the SQL is to load a different definition. See
-     SqlHighlighting.
+     SyntaxHighlighting.
 
      The keyword list is upstream's and is deliberately left alone. The colours, the number rule and
      the quoted-identifier rule below are the only differences between this file and its sibling. -->

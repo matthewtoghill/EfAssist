@@ -40,6 +40,16 @@ public partial class ScriptViewModel : ObservableObject
     private readonly Func<IReadOnlyList<MigrationInfo>> _migrations;
     private readonly Action _persist;
 
+    /// <summary>
+    /// Whether the shared "Idempotent" option, which lives in the workspace options pane rather than
+    /// on this tab, is currently ticked. Shared with the migration detail pane's SQL preview, so both
+    /// honour the same flag and the same provider gate rather than keeping two independent ones.
+    /// </summary>
+    private readonly Func<bool> _idempotentRequested;
+
+    /// <summary>Called when a provider probe finds the ticked option is not actually usable.</summary>
+    private readonly Action _onIdempotentUnsupported;
+
     /// <summary>Provider details per context name, so the probe runs once rather than per visit.</summary>
     private readonly Dictionary<string, DbContextDetails> _providerCache = new(StringComparer.Ordinal);
 
@@ -52,12 +62,16 @@ public partial class ScriptViewModel : ObservableObject
         CommandSession session,
         Func<EfTarget?> target,
         Func<IReadOnlyList<MigrationInfo>> migrations,
-        Action persist)
+        Action persist,
+        Func<bool>? idempotentRequested = null,
+        Action? onIdempotentUnsupported = null)
     {
         _session = session;
         _target = target;
         _migrations = migrations;
         _persist = persist;
+        _idempotentRequested = idempotentRequested ?? (() => false);
+        _onIdempotentUnsupported = onIdempotentUnsupported ?? (() => { });
 
         _session.PropertyChanged += (_, e) =>
         {
@@ -101,9 +115,6 @@ public partial class ScriptViewModel : ObservableObject
     public bool IsCustomRange => Range == ScriptRange.Custom;
 
     // ---- Options ----
-
-    [ObservableProperty]
-    private bool _idempotent;
 
     /// <summary>
     /// Null until the provider has been probed. Unknown providers get the benefit of the doubt: it is
@@ -198,6 +209,13 @@ public partial class ScriptViewModel : ObservableObject
         await EnsureProviderKnownAsync();
     }
 
+    /// <summary>
+    /// Probes the provider if it is not already known. Public so the migration detail pane can share
+    /// the same probe and cache rather than running its own — the capability depends only on the
+    /// context, which the two views have in common.
+    /// </summary>
+    public Task EnsureProviderKnownAsync() => EnsureProviderKnownAsyncCore();
+
     public void Restore(WorkspaceSettings saved)
     {
         OutputFolder = saved.ScriptOutputFolder ?? "";
@@ -281,7 +299,7 @@ public partial class ScriptViewModel : ObservableObject
         }
 
         var result = await _session.RunAsync(
-            EfArgs.MigrationsScript(target, path, from, to, Idempotent && CanUseIdempotent),
+            EfArgs.MigrationsScript(target, path, from, to, _idempotentRequested() && CanUseIdempotent),
             "Generating SQL script");
 
         if (result is null)
@@ -445,7 +463,7 @@ public partial class ScriptViewModel : ObservableObject
         }
     }
 
-    private async Task EnsureProviderKnownAsync()
+    private async Task EnsureProviderKnownAsyncCore()
     {
         var target = _target();
         var context = target?.Context;
@@ -493,7 +511,7 @@ public partial class ScriptViewModel : ObservableObject
             _target()?.Context,
             Range == ScriptRange.All ? null : from,
             to,
-            Idempotent && CanUseIdempotent);
+            _idempotentRequested() && CanUseIdempotent);
     }
 
     private void UpdateSuggestedFileName()
@@ -522,6 +540,9 @@ public partial class ScriptViewModel : ObservableObject
     /// </summary>
     public void NotifyTargetChanged() => NotifyCommandStates();
 
+    /// <summary>Called by the shell when the shared Idempotent option is toggled.</summary>
+    public void NotifyIdempotentChanged() => UpdateSuggestedFileName();
+
     private void NotifyCommandStates()
     {
         OnPropertyChanged(nameof(IsReady));
@@ -545,17 +566,15 @@ public partial class ScriptViewModel : ObservableObject
 
     partial void OnSelectedToChanged(string value) => UpdateSuggestedFileName();
 
-    partial void OnIdempotentChanged(bool value) => UpdateSuggestedFileName();
-
     partial void OnProviderDetailsChanged(DbContextDetails? value)
     {
         OnPropertyChanged(nameof(CanUseIdempotent));
         OnPropertyChanged(nameof(IdempotentTooltip));
 
-        // A provider that cannot do it must not leave the box ticked from a previous context.
-        if (!CanUseIdempotent && Idempotent)
+        // A provider that cannot do it must not leave the option ticked from a previous context.
+        if (!CanUseIdempotent)
         {
-            Idempotent = false;
+            _onIdempotentUnsupported();
         }
     }
 

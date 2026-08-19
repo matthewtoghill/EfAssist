@@ -11,7 +11,7 @@
 
   <ItemGroup>
     <AvaloniaResource Include="Assets\**" />
-    <!-- Read by SqlHighlighting through GetManifestResourceStream, so these are plain embedded
+    <!-- Read by SyntaxHighlighting through GetManifestResourceStream, so these are plain embedded
          resources rather than AvaloniaResource entries. -->
     <EmbeddedResource Include="Highlighting\*.xshd" />
   </ItemGroup>

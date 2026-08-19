@@ -93,7 +93,19 @@ public class ScriptViewModelTests : IDisposable
     private static List<MigrationInfo> Rows(params (string Name, bool? Applied)[] rows) =>
         [.. rows.Select((r, i) => new MigrationInfo($"2026010100000{i}_{r.Name}", r.Name, r.Name, r.Applied))];
 
-    private (ScriptViewModel Tab, FakeEf Runner, List<ConfirmRequest> Confirms) Build(
+    /// <summary>
+    /// Stands in for the shared "Idempotent" option, which the shell owns now that the flag lives in
+    /// the workspace options pane rather than on the Script tab itself.
+    /// </summary>
+    private sealed class IdempotentOption
+    {
+        public bool Requested { get; set; }
+        public bool WasUnsupported { get; private set; }
+
+        public void MarkUnsupported() => WasUnsupported = true;
+    }
+
+    private (ScriptViewModel Tab, FakeEf Runner, List<ConfirmRequest> Confirms, IdempotentOption Idempotent) Build(
         List<MigrationInfo>? migrations = null,
         bool confirmed = true,
         string? outputFolder = null,
@@ -102,9 +114,17 @@ public class ScriptViewModelTests : IDisposable
         var runner = new FakeEf();
         var session = new CommandSession(runner) { PostToUiThread = action => action() };
         var confirms = new List<ConfirmRequest>();
+        var idempotent = new IdempotentOption();
         var rows = migrations ?? Rows(("InitialCreate", true), ("AddBlogUrl", false));
 
-        var tab = new ScriptViewModel(session, () => Target, () => rows, () => { })
+        var tab = new ScriptViewModel(
+            session, () => Target, () => rows, () => { },
+            idempotentRequested: () => idempotent.Requested,
+            onIdempotentUnsupported: () =>
+            {
+                idempotent.MarkUnsupported();
+                idempotent.Requested = false;
+            })
         {
             ConfirmAsync = request =>
             {
@@ -116,7 +136,7 @@ public class ScriptViewModelTests : IDisposable
         };
 
         tab.RefreshOptions();
-        return (tab, runner, confirms);
+        return (tab, runner, confirms, idempotent);
     }
 
     private static IReadOnlyList<string> ScriptCall(FakeEf runner) =>
@@ -134,7 +154,7 @@ public class ScriptViewModelTests : IDisposable
     [Fact]
     public async Task All_scripts_everything_by_passing_no_range()
     {
-        var (tab, runner, _) = Build(outputFolder: _root);
+        var (tab, runner, _, _) = Build(outputFolder: _root);
         tab.Range = ScriptRange.All;
 
         await tab.GenerateCommand.ExecuteAsync(null);
@@ -145,7 +165,7 @@ public class ScriptViewModelTests : IDisposable
     [Fact]
     public async Task Pending_scripts_from_the_last_applied_migration_forward()
     {
-        var (tab, runner, _) = Build(
+        var (tab, runner, _, _) = Build(
             Rows(("A", true), ("B", true), ("C", false)),
             outputFolder: _root);
         tab.Range = ScriptRange.Pending;
@@ -159,7 +179,7 @@ public class ScriptViewModelTests : IDisposable
     [Fact]
     public async Task Pending_with_nothing_applied_scripts_from_the_beginning()
     {
-        var (tab, runner, _) = Build(Rows(("A", false), ("B", false)), outputFolder: _root);
+        var (tab, runner, _, _) = Build(Rows(("A", false), ("B", false)), outputFolder: _root);
         tab.Range = ScriptRange.Pending;
 
         await tab.GenerateCommand.ExecuteAsync(null);
@@ -170,7 +190,7 @@ public class ScriptViewModelTests : IDisposable
     [Fact]
     public void Pending_warns_when_the_applied_state_was_never_fetched()
     {
-        var (tab, _, _) = Build(Rows(("A", null), ("B", null)));
+        var (tab, _, _, _) = Build(Rows(("A", null), ("B", null)));
 
         tab.Range = ScriptRange.Pending;
 
@@ -185,7 +205,7 @@ public class ScriptViewModelTests : IDisposable
     [Fact]
     public async Task Custom_passes_both_endpoints()
     {
-        var (tab, runner, _) = Build(outputFolder: _root);
+        var (tab, runner, _, _) = Build(outputFolder: _root);
         tab.Range = ScriptRange.Custom;
         tab.SelectedFrom = "InitialCreate";
         tab.SelectedTo = "AddBlogUrl";
@@ -199,7 +219,7 @@ public class ScriptViewModelTests : IDisposable
     public async Task Custom_with_only_an_end_point_still_sends_a_start()
     {
         // FROM and TO are positional, so a lone TO would be read as a FROM and script the wrong range.
-        var (tab, runner, _) = Build(outputFolder: _root);
+        var (tab, runner, _, _) = Build(outputFolder: _root);
         tab.Range = ScriptRange.Custom;
         tab.SelectedTo = "AddBlogUrl";
 
@@ -211,7 +231,7 @@ public class ScriptViewModelTests : IDisposable
     [Fact]
     public void The_pickers_are_built_from_the_migrations_list()
     {
-        var (tab, _, _) = Build();
+        var (tab, _, _, _) = Build();
 
         Assert.Equal(
             [ScriptViewModel.FromBeginning, "InitialCreate", "AddBlogUrl"],
@@ -242,7 +262,7 @@ public class ScriptViewModelTests : IDisposable
     [Fact]
     public async Task The_provider_is_probed_once_when_the_tab_is_opened()
     {
-        var (tab, runner, _) = Build();
+        var (tab, runner, _, _) = Build();
 
         await tab.OnActivatedAsync();
         await tab.OnActivatedAsync();
@@ -254,9 +274,9 @@ public class ScriptViewModelTests : IDisposable
     [Fact]
     public async Task Sqlite_cannot_use_idempotent_and_the_tooltip_says_why()
     {
-        var (tab, runner, _) = Build();
+        var (tab, runner, _, idempotent) = Build();
         runner.Provider = "Microsoft.EntityFrameworkCore.Sqlite";
-        tab.Idempotent = true;
+        idempotent.Requested = true;
 
         await tab.OnActivatedAsync();
 
@@ -264,14 +284,15 @@ public class ScriptViewModelTests : IDisposable
         Assert.Contains("does not support", tab.IdempotentTooltip);
 
         // Also untick it, so a provider switch cannot leave an unsupported flag armed.
-        Assert.False(tab.Idempotent);
+        Assert.True(idempotent.WasUnsupported);
+        Assert.False(idempotent.Requested);
     }
 
     [Fact]
     public async Task An_unknown_provider_keeps_the_option_available()
     {
         // Better to attempt and surface EF's own error than to grey out something that would work.
-        var (tab, runner, _) = Build();
+        var (tab, runner, _, _) = Build();
         runner.InfoFails = true;
 
         await tab.OnActivatedAsync();
@@ -282,11 +303,11 @@ public class ScriptViewModelTests : IDisposable
     [Fact]
     public async Task Idempotent_is_passed_only_when_ticked_and_supported()
     {
-        var (tab, runner, _) = Build(outputFolder: _root);
+        var (tab, runner, _, idempotent) = Build(outputFolder: _root);
         await tab.GenerateCommand.ExecuteAsync(null);
         Assert.DoesNotContain("--idempotent", ScriptCall(runner));
 
-        tab.Idempotent = true;
+        idempotent.Requested = true;
         await tab.GenerateCommand.ExecuteAsync(null);
         Assert.Contains("--idempotent", ScriptCall(runner));
     }
@@ -296,7 +317,7 @@ public class ScriptViewModelTests : IDisposable
     [Fact]
     public async Task A_configured_folder_is_used_without_asking()
     {
-        var (tab, runner, confirms) = Build(outputFolder: _root);
+        var (tab, runner, confirms, _) = Build(outputFolder: _root);
 
         await tab.GenerateCommand.ExecuteAsync(null);
 
@@ -310,7 +331,7 @@ public class ScriptViewModelTests : IDisposable
     public async Task With_no_folder_configured_the_save_dialog_decides()
     {
         var chosen = Path.Combine(_root, "picked.sql");
-        var (tab, _, confirms) = Build(savePath: chosen);
+        var (tab, _, confirms, _) = Build(savePath: chosen);
 
         await tab.GenerateCommand.ExecuteAsync(null);
 
@@ -322,7 +343,7 @@ public class ScriptViewModelTests : IDisposable
     [Fact]
     public async Task Cancelling_the_save_dialog_generates_nothing()
     {
-        var (tab, runner, _) = Build(savePath: null);
+        var (tab, runner, _, _) = Build(savePath: null);
 
         await tab.GenerateCommand.ExecuteAsync(null);
 
@@ -337,7 +358,7 @@ public class ScriptViewModelTests : IDisposable
         var existing = Path.Combine(_root, "BlogContext_0-to-latest.sql");
         File.WriteAllText(existing, "-- hand edited");
 
-        var (tab, runner, confirms) = Build(outputFolder: _root, confirmed: false);
+        var (tab, runner, confirms, _) = Build(outputFolder: _root, confirmed: false);
         await tab.GenerateCommand.ExecuteAsync(null);
 
         Assert.Single(confirms);
@@ -353,7 +374,7 @@ public class ScriptViewModelTests : IDisposable
         var existing = Path.Combine(_root, "BlogContext_0-to-latest.sql");
         File.WriteAllText(existing, "-- old");
 
-        var (tab, _, confirms) = Build(outputFolder: _root, confirmed: true);
+        var (tab, _, confirms, _) = Build(outputFolder: _root, confirmed: true);
         await tab.GenerateCommand.ExecuteAsync(null);
 
         Assert.Single(confirms);
@@ -365,7 +386,7 @@ public class ScriptViewModelTests : IDisposable
     [Fact]
     public void The_suggested_name_follows_the_choices()
     {
-        var (tab, _, _) = Build();
+        var (tab, _, _, _) = Build();
 
         Assert.Equal("BlogContext_0-to-latest.sql", tab.FileName);
 
@@ -379,7 +400,7 @@ public class ScriptViewModelTests : IDisposable
     [Fact]
     public void A_hand_typed_name_is_not_overwritten_by_later_choices()
     {
-        var (tab, _, _) = Build();
+        var (tab, _, _, _) = Build();
 
         tab.FileName = "deploy-to-staging.sql";
         tab.Range = ScriptRange.Custom;
@@ -395,7 +416,7 @@ public class ScriptViewModelTests : IDisposable
     [Fact]
     public async Task A_name_without_an_extension_gets_one()
     {
-        var (tab, _, _) = Build(outputFolder: _root);
+        var (tab, _, _, _) = Build(outputFolder: _root);
         tab.FileName = "deploy";
 
         await tab.GenerateCommand.ExecuteAsync(null);
@@ -408,7 +429,7 @@ public class ScriptViewModelTests : IDisposable
     [Fact]
     public async Task The_generated_sql_is_read_back_byte_for_byte()
     {
-        var (tab, runner, _) = Build(outputFolder: _root);
+        var (tab, runner, _, _) = Build(outputFolder: _root);
 
         await tab.GenerateCommand.ExecuteAsync(null);
 
@@ -421,7 +442,7 @@ public class ScriptViewModelTests : IDisposable
     [Fact]
     public async Task Open_and_reveal_only_become_available_after_a_script_exists()
     {
-        var (tab, _, _) = Build(outputFolder: _root);
+        var (tab, _, _, _) = Build(outputFolder: _root);
 
         Assert.False(tab.OpenCommand.CanExecute(null));
         Assert.False(tab.RevealCommand.CanExecute(null));
@@ -437,7 +458,7 @@ public class ScriptViewModelTests : IDisposable
     [Fact]
     public async Task Open_and_reveal_hand_the_generated_path_to_the_shell()
     {
-        var (tab, _, _) = Build(outputFolder: _root);
+        var (tab, _, _, _) = Build(outputFolder: _root);
         var opened = new List<string>();
         var revealed = new List<string>();
         tab.OpenFileAsync = path => { opened.Add(path); return Task.CompletedTask; };
@@ -455,7 +476,7 @@ public class ScriptViewModelTests : IDisposable
     [Fact]
     public async Task A_failed_generation_leaves_the_viewer_alone()
     {
-        var (tab, runner, _) = Build(outputFolder: _root);
+        var (tab, runner, _, _) = Build(outputFolder: _root);
         runner.ScriptFails = true;
 
         await tab.GenerateCommand.ExecuteAsync(null);
@@ -470,14 +491,14 @@ public class ScriptViewModelTests : IDisposable
     [Fact]
     public void The_scripts_folder_round_trips_through_workspace_settings()
     {
-        var (tab, _, _) = Build();
+        var (tab, _, _, _) = Build();
         tab.OutputFolder = _root;
 
         var saved = new WorkspaceSettings();
         tab.Store(saved);
         Assert.Equal(_root, saved.ScriptOutputFolder);
 
-        var (reopened, _, _) = Build();
+        var (reopened, _, _, _) = Build();
         reopened.Restore(saved);
         Assert.Equal(_root, reopened.OutputFolder);
         Assert.True(reopened.UsesConfiguredFolder);
@@ -486,7 +507,7 @@ public class ScriptViewModelTests : IDisposable
     [Fact]
     public void An_empty_folder_is_stored_as_null_rather_than_an_empty_string()
     {
-        var (tab, _, _) = Build();
+        var (tab, _, _, _) = Build();
         var saved = new WorkspaceSettings { ScriptOutputFolder = _root };
 
         tab.OutputFolder = "   ";
@@ -508,7 +529,7 @@ public class ScriptViewModelTests : IDisposable
     [Fact]
     public async Task A_failed_generation_marks_the_sql_on_screen_as_out_of_date()
     {
-        var (tab, runner, _) = Build(outputFolder: _root);
+        var (tab, runner, _, _) = Build(outputFolder: _root);
         await tab.GenerateCommand.ExecuteAsync(null);
         Assert.True(tab.HasSql);
         Assert.False(tab.IsStale);

@@ -57,6 +57,13 @@ public sealed class WorkspaceSettings
     public bool Offline { get; set; }
 
     /// <summary>
+    /// Generate idempotent scripts, checking the migrations history table. Shared by the Script tab
+    /// and the migration detail pane's SQL preview, so it lives once, per workspace, alongside
+    /// <see cref="NoBuild"/> and <see cref="Offline"/> rather than on either view.
+    /// </summary>
+    public bool Idempotent { get; set; }
+
+    /// <summary>
     /// The contexts found last time discovery ran here, so the dropdown can be populated without
     /// building anything. Refreshed whenever discovery succeeds.
     /// </summary>

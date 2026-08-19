@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -18,6 +18,9 @@ public partial class MainWindow : Window
     /// <summary>The view model whose Script tab the SQL editor is currently showing.</summary>
     private ScriptViewModel? _script;
 
+    /// <summary>The view model behind the migration detail pane.</summary>
+    private MigrationDetailViewModel? _detail;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -25,11 +28,14 @@ public partial class MainWindow : Window
         // Ctrl+F, Ctrl+H and F3 over the SQL. Read-only, so replace does nothing, but the search
         // half is the point for a long script.
         SearchPanel.Install(SqlEditor);
+        SearchPanel.Install(DetailEditor);
 
         // A definition holds literal colours, so a theme switch needs a different one. This fires
         // for a System user whose OS flips too, which a Theme-property handler would miss.
         SqlEditor.ActualThemeVariantChanged += (_, _) => ApplySqlHighlighting();
+        DetailEditor.ActualThemeVariantChanged += (_, _) => ApplyDetailHighlighting();
         ApplySqlHighlighting();
+        ApplyDetailHighlighting();
 
         // The view owns the TopLevel that file pickers and the clipboard need, so it supplies those
         // to the view model rather than the view model reaching for UI services.
@@ -48,6 +54,7 @@ public partial class MainWindow : Window
             viewModel.Script.PickFolderAsync = PickFolderAsync;
             viewModel.Script.OpenFileAsync = path => OpenWithShellAsync(path, reveal: false);
             viewModel.Script.RevealFileAsync = path => OpenWithShellAsync(path, reveal: true);
+            viewModel.Migrations.Detail.OpenFileAsync = path => OpenWithShellAsync(path, reveal: false);
 
             viewModel.Session.Output.CollectionChanged += ScrollOutputToEnd;
 
@@ -59,11 +66,29 @@ public partial class MainWindow : Window
             _script = viewModel.Script;
             _script.PropertyChanged += OnScriptPropertyChanged;
             ShowSql();
+
+            if (_detail is not null)
+            {
+                _detail.PropertyChanged -= OnDetailPropertyChanged;
+            }
+
+            _detail = viewModel.Migrations.Detail;
+            _detail.PropertyChanged += OnDetailPropertyChanged;
+            ShowDetail();
         };
     }
 
     private void ApplySqlHighlighting() =>
-        SqlEditor.SyntaxHighlighting = SqlHighlighting.For(SqlEditor.ActualThemeVariant);
+        SqlEditor.SyntaxHighlighting = SyntaxHighlighting.Sql(SqlEditor.ActualThemeVariant);
+
+    /// <summary>
+    /// The detail editor shows two languages, so which definition it wants depends on the view model
+    /// as well as on the theme variant.
+    /// </summary>
+    private void ApplyDetailHighlighting() =>
+        DetailEditor.SyntaxHighlighting = _detail?.IsShowingSql == true
+            ? SyntaxHighlighting.Sql(DetailEditor.ActualThemeVariant)
+            : SyntaxHighlighting.CSharp(DetailEditor.ActualThemeVariant);
 
     private void OnScriptPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -79,6 +104,28 @@ public partial class MainWindow : Window
     /// </summary>
     private void ShowSql() =>
         SqlEditor.Document = new TextDocument(_script?.Sql ?? "");
+
+    private void OnDetailPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MigrationDetailViewModel.Text))
+        {
+            ShowDetail();
+        }
+        else if (e.PropertyName == nameof(MigrationDetailViewModel.IsShowingSql))
+        {
+            ApplyDetailHighlighting();
+        }
+    }
+
+    /// <summary>
+    /// Pushes the selected migration's source or SQL into the detail editor, on the same fresh-document
+    /// basis as <see cref="ShowSql"/> so nothing carries over from the previous migration.
+    /// </summary>
+    private void ShowDetail()
+    {
+        ApplyDetailHighlighting();
+        DetailEditor.Document = new TextDocument(_detail?.Text ?? "");
+    }
 
     private void ScrollOutputToEnd(object? sender, NotifyCollectionChangedEventArgs e)
     {
