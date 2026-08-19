@@ -101,4 +101,80 @@ public class PreflightTests
         Assert.NotNull(status.EfToolVersion);
         Assert.NotNull(status.SdkVersion);
     }
+
+    [Fact]
+    public void No_manifest_anywhere_above_means_no_local_tool()
+    {
+        var dir = CreateTempDir();
+        try
+        {
+            Assert.False(Preflight.HasLocalDotnetEfTool(dir));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void A_manifest_pinning_dotnet_ef_here_counts_as_local()
+    {
+        var dir = CreateTempDir();
+        try
+        {
+            WriteManifest(dir, """{"version":1,"tools":{"dotnet-ef":{"version":"9.0.0"}}}""");
+
+            Assert.True(Preflight.HasLocalDotnetEfTool(dir));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void A_manifest_that_does_not_pin_dotnet_ef_does_not_count_as_local()
+    {
+        var dir = CreateTempDir();
+        try
+        {
+            WriteManifest(dir, """{"version":1,"tools":{"some-other-tool":{"version":"1.0.0"}}}""");
+
+            Assert.False(Preflight.HasLocalDotnetEfTool(dir));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void The_manifest_is_found_from_a_subdirectory()
+    {
+        var dir = CreateTempDir();
+        try
+        {
+            WriteManifest(dir, """{"version":1,"tools":{"dotnet-ef":{"version":"9.0.0"}}}""");
+            var subDir = Directory.CreateDirectory(Path.Combine(dir, "src", "SomeProject")).FullName;
+
+            Assert.True(Preflight.HasLocalDotnetEfTool(subDir));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    private static string CreateTempDir()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "EfMigrateHubTests_" + Guid.NewGuid());
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    private static void WriteManifest(string dir, string json)
+    {
+        var configDir = Directory.CreateDirectory(Path.Combine(dir, ".config")).FullName;
+        File.WriteAllText(Path.Combine(configDir, "dotnet-tools.json"), json);
+    }
 }

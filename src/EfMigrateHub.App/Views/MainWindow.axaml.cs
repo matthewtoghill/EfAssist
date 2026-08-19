@@ -50,6 +50,7 @@ public partial class MainWindow : Window
             viewModel.PickFolderAsync = PickFolderAsync;
             viewModel.CopyToClipboardAsync = CopyToClipboardAsync;
             viewModel.ConfirmAsync = ConfirmAsync;
+            viewModel.ShowErrorAsync = ShowErrorAsync;
             viewModel.Script.PickSaveFileAsync = PickSaveFileAsync;
             viewModel.Script.PickFolderAsync = PickFolderAsync;
             viewModel.Script.OpenFileAsync = path => OpenWithShellAsync(path, reveal: false);
@@ -170,6 +171,9 @@ public partial class MainWindow : Window
     /// </summary>
     private Task<bool> ConfirmAsync(ConfirmRequest request) =>
         new ConfirmWindow(request).ShowDialog<bool>(this);
+
+    private Task ShowErrorAsync(ErrorDetail detail) =>
+        new ErrorWindow(detail).ShowDialog(this);
 
     private async Task<string?> PickSaveFileAsync(string suggestedName, string? startFolder)
     {

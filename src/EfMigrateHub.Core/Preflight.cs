@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace EfMigrateHub.Core;
 
 /// <summary>
@@ -53,4 +55,37 @@ public static class Preflight
     private static string? LastMeaningfulLine(EfResult result) => result.Lines
         .Select(l => l.Text.Trim())
         .LastOrDefault(t => t.Length > 0);
+
+    /// <summary>
+    /// Walks up from <paramref name="workingDirectory"/> looking for the nearest
+    /// <c>.config/dotnet-tools.json</c> that pins <c>dotnet-ef</c> — the same manifest
+    /// <c>dotnet tool</c> commands resolve against. Used to decide between a global and a local
+    /// tool update, since running <c>dotnet tool update dotnet-ef</c> without <c>--global</c> fails
+    /// outright when no manifest pins it here.
+    /// </summary>
+    public static bool HasLocalDotnetEfTool(string workingDirectory)
+    {
+        for (var dir = new DirectoryInfo(workingDirectory); dir is not null; dir = dir.Parent)
+        {
+            var manifestPath = Path.Combine(dir.FullName, ".config", "dotnet-tools.json");
+            if (!File.Exists(manifestPath))
+            {
+                continue;
+            }
+
+            try
+            {
+                using var stream = File.OpenRead(manifestPath);
+                using var manifest = JsonDocument.Parse(stream);
+                return manifest.RootElement.TryGetProperty("tools", out var tools) &&
+                    tools.TryGetProperty("dotnet-ef", out _);
+            }
+            catch (JsonException)
+            {
+                return false;
+            }
+        }
+
+        return false;
+    }
 }

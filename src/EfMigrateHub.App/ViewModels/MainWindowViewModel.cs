@@ -190,6 +190,26 @@ public partial class MainWindowViewModel : ObservableObject
 
     public bool HasPreflightProblem => !string.IsNullOrEmpty(PreflightProblem);
 
+    [ObservableProperty]
+    private bool _efToolAvailable;
+
+    /// <summary>Set once an update finishes successfully; cleared as soon as another one starts.</summary>
+    [ObservableProperty]
+    private bool _efToolUpdateSucceeded;
+
+    /// <summary>The first line of the failure, shown next to the icon without needing the modal.</summary>
+    [ObservableProperty]
+    private string? _efToolUpdateErrorSummary;
+
+    /// <summary>The full output, shown in <see cref="ShowErrorAsync"/> on request.</summary>
+    [ObservableProperty]
+    private string? _efToolUpdateErrorDetail;
+
+    public bool HasEfToolUpdateError => !string.IsNullOrEmpty(EfToolUpdateErrorSummary);
+
+    /// <summary>Shows a dismissible modal with the full text of a failure. Supplied by the view.</summary>
+    public Func<ErrorDetail, Task>? ShowErrorAsync { get; set; }
+
     // ---- Workspace ----
 
     [ObservableProperty]
@@ -355,6 +375,55 @@ public partial class MainWindowViewModel : ObservableObject
 
         await CopyToClipboardAsync(InstallCommand);
         Session.StatusMessage = "Install command copied to the clipboard.";
+    }
+
+    /// <summary>
+    /// Updates the <c>dotnet-ef</c> tool in place and refreshes <see cref="EnvironmentSummary"/>
+    /// afterwards. Runs against a local tool manifest when one pins <c>dotnet-ef</c> here, otherwise
+    /// updates the global tool — see <see cref="Preflight.HasLocalDotnetEfTool"/>.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanOpen))]
+    private async Task UpdateEfToolAsync()
+    {
+        EfToolUpdateSucceeded = false;
+        EfToolUpdateErrorSummary = null;
+        EfToolUpdateErrorDetail = null;
+
+        var args = Preflight.HasLocalDotnetEfTool(WorkingDirectory)
+            ? new[] { "tool", "update", "dotnet-ef" }
+            : new[] { "tool", "update", "--global", "dotnet-ef" };
+
+        var result = await Session.RunAsync(args, "Update dotnet-ef");
+        if (result is null)
+        {
+            // Session already reported why: already running, cancelled, or an unhandled exception.
+            return;
+        }
+
+        if (!result.Success)
+        {
+            Session.ReportFailure(result, "Could not update dotnet-ef.");
+            EfToolUpdateErrorSummary = result.ErrorMessage.Length > 0
+                ? FirstLine(result.ErrorMessage)
+                : "Could not update dotnet-ef.";
+            EfToolUpdateErrorDetail = result.Diagnostics;
+            return;
+        }
+
+        Session.StatusMessage = "dotnet-ef update finished.";
+        EfToolUpdateSucceeded = true;
+        await CheckToolingAsync(WorkingDirectory);
+    }
+
+    [RelayCommand]
+    private async Task ShowEfToolUpdateErrorAsync()
+    {
+        if (ShowErrorAsync is null || EfToolUpdateErrorDetail is null)
+        {
+            return;
+        }
+
+        await ShowErrorAsync(new ErrorDetail("Update dotnet-ef failed", EfToolUpdateErrorDetail));
     }
 
     // ---- Workspace loading ----
@@ -638,6 +707,7 @@ public partial class MainWindowViewModel : ObservableObject
         var status = await Preflight.CheckAsync(_runner, workingDirectory);
 
         PreflightProblem = status.Problem;
+        EfToolAvailable = status.EfToolAvailable;
         EnvironmentSummary = status.EfToolAvailable
             ? $"dotnet-ef {status.EfToolVersion} · SDK {status.SdkVersion}"
             : $"SDK {status.SdkVersion ?? "unknown"}";
@@ -667,6 +737,7 @@ public partial class MainWindowViewModel : ObservableObject
         OpenFolderCommand.NotifyCanExecuteChanged();
         OpenRecentCommand.NotifyCanExecuteChanged();
         RefreshContextsCommand.NotifyCanExecuteChanged();
+        UpdateEfToolCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>
@@ -695,6 +766,9 @@ public partial class MainWindowViewModel : ObservableObject
 
     partial void OnPreflightProblemChanged(string? value) =>
         OnPropertyChanged(nameof(HasPreflightProblem));
+
+    partial void OnEfToolUpdateErrorSummaryChanged(string? value) =>
+        OnPropertyChanged(nameof(HasEfToolUpdateError));
 
     partial void OnContextsStaleChanged(bool value) => OnPropertyChanged(nameof(ShowsStaleContexts));
 

@@ -44,6 +44,9 @@ public class MainWindowViewModelTests : IDisposable
         /// <summary>When true, every `dbcontext list` fails, however it is invoked.</summary>
         public bool ContextsFail { get; set; }
 
+        /// <summary>When set, `dotnet tool update` fails with this message instead of succeeding.</summary>
+        public string? ToolUpdateError { get; set; }
+
         public Task<EfResult> RunAsync(
             IReadOnlyList<string> args,
             string workingDirectory,
@@ -78,6 +81,12 @@ public class MainWindowViewModelTests : IDisposable
             else if (args.Contains("migrations"))
             {
                 result = Data("[]");
+            }
+            else if (args.Contains("tool"))
+            {
+                result = ToolUpdateError is null
+                    ? Raw(0, "Tool 'dotnet-ef' was successfully updated.")
+                    : new EfResult(1, [new OutputLine(OutputChannel.Error, ToolUpdateError)], "fake", ".");
             }
             else
             {
@@ -468,6 +477,33 @@ public class MainWindowViewModelTests : IDisposable
         Assert.True(viewModel.HasPreflightProblem);
         Assert.DoesNotContain(runner.Calls, args => args.Contains("dbcontext"));
         Assert.Equal("dotnet tool install --global dotnet-ef", MainWindowViewModel.InstallCommand);
+    }
+
+    [Fact]
+    public async Task Updating_the_ef_tool_reports_success_in_the_status_bar_and_the_icon()
+    {
+        var viewModel = NewViewModel(new RoutingRunner());
+
+        await viewModel.UpdateEfToolCommand.ExecuteAsync(null);
+
+        Assert.True(viewModel.EfToolUpdateSucceeded);
+        Assert.False(viewModel.HasEfToolUpdateError);
+        Assert.Equal("dotnet-ef update finished.", viewModel.Session.StatusMessage);
+    }
+
+    [Fact]
+    public async Task A_failed_ef_tool_update_reports_the_failure_instead_of_hanging_on_the_verb()
+    {
+        var runner = new RoutingRunner { ToolUpdateError = "Tool 'dotnet-ef' failed to update." };
+        var viewModel = NewViewModel(runner);
+
+        await viewModel.UpdateEfToolCommand.ExecuteAsync(null);
+
+        Assert.False(viewModel.EfToolUpdateSucceeded);
+        Assert.True(viewModel.HasEfToolUpdateError);
+        Assert.Equal("Tool 'dotnet-ef' failed to update.", viewModel.EfToolUpdateErrorSummary);
+        Assert.Contains("Tool 'dotnet-ef' failed to update.", viewModel.EfToolUpdateErrorDetail);
+        Assert.Equal("Tool 'dotnet-ef' failed to update.", viewModel.Session.StatusMessage);
     }
 
     [Fact]

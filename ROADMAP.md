@@ -83,13 +83,6 @@ From the migrations list, select a migration and read what it does. **Done.**
 - **Revisit when:** someone wants to read Up without Down beside it. Ctrl+F in the pane covers the "find the bit I want" case in the meantime.
 - **Cost:** a day for a reliable Up/Down split.
 
-### Update dotnet-ef tool from the app
-From the home page, offer a way to update the `dotnet-ef` global/local tool.
-
-- **Why parked:** not scoped for v1; needs thought on global vs local tool installs and permission/elevation concerns.
-- **Revisit when:** prioritised for a later version.
-- **Cost:** small-moderate.
-
 ### `dbcontext script` vs `migrations script`
 Explore the difference between `dotnet ef dbcontext script` and `dotnet ef migrations script`, and whether EfMigrateHub should expose both.
 
