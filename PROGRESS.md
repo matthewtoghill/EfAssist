@@ -954,6 +954,27 @@ when `-Version` is not passed, and passes it to both `dotnet publish` and `vpk p
 - **Release notes are not wired up.** `vpk pack --releaseNotes` takes a markdown file; nothing
   generates one, and the banner shows only the version number.
 
+## Open file follows the current view
+"Open file" in the detail pane always opened the migration's `.cs`, even while the SQL preview was
+on screen. Fixed so it opens whichever half of the pane is showing.
+
+- **One command, not two.** `OpenSourceCommand` renamed to `OpenCommand`; it opens `SourcePath` while
+  showing source and `SqlPath` while showing SQL, gated by `CanOpenCurrent` (`IsShowingSql ?
+  HasSqlFile : HasSourceFile`).
+- **The idempotent and non-idempotent SQL previews no longer share a temp file.**
+  `MigrationFiles.ScriptCachePath` gained an `idempotent` parameter that changes the filename
+  (`<id>_idempotent.sql` vs `<id>.sql`). Previously both variants wrote to the same path, so
+  generating one after the other silently overwrote the file the in-memory cache for the other one
+  still pointed at — "Open file" for a cached-but-stale entry would have opened the wrong content.
+  Keying the file by the same tuple as the in-memory cache closes that gap structurally rather than
+  by remembering to invalidate correctly.
+- `SqlPath` is a new observable, set alongside `Sql` on both a cache hit and a fresh generation, and
+  cleared with it everywhere `Sql` is cleared.
+
+Verified: `dotnet test` → **319 passed, 0 failed, 0 warnings** (was 303). New cases cover opening the
+source, opening the generated SQL, switching back to source after viewing SQL, the idempotent and
+non-idempotent files never being the same path, and the command disabling once nothing is selected.
+
 ---
 
 ## Deliberate shortcuts

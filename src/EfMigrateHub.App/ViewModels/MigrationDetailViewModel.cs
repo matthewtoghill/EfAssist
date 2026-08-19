@@ -43,12 +43,13 @@ public partial class MigrationDetailViewModel : ObservableObject
     private readonly Func<Task> _ensureProviderKnownAsync;
 
     /// <summary>
-    /// Generated SQL keyed by migration id and whether it was idempotent, so re-selecting a migration
-    /// or flipping the option back costs nothing, and the two never get shown under each other's key.
+    /// Generated SQL and the temp file it came from, keyed by migration id and whether it was
+    /// idempotent, so re-selecting a migration or flipping the option back costs nothing, and the
+    /// two variants never get shown, or opened, under each other's key.
     /// </summary>
     // ponytail: invalidated by a list refresh, not by watching the files. Add a watcher if editing a
     // migration and re-reading its SQL without refreshing proves confusing.
-    private readonly Dictionary<(string Id, bool Idempotent), string> _sqlCache = new();
+    private readonly Dictionary<(string Id, bool Idempotent), (string Sql, string Path)> _sqlCache = new();
 
     public MigrationDetailViewModel(
         CommandSession session,
@@ -74,7 +75,7 @@ public partial class MigrationDetailViewModel : ObservableObject
         };
     }
 
-    /// <summary>Supplied by the view: hands a path to the OS to open in whatever owns <c>.cs</c>.</summary>
+    /// <summary>Supplied by the view: hands a path to the OS to open in whatever owns the file.</summary>
     public Func<string, Task>? OpenFileAsync { get; set; }
 
     [ObservableProperty]
@@ -91,6 +92,13 @@ public partial class MigrationDetailViewModel : ObservableObject
 
     [ObservableProperty]
     private string _sql = "";
+
+    /// <summary>
+    /// Where the SQL currently on screen was generated to. Null until this migration's SQL, for the
+    /// idempotent option as it stood at the time, has actually been generated.
+    /// </summary>
+    [ObservableProperty]
+    private string? _sqlPath;
 
     /// <summary>
     /// Why there is nothing to show — the file could not be found or read. Kept separate from the
@@ -116,6 +124,15 @@ public partial class MigrationDetailViewModel : ObservableObject
 
     public bool HasSourceFile => SourcePath is not null;
 
+    public bool HasSqlFile => SqlPath is not null;
+
+    /// <summary>
+    /// What "Open file" would open: the source while reading it, the generated script while showing
+    /// it, so one button follows whichever half of the pane is on screen rather than always the
+    /// source.
+    /// </summary>
+    public bool CanOpenCurrent => IsShowingSql ? HasSqlFile : HasSourceFile;
+
     public string? Subtitle => Migration is null
         ? null
         : IsShowingSql
@@ -135,6 +152,7 @@ public partial class MigrationDetailViewModel : ObservableObject
         Migration = row;
         Problem = null;
         Sql = "";
+        SqlPath = null;
         Source = "";
         SourcePath = null;
 
@@ -152,7 +170,8 @@ public partial class MigrationDetailViewModel : ObservableObject
         // for the option as currently ticked.
         if (_sqlCache.TryGetValue((row.Id, EffectiveIdempotent), out var cached))
         {
-            Sql = cached;
+            Sql = cached.Sql;
+            SqlPath = cached.Path;
         }
         else if (IsShowingSql)
         {
@@ -171,6 +190,7 @@ public partial class MigrationDetailViewModel : ObservableObject
     {
         _sqlCache.Clear();
         Sql = "";
+        SqlPath = null;
         if (IsShowingSql)
         {
             View = MigrationView.Source;
@@ -184,6 +204,7 @@ public partial class MigrationDetailViewModel : ObservableObject
         Source = "";
         SourcePath = null;
         Sql = "";
+        SqlPath = null;
         Problem = null;
         View = MigrationView.Source;
         NotifyCommandStates();
@@ -211,12 +232,13 @@ public partial class MigrationDetailViewModel : ObservableObject
 
         if (_sqlCache.TryGetValue((row.Id, idempotent), out var cached))
         {
-            Sql = cached;
+            Sql = cached.Sql;
+            SqlPath = cached.Path;
             View = MigrationView.Sql;
             return;
         }
 
-        var path = MigrationFiles.ScriptCachePath(target.Project, target.Context, row.Id);
+        var path = MigrationFiles.ScriptCachePath(target.Project, target.Context, row.Id, idempotent);
 
         try
         {
@@ -257,8 +279,9 @@ public partial class MigrationDetailViewModel : ObservableObject
             return;
         }
 
-        _sqlCache[(row.Id, idempotent)] = sql;
+        _sqlCache[(row.Id, idempotent)] = (sql, path);
         Sql = sql;
+        SqlPath = path;
         View = MigrationView.Sql;
         _session.StatusMessage = $"SQL for '{row.Name}': {sql.Length:N0} characters.";
     }
@@ -279,12 +302,18 @@ public partial class MigrationDetailViewModel : ObservableObject
             : "Migration source copied to the clipboard.";
     }
 
-    [RelayCommand(CanExecute = nameof(HasSourceFile))]
-    private async Task OpenSourceAsync()
+    /// <summary>
+    /// Opens whichever file is currently on screen: the migration's .cs while showing the source,
+    /// the generated .sql while showing its SQL. One button that follows the toggle, rather than two
+    /// buttons for the two things it could mean.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanOpenCurrent))]
+    private async Task OpenAsync()
     {
-        if (OpenFileAsync is not null && SourcePath is not null)
+        var path = IsShowingSql ? SqlPath : SourcePath;
+        if (OpenFileAsync is not null && path is not null)
         {
-            await OpenFileAsync(SourcePath);
+            await OpenFileAsync(path);
         }
     }
 
@@ -341,7 +370,7 @@ public partial class MigrationDetailViewModel : ObservableObject
         OnPropertyChanged(nameof(IsReady));
         ShowSqlCommand.NotifyCanExecuteChanged();
         CopyCommand.NotifyCanExecuteChanged();
-        OpenSourceCommand.NotifyCanExecuteChanged();
+        OpenCommand.NotifyCanExecuteChanged();
     }
 
     // ---- Property change plumbing ----
@@ -357,6 +386,8 @@ public partial class MigrationDetailViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(IsShowingSql));
         OnPropertyChanged(nameof(Subtitle));
+        OnPropertyChanged(nameof(CanOpenCurrent));
+        OpenCommand.NotifyCanExecuteChanged();
         NotifyText();
     }
 
@@ -368,7 +399,15 @@ public partial class MigrationDetailViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(HasSourceFile));
         OnPropertyChanged(nameof(Subtitle));
-        OpenSourceCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanOpenCurrent));
+        OpenCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnSqlPathChanged(string? value)
+    {
+        OnPropertyChanged(nameof(HasSqlFile));
+        OnPropertyChanged(nameof(CanOpenCurrent));
+        OpenCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnProblemChanged(string? value) => OnPropertyChanged(nameof(HasProblem));

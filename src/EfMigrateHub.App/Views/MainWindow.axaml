@@ -377,7 +377,8 @@
                                             <Button Content="Copy"
                                                     Command="{Binding Migrations.Detail.CopyCommand}" />
                                             <Button Content="Open file"
-                                                    Command="{Binding Migrations.Detail.OpenSourceCommand}" />
+                                                    Command="{Binding Migrations.Detail.OpenCommand}"
+                                                    ToolTip.Tip="Open the .cs file while showing the source, or the generated .sql while showing the SQL." />
                                         </StackPanel>
                                     </StackPanel>
 

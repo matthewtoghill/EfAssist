@@ -125,7 +125,7 @@ public class MigrationDetailViewModelTests : IDisposable
         Assert.True(detail.HasProblem);
         Assert.Contains("20260101000000_InitialCreate.cs", detail.Problem);
         Assert.False(detail.HasText);
-        Assert.False(detail.OpenSourceCommand.CanExecute(null));
+        Assert.False(detail.OpenCommand.CanExecute(null));
     }
 
     [Fact]
@@ -352,6 +352,87 @@ public class MigrationDetailViewModelTests : IDisposable
 
         // Flipping back finds the first result still cached rather than rebuilding a third time.
         Assert.Equal(2, runner.Calls.Count);
+    }
+
+    // ---- Open file follows the current view ----
+
+    [Fact]
+    public void Open_opens_the_source_file_while_showing_source()
+    {
+        var opened = new List<string>();
+        WriteMigration("20260101000000_InitialCreate", "// source");
+        var (detail, _) = Build();
+        detail.OpenFileAsync = (string path) => { opened.Add(path); return Task.CompletedTask; };
+        detail.Show(Row(0));
+
+        detail.OpenCommand.Execute(null);
+
+        Assert.Equal([detail.SourcePath!], opened);
+    }
+
+    [Fact]
+    public async Task Open_opens_the_generated_sql_file_while_showing_sql()
+    {
+        var opened = new List<string>();
+        WriteMigration("20260101000000_InitialCreate", "// source");
+        var (detail, _) = Build();
+        detail.OpenFileAsync = (string path) => { opened.Add(path); return Task.CompletedTask; };
+        detail.Show(Row(0));
+        await detail.ShowSqlCommand.ExecuteAsync(null);
+
+        detail.OpenCommand.Execute(null);
+
+        Assert.Equal([detail.SqlPath!], opened);
+        Assert.NotEqual(detail.SourcePath, detail.SqlPath);
+    }
+
+    [Fact]
+    public async Task Switching_back_to_source_after_viewing_sql_opens_source_again()
+    {
+        var opened = new List<string>();
+        WriteMigration("20260101000000_InitialCreate", "// source");
+        var (detail, _) = Build();
+        detail.OpenFileAsync = (string path) => { opened.Add(path); return Task.CompletedTask; };
+        detail.Show(Row(0));
+        await detail.ShowSqlCommand.ExecuteAsync(null);
+
+        detail.ShowSourceCommand.Execute(null);
+        detail.OpenCommand.Execute(null);
+
+        Assert.Equal([detail.SourcePath!], opened);
+    }
+
+    [Fact]
+    public async Task Idempotent_and_non_idempotent_sql_are_never_opened_from_the_same_file()
+    {
+        var idempotent = false;
+        var (detail, _) = Build(idempotentRequested: () => idempotent, canUseIdempotent: () => true);
+        detail.Show(Row(0));
+
+        await detail.ShowSqlCommand.ExecuteAsync(null);
+        var plainPath = detail.SqlPath;
+
+        idempotent = true;
+        await detail.ShowSqlCommand.ExecuteAsync(null);
+        var idempotentPath = detail.SqlPath;
+
+        // Otherwise generating the second variant would silently overwrite the file "Open file"
+        // still thinks holds the first one.
+        Assert.NotNull(plainPath);
+        Assert.NotNull(idempotentPath);
+        Assert.NotEqual(plainPath, idempotentPath);
+    }
+
+    [Fact]
+    public void Open_is_disabled_once_nothing_is_selected()
+    {
+        WriteMigration("20260101000000_InitialCreate", "// source");
+        var (detail, _) = Build();
+        detail.Show(Row(0));
+
+        detail.Show(null);
+
+        Assert.False(detail.OpenCommand.CanExecute(null));
     }
 
     [Fact]

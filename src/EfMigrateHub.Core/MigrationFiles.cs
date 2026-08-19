@@ -104,12 +104,20 @@ public static class MigrationFiles
     /// migrations cannot read each other's SQL. The files are left behind deliberately: the OS
     /// clears its own temp folder, and a leftover is only ever re-read after being rewritten.
     /// </remarks>
-    public static string ScriptCachePath(string migrationsProjectPath, string? context, string migrationId)
+    /// <param name="idempotent">
+    /// Whether the script was (or would be) generated with <c>--idempotent</c>. Part of the path
+    /// rather than just the in-memory cache key, so the two variants never share a file — without
+    /// this, generating one after the other would silently overwrite the file that "Open file"
+    /// still thinks holds the other one.
+    /// </param>
+    public static string ScriptCachePath(
+        string migrationsProjectPath, string? context, string migrationId, bool idempotent = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(migrationId);
 
         var key = Key(Path.GetFullPath(migrationsProjectPath) + "|" + (context ?? ""));
-        return Path.Combine(Path.GetTempPath(), "EfMigrateHub", "preview", key, migrationId + ".sql");
+        var fileName = idempotent ? migrationId + "_idempotent.sql" : migrationId + ".sql";
+        return Path.Combine(Path.GetTempPath(), "EfMigrateHub", "preview", key, fileName);
     }
 
     private static string Key(string value)
