@@ -1,4 +1,4 @@
-# EfMigrateHub — Plan
+﻿# EfMigrateHub — Plan
 
 A cross-platform desktop GUI over the `dotnet ef` CLI, for managing Entity Framework Core migrations.
 
@@ -214,10 +214,15 @@ Exit criteria: each mapped error reproduced deliberately and shown correctly.
 
 ### Phase 6 — Publish (half a day)
 
-- `dotnet publish -r <rid> -c Release -p:PublishSingleFile=true --self-contained`.
+- `dotnet publish -r <rid> -c Release --self-contained`.
 - **Do not enable `PublishTrimmed`.** Avalonia's XAML loading and CommunityToolkit's generated code are trim-hostile enough that the failure mode is a runtime crash in a shipped binary, not a build error. Not worth the megabytes.
 
-Exit criteria: a single-file binary runs on a machine without the .NET SDK.
+Exit criteria: a binary runs on a machine without the .NET SDK.
+
+**Amended during implementation.** The brief for this phase asked for an installer that can also update the app, which pulls the "Installer packaging" and auto-update items forward from the roadmap. Velopack does both, so Phase 6 became: self-contained publish → `vpk pack` → installer, portable zip and delta package, plus an in-app updater that reads GitHub Releases. Two consequences for the bullets above:
+
+- **`PublishSingleFile` is off, not on.** Velopack packs a directory and produces binary deltas against the previous release; a single bundled exe defeats that, so every update would re-download the whole application.
+- **Nothing is signed.** SmartScreen will warn on first run of the installer until download reputation builds. A code-signing certificate is the only real fix; `vpk pack --signParams` is where it would go.
 
 **Rough total: 6–8 working days** for v1 as scoped, assuming the Phase 0 spikes come back clean.
 

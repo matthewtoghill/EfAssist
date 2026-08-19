@@ -7,6 +7,11 @@
     <!-- Compiled bindings turn a mistyped binding path into a build error instead of a silent
          runtime no-op, which matters for panels that only appear once a workspace is open. -->
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <!-- The shipped version. build/release.ps1 reads this, and vpk stamps the release with it, so
+         this is the one place a release number is written down. -->
+    <Version>1.0.0</Version>
+    <AssemblyName>EfMigrateHub</AssemblyName>
+    <Product>EfMigrateHub</Product>
   </PropertyGroup>
 
   <ItemGroup>
@@ -27,6 +32,7 @@
       <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
     </PackageReference>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="Velopack" Version="1.2.0" />
   </ItemGroup>
 
   <ItemGroup>

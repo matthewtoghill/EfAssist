@@ -1,4 +1,4 @@
-using Avalonia;
+﻿using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Styling;
@@ -24,8 +24,13 @@ public partial class App : Application
             ApplyTheme(viewModel.Theme);
             desktop.MainWindow = new MainWindow { DataContext = viewModel };
 
-            // Probing the tooling takes about a second; don't hold up first paint for it.
-            desktop.MainWindow.Opened += async (_, _) => await viewModel.InitialiseAsync();
+            // Probing the tooling takes about a second; don't hold up first paint for it. The
+            // update check goes out at the same time and stays silent unless it finds something.
+            desktop.MainWindow.Opened += async (_, _) =>
+            {
+                _ = viewModel.Update.CheckOnStartupAsync();
+                await viewModel.InitialiseAsync();
+            };
         }
 
         base.OnFrameworkInitializationCompleted();

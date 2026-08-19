@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EfMigrateHub.App.Updates;
 using EfMigrateHub.Core;
 
 namespace EfMigrateHub.App.ViewModels;
@@ -61,7 +62,11 @@ public partial class MainWindowViewModel : ObservableObject
     {
     }
 
-    public MainWindowViewModel(IEfRunner runner, AppSettings settings, string? settingsPath = null)
+    public MainWindowViewModel(
+        IEfRunner runner,
+        AppSettings settings,
+        string? settingsPath = null,
+        IAppUpdater? updater = null)
     {
         _runner = runner;
         _settings = settings;
@@ -101,6 +106,7 @@ public partial class MainWindowViewModel : ObservableObject
             canUseIdempotent: () => Script.CanUseIdempotent,
             ensureProviderKnownAsync: Script.EnsureProviderKnownAsync);
         Tools = new ToolsViewModel(Session, BuildTargetForCommands);
+        Update = new UpdateViewModel(updater ?? new VelopackUpdater());
     }
 
     /// <summary>Runs commands and owns the output console. Shared by every tab.</summary>
@@ -111,6 +117,9 @@ public partial class MainWindowViewModel : ObservableObject
     public ScriptViewModel Script { get; }
 
     public ToolsViewModel Tools { get; }
+
+    /// <summary>The in-app updater. Independent of any workspace, so it lives on the shell.</summary>
+    public UpdateViewModel Update { get; }
 
     /// <summary>Choices for the theme dropdown, in the order they are offered.</summary>
     public static IReadOnlyList<AppTheme> Themes { get; } =

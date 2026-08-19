@@ -1,4 +1,4 @@
-# EfMigrateHub — Progress
+﻿# EfMigrateHub — Progress
 
 What is actually built and verified. `PLAN.md` is the agreed plan and spec; this is the record of implementation, and the only place implementation detail is written down.
 
@@ -12,9 +12,9 @@ Last updated: 2026-08-19.
 | 3 — Migrations tab | **Done** |
 | 4 — Script tab | **Done** |
 | 5 — Errors, diagnostics, polish | **Done** |
-| 6 — Publish (Windows) | Not started |
+| 6 — Publish + installer + in-app update (Windows) | **Done** |
 
-Current state: `dotnet test EfMigrateHub.slnx` → **249 passed, 0 failed, 0 warnings**, about 70 seconds. The app launches, opens a real solution or folder, lists migrations with their applied state, can add, apply, roll back, remove and drop, generates SQL scripts into a syntax-highlighted viewer, and explains the common EF failures in plain language without hiding the raw output.
+Current state: `dotnet test EfMigrateHub.slnx` → **314 passed, 0 failed**, about 70 seconds. The app launches, opens a real solution or folder, lists migrations with their applied state, can add, apply, roll back, remove and drop, generates SQL scripts into a syntax-highlighted viewer, and explains the common EF failures in plain language without hiding the raw output.
 
 Phases 2, 3 and 4 have each had a round of manual UI testing and follow-up fixes — see the review sections below.
 
@@ -860,6 +860,102 @@ switching context on the Migrations tab without ever having visited the Script t
 
 ---
 
+## Phase 6 — Done
+
+### Built
+
+Phase 6 in `PLAN.md` was a single-file publish and nothing else. The brief for it added "ideally the
+published installer will also be able to handle updating the app", which pulls two items forward
+from the roadmap: installer packaging, and auto-update. Both are now in.
+
+**Velopack, not a hand-rolled updater.** One package (`Velopack` 1.2.0) plus one CLI (`vpk` 1.2.0,
+pinned in `.config/dotnet-tools.json`) covers the installer, the portable zip, delta packages, the
+GitHub Releases feed, the download, and the restart into the new version. The alternative considered
+was Inno Setup plus a hand-written check against the GitHub API — more code, no deltas, and the
+restart dance is the part that is easy to get subtly wrong.
+
+- `src/EfMigrateHub.App/Updates/IAppUpdater.cs` — the one seam over Velopack: `CurrentVersion`,
+  `CanUpdate`, `CheckAsync`, `ApplyAndRestartAsync`. Same rationale as `IEfRunner`: tests need to
+  produce "an update is available" without a GitHub release and without an installed application.
+- `src/EfMigrateHub.App/Updates/VelopackUpdater.cs` — the real implementation, against
+  `GithubSource("https://github.com/matthewtoghill/EfMigrateHub")`, stable releases only. The
+  `UpdateManager` is built **lazily and inside a try/catch**: its constructor throws
+  `"No VelopackLocator has been set"` unless `VelopackApp.Build().Run()` has run, which is true of
+  the shipped app but not of the test host or the XAML previewer, both of which construct the shell
+  view model directly. A null manager means `CanUpdate` is false, which is the correct answer for a
+  development or portable run anyway.
+- `src/EfMigrateHub.App/ViewModels/UpdateViewModel.cs` — states (`Idle`, `Checking`, `UpToDate`,
+  `Available`, `Downloading`, `Failed`), the `Check` / `UpdateNow` / `Dismiss` commands, and the
+  messages. Owned by `MainWindowViewModel` as `Update`, because it belongs to no workspace.
+- `Program.Main` calls `VelopackApp.Build().Run()` as its first statement, before Avalonia. Velopack
+  drives its install, update and uninstall hooks by relaunching the exe with a hook argument, and
+  `Run()` exits the process in those cases; anything before it would run during an install too.
+  `vpk pack` verifies this call is present and fails the build if it is not.
+- `build/release.ps1` — the whole release: `dotnet test`, then a self-contained `dotnet publish`,
+  then `vpk pack` into `releases/`, then optionally `vpk upload github`. `artifacts/` and
+  `releases/` are gitignored.
+
+**Two checks, one code path.** A silent check fires a moment after launch from
+`App.OnFrameworkInitializationCompleted`, alongside the tooling preflight and deliberately not
+awaited — an update check must never delay first paint, and it must never surface a failure. If it
+finds nothing, or cannot reach GitHub, it says nothing at all. The manual "Check for updates" button
+on the home page runs the same check but reports every outcome, including "up to date" and the
+failure reason. The button stays visible but disabled on a development or portable run, because a
+missing button reads as a missing feature.
+
+**The banner is a `Border.caution`, above everything, dismissible.** It reuses the existing semantic
+style rather than introducing a colour. "Update and restart" downloads and restarts; "Later" hides
+it for the session without forgetting the update — `UpdateNowCommand` stays enabled, so the home
+page still offers it. The next launch checks again.
+
+**`PublishSingleFile` is off.** `PLAN.md` asked for it, and Velopack makes it the wrong call:
+Velopack packs a directory and produces binary deltas against the previous release, so a single
+bundled exe would mean re-downloading the whole ~50 MB application on every update. `PublishTrimmed`
+stays off for the reason the plan gives.
+
+**The version lives in one place.** `<Version>` in `EfMigrateHub.App.csproj`. `release.ps1` reads it
+when `-Version` is not passed, and passes it to both `dotnet publish` and `vpk pack`.
+
+### Verified
+
+- `dotnet test EfMigrateHub.slnx` → **314 passed, 0 failed** (was 303). Eleven new
+  `UpdateViewModelTests` against a fake `IAppUpdater`: up to date, update found, check failed,
+  startup check silent on failure and on no update, uninstalled build never checks, dismiss hides
+  the banner without forgetting the update, apply is called, and a failed download reports rather
+  than leaving the banner claiming progress.
+- `pwsh build/release.ps1` runs clean end to end and produces, in `releases/`:
+  `EfMigrateHub-win-Setup.exe` (56 MB), `EfMigrateHub-win-Portable.zip` (51 MB),
+  `EfMigrateHub-1.0.0-full.nupkg`, and the `releases.win.json` feed. `vpk` logged
+  `Verified VelopackApp.Run() in 'System.Void EfMigrateHub.App.Program::Main(System.String)'`.
+- The published self-contained build launches and shows its window when run directly from
+  `artifacts/publish/win-x64/EfMigrateHub.exe`.
+- `EfMigrateHub-win-Setup.exe --silent` installs per-user into `%LocalAppData%\EfMigrateHub`
+  (`current/`, `packages/`, an `EfMigrateHub.exe` stub, `Update.exe`), exit code 0, and the
+  installed app launches and shows its window. The root `EfMigrateHub.exe` is a stub that starts
+  `current\EfMigrateHub.exe` and exits immediately — "exit code 0 straight away" from the stub is
+  correct behaviour, not a crash.
+
+### Not done
+
+- **The download and restart path has never run for real.** There is no published GitHub release to
+  update from or to, and this machine has neither `gh` nor a `GITHUB_TOKEN`, so
+  `release.ps1 -Upload` could not be exercised. The check, the banner and the failure handling are
+  covered by unit tests against a fake; Velopack's own download and apply are not. Publishing a
+  v1.0.0 and then a v1.0.1 and watching a real install update itself is the outstanding test.
+- **Nothing is signed.** SmartScreen will warn on first run of the installer until download
+  reputation builds. `vpk pack --signParams` is where a certificate would go.
+- **Windows only.** `release.ps1` hard-codes `win-x64`, as agreed in `PLAN.md` section 3 Q9.
+  Velopack supports macOS and Linux; adding them is a RID list and a test run on each, and stays on
+  the roadmap.
+- **No update channel other than stable.** `GithubSource` is constructed with `prerelease: false`,
+  so a pre-release on GitHub is invisible to the app, and there is no UI for opting in.
+- **The banner has had no visual review in either theme.** It reuses `Border.caution`, which has,
+  but not in this position or at this width.
+- **Release notes are not wired up.** `vpk pack --releaseNotes` takes a markdown file; nothing
+  generates one, and the banner shows only the version number.
+
+---
+
 ## Deliberate shortcuts
 
 Tracked so they do not rot into "later means never". Each is marked with a `ponytail:` comment at the site.
@@ -881,3 +977,5 @@ Tracked so they do not rot into "later means never". Each is marked with a `pony
 | `MigrationFiles.FindSource` | Walks the migrations project for `<id>.cs` on every selection, with no cache | A project is big enough that the walk is noticeable; it is a directory scan against a warm OS cache |
 | `MigrationDetailViewModel` | Cached SQL is invalidated by a list refresh, not by watching the migration files | Editing a migration and re-reading its SQL without refreshing proves confusing |
 | Migrations tab splitter | Column widths are proportional and not persisted | Someone resizes it every session |
+| `VelopackUpdater` | A failure constructing the `UpdateManager` is swallowed, so "no updater here" and "broken updater" look the same to the UI | A user reports the update button doing nothing on an installed build |
+| `UpdateViewModel` | `CanUpdate` is read once and never raises a change notification | It could change while the app is running, which an install cannot |

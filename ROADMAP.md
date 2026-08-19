@@ -1,4 +1,4 @@
-# EfMigrateHub — Roadmap
+﻿# EfMigrateHub — Roadmap
 
 Ideas deliberately cut from v1. Nothing here is rejected — it's parked with a reason, so the decision doesn't have to be re-argued from scratch.
 
@@ -27,14 +27,15 @@ v1 publishes `win-x64` only.
 
 - **Why parked:** Windows is the only platform needed right now, and a publish matrix is CI work with no user-facing payoff yet.
 - **Revisit when:** someone needs to run it on macOS or Linux.
-- **Cost:** small. Avalonia and the whole codebase are already cross-platform; this is adding RIDs to a publish command and testing the process-kill behaviour on each OS.
+- **Cost:** small. Avalonia and the whole codebase are already cross-platform; this is adding RIDs to `build/release.ps1` and testing the process-kill behaviour on each OS. Velopack packs macOS and Linux from the same command, so the packaging half is already paid for.
 
-### Installer packaging — MSIX, DMG/pkg, AppImage/deb/rpm
-Parked in the original brief, still parked.
+### Installer packaging — Windows done, the rest still parked, signing outstanding
+Windows installer and in-app auto-update: **done** in Phase 6.
 
-- **Why parked:** single-file publish is enough for a developer tool that developers will download and run.
-- **Revisit when:** distribution to non-developers, or auto-update becomes a requirement.
-- **Cost:** meaningful per platform — signing certificates, notarisation on macOS, packaging metadata.
+- **Current state:** `build/release.ps1` runs a self-contained publish and hands the directory to Velopack (`vpk pack`), which produces `EfMigrateHub-win-Setup.exe`, a portable zip, and a delta package against the previous release. `vpk upload github` publishes them to GitHub Releases, which is the feed the app reads. In the app, `IAppUpdater`/`VelopackUpdater` back an `UpdateViewModel`: a silent check shortly after launch, a manual "Check for updates" button on the home page, and a dismissible banner offering "Update and restart". See `PROGRESS.md`.
+- **Not done:** code signing. Nothing produced is signed, so SmartScreen warns on first run until download reputation builds. `vpk pack --signParams` (or `--azureTrustedSignFile`) is the hook; the work is buying and handling a certificate, not the wiring. MSIX, DMG/pkg and AppImage/deb/rpm remain parked with the platforms themselves.
+- **Revisit when:** the SmartScreen warning becomes a real obstacle to someone installing it, or macOS/Linux ship.
+- **Cost:** signing is a certificate purchase plus an afternoon. Notarisation on macOS is its own day.
 
 ### Theme support — light/dark/system done, custom schemes still parked
 Light and dark themes selectable from the UI: **done**. Broader theming (accent colour, font size, custom colour schemes): still parked.
@@ -102,6 +103,20 @@ Explore the difference between `dotnet ef dbcontext script` and `dotnet ef migra
 - **Why parked:** .NET 11 not yet released/adopted; nothing to support yet.
 - **Revisit when:** .NET 11 ships and repos start using the config file.
 - **Cost:** unknown until the config file's shape is finalised.
+
+### Pre-release update channel
+Let the app opt in to GitHub pre-releases, so a beta can be tried without publishing it as stable.
+
+- **Why parked:** `GithubSource` is constructed with `prerelease: false` and there is one user. A channel switch needs a setting, a UI, and a story for downgrading back to stable.
+- **Revisit when:** there is someone to beta-test for.
+- **Cost:** hours for the flag, most of the work is the downgrade path.
+
+### Release notes in the update banner
+`vpk pack --releaseNotes` takes a markdown file, and Velopack carries the notes through to `VelopackAsset.NotesMarkdown`, so the banner could say what changed rather than only which version.
+
+- **Why parked:** nothing generates release notes yet, so there would be nothing to show.
+- **Revisit when:** releases start having notes worth reading.
+- **Cost:** hours, once the notes exist.
 
 ---
 

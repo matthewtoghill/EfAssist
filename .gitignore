@@ -485,3 +485,7 @@ $RECYCLE.BIN/
 samples/**/*.db
 samples/**/*.db-shm
 samples/**/*.db-wal
+
+# Publish and packaging output
+artifacts/
+releases/
