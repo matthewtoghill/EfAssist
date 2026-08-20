@@ -159,7 +159,7 @@
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
                     <Button Content="&#x2699;" Command="{Binding OpenSettingsCommand}"
-                            FontSize="{DynamicResource AppFontSizeLarge}" Padding="10,0" MinWidth="36"
+                            FontSize="{DynamicResource AppFontSizeLarge}" Padding="10,3" MinWidth="36"
                             ToolTip.Tip="Settings (Ctrl+,): theme, colours, font size, dotnet-ef and app updates." />
                     <Button Content="Refresh contexts" Command="{Binding RefreshContextsCommand}" />
                     <Button Content="Cancel" Command="{Binding Session.CancelCommand}" />
@@ -178,7 +178,7 @@
                     <Button Content="Open solution…" Command="{Binding OpenSolutionCommand}" />
                     <Button Content="Open folder…" Command="{Binding OpenFolderCommand}" />
                     <Button Content="&#x2699;" Command="{Binding OpenSettingsCommand}"
-                            FontSize="{DynamicResource AppFontSizeLarge}" Padding="10,0" MinWidth="36"
+                            FontSize="{DynamicResource AppFontSizeLarge}" Padding="10,3" MinWidth="36"
                             ToolTip.Tip="Settings (Ctrl+,): theme, colours, font size, dotnet-ef and app updates." />
                 </StackPanel>
 
@@ -219,8 +219,7 @@
                 <!-- Both the dotnet-ef update and the app update check now live in Settings; what
                      stays here is the state a person wants to see without opening anything. -->
                 <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding EnvironmentSummary}" Classes="label"
-                               VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding EnvironmentSummary}" Classes="label" VerticalAlignment="Center" />
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">

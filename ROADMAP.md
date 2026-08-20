@@ -116,6 +116,20 @@ Let the app opt in to GitHub pre-releases, so a beta can be tried without publis
 - **Revisit when:** there is someone to beta-test for.
 - **Cost:** hours for the flag, most of the work is the downgrade path.
 
+### UI/UX and layout pass
+General review of layout, spacing, information density and visual polish across both screens, beyond one-off fixes made in passing.
+
+- **Why parked:** no single screen is broken; this is a cross-cutting polish pass, not a bug, and needs a concrete list of what to change rather than an open-ended "make it nicer."
+- **Revisit when:** there's a specific list of layout/UX complaints to work through, or a design pass is scheduled.
+- **Cost:** unknown until scoped — likely several small changes rather than one big one.
+
+### App icon
+Window/taskbar/installer icon is still `Assets/avalonia-logo.ico`, the Avalonia template default, not a icon for EfMigrateHub. Referenced from `MainWindow.axaml` (`Icon=`) and `build/release.ps1` (`--icon`, feeds the Velopack-packed exe).
+
+- **Why parked:** needs actual icon artwork, which is a design task, not a code task.
+- **Revisit when:** artwork exists. Then it's swapping the `.ico` file both places reference.
+- **Cost:** minutes once the `.ico` exists.
+
 ### Release notes in the update banner
 `vpk pack --releaseNotes` takes a markdown file, and Velopack carries the notes through to `VelopackAsset.NotesMarkdown`, so the banner could say what changed rather than only which version.
 
