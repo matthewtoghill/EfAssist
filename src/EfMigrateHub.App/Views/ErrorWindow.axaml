@@ -18,8 +18,7 @@
                  FontFamily="Consolas,Menlo,monospace"
                  ScrollViewer.VerticalScrollBarVisibility="Auto" />
 
-        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right"
-                    Margin="0,14,0,0">
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
             <Button Name="CloseButton" Content="Close" IsCancel="True" IsDefault="True" MinWidth="90" />
         </StackPanel>
     </Grid>

@@ -56,8 +56,7 @@
                                Text="Saved already. Avalonia cannot repaint a running app's colours, so they take effect on the next start." />
                 </StackPanel>
                 <Button Grid.Column="1" Content="Restart now" Classes="accent"
-                        VerticalAlignment="Center"
-                        Command="{Binding RestartCommand}"
+                        VerticalAlignment="Center" Command="{Binding RestartCommand}"
                         ToolTip.Tip="Unavailable while a command is running - a restart would kill it." />
             </Grid>
         </Border>
@@ -98,33 +97,27 @@
                         <Border Classes="section">
                             <StackPanel>
                                 <Grid ColumnDefinitions="*,Auto">
-                                    <TextBlock Grid.Column="0" Classes="group" Text="Colours"
-                                               VerticalAlignment="Center" />
-                                    <!-- Two sets of colours, one per variant, so a System user can set
-                                         both. This picks which set the pickers below are editing, not
-                                         which variant is showing. -->
+                                    <TextBlock Grid.Column="0" Classes="group" Text="Colours" VerticalAlignment="Center" />
+                                    <!-- Two sets of colours, one per variant, so a System user can set both.
+									     This picks which set the pickers below are editing, not which is showing. -->
                                     <ToggleSwitch Grid.Column="1"
                                                   IsChecked="{Binding Appearance.EditingDark}"
                                                   OffContent="Light" OnContent="Dark"
                                                   ToolTip.Tip="Which variant's colours these pickers edit." />
                                 </Grid>
 
-                                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto"
-                                      Margin="0,8,0,0">
-                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Background"
-                                               VerticalAlignment="Center" Margin="0,0,12,6" />
+                                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" Margin="0,8,0,0">
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Background" VerticalAlignment="Center" Margin="0,0,12,6" />
                                     <ColorPicker Grid.Row="0" Grid.Column="1" Margin="0,0,0,6"
                                                  HorizontalAlignment="Left"
                                                  Color="{Binding Appearance.Background}" />
 
-                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Accent"
-                                               VerticalAlignment="Center" Margin="0,0,12,6" />
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Accent" VerticalAlignment="Center" Margin="0,0,12,6" />
                                     <ColorPicker Grid.Row="1" Grid.Column="1" Margin="0,0,0,6"
                                                  HorizontalAlignment="Left"
                                                  Color="{Binding Appearance.Accent}" />
 
-                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Text"
-                                               VerticalAlignment="Center" Margin="0,0,12,0" />
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Text" VerticalAlignment="Center" Margin="0,0,12,0" />
                                     <ColorPicker Grid.Row="2" Grid.Column="1"
                                                  HorizontalAlignment="Left"
                                                  Color="{Binding Appearance.Foreground}" />
@@ -146,9 +139,8 @@
                             <StackPanel>
                                 <TextBlock Classes="group" Text="Preview" />
 
-                                <!-- Painted from plain brushes rather than theme resources: it has to
-                                     show the palette being edited, which is not the one the window
-                                     around it is using. -->
+                                <!-- Painted from plain brushes rather than theme resources: it has to show the
+								     palette being edited, which is not the one the window around it is using. -->
                                 <Border CornerRadius="4" BorderThickness="1" Padding="12"
                                         Background="{Binding Appearance.Preview.Surface, Converter={x:Static app:OutputConverters.Brush}}"
                                         BorderBrush="{Binding Appearance.Preview.Border, Converter={x:Static app:OutputConverters.Brush}}">

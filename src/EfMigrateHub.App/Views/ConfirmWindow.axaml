@@ -17,9 +17,7 @@
     <StackPanel Margin="20" Spacing="14">
         <TextBlock Text="{Binding Message}" TextWrapping="Wrap" />
 
-        <Border IsVisible="{Binding HasDetail}"
-                Classes="caution"
-                CornerRadius="4" Padding="10,8">
+        <Border IsVisible="{Binding HasDetail}" Classes="caution" CornerRadius="4" Padding="10,8">
             <TextBlock Text="{Binding Detail}" TextWrapping="Wrap" FontSize="{DynamicResource AppFontSizeSmall}" />
         </Border>
 
@@ -34,8 +32,7 @@
 
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
             <Button Name="CancelButton" Content="Cancel" IsCancel="True" MinWidth="90" />
-            <Button Name="ConfirmButton" Content="{Binding ConfirmText}" MinWidth="90"
-                    Classes="danger" />
+            <Button Name="ConfirmButton" Content="{Binding ConfirmText}" MinWidth="90" Classes="danger" />
         </StackPanel>
     </StackPanel>
 </Window>
