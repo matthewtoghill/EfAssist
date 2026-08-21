@@ -9,7 +9,7 @@
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <!-- The shipped version. build/release.ps1 reads this, and vpk stamps the release with it, so
          this is the one place a release number is written down. -->
-    <Version>1.0.1</Version>
+    <Version>1.0.2</Version>
     <AssemblyName>EfAssist</AssemblyName>
     <Product>EfAssist</Product>
   </PropertyGroup>
