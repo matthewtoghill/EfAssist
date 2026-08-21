@@ -1,9 +1,0 @@
-<Solution>
-  <Folder Name="/src/">
-    <Project Path="src/EfMigrateHub.App/EfMigrateHub.App.csproj" />
-    <Project Path="src/EfMigrateHub.Core/EfMigrateHub.Core.csproj" />
-  </Folder>
-  <Folder Name="/tests/">
-    <Project Path="tests/EfMigrateHub.Core.Tests/EfMigrateHub.Core.Tests.csproj" />
-  </Folder>
-</Solution>

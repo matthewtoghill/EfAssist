@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Builds a Windows release of EfMigrateHub: a self-contained publish, packed by Velopack into an
+    Builds a Windows release of EfAssist: a self-contained publish, packed by Velopack into an
     installer, a portable zip, and a delta package against the previous release.
 
 .DESCRIPTION
@@ -15,7 +15,7 @@
     certificate ever appears.
 
 .PARAMETER Version
-    The version to release. Defaults to the <Version> in EfMigrateHub.App.csproj, which is the one
+    The version to release. Defaults to the <Version> in EfAssist.App.csproj, which is the one
     place the release number is written down.
 
 .PARAMETER Upload
@@ -48,10 +48,10 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $repo = Split-Path -Parent $PSScriptRoot
-$appProject = Join-Path $repo 'src/EfMigrateHub.App/EfMigrateHub.App.csproj'
+$appProject = Join-Path $repo 'src/EfAssist.App/EfAssist.App.csproj'
 $publishDir = Join-Path $repo 'artifacts/publish/win-x64'
 $releaseDir = Join-Path $repo 'releases'
-$repoUrl = 'https://github.com/matthewtoghill/EfMigrateHub'
+$repoUrl = 'https://github.com/matthewtoghill/EfAssist'
 $runtime = 'win-x64'
 
 if (-not $Version) {
@@ -62,7 +62,7 @@ if (-not $Version) {
     }
 }
 
-Write-Host "Releasing EfMigrateHub $Version ($runtime)" -ForegroundColor Cyan
+Write-Host "Releasing EfAssist $Version ($runtime)" -ForegroundColor Cyan
 
 # A stale publish directory would be packed verbatim, shipping files that are no longer built.
 if (Test-Path $publishDir) {
@@ -70,7 +70,7 @@ if (Test-Path $publishDir) {
 }
 
 # Tests gate the release. A broken build is not worth packaging.
-dotnet test (Join-Path $repo 'EfMigrateHub.slnx') -c Release --nologo
+dotnet test (Join-Path $repo 'EfAssist.slnx') -c Release --nologo
 if ($LASTEXITCODE -ne 0) { throw "Tests failed; nothing packaged." }
 
 # Self-contained so the installer works on a machine with no .NET runtime. Not PublishSingleFile:
@@ -89,13 +89,13 @@ dotnet publish $appProject `
 if ($LASTEXITCODE -ne 0) { throw "Publish failed." }
 
 dotnet vpk pack `
-    --packId EfMigrateHub `
+    --packId EfAssist `
     --packVersion $Version `
     --packDir $publishDir `
-    --packTitle EfMigrateHub `
+    --packTitle EfAssist `
     --packAuthors 'Matthew Toghill' `
-    --mainExe EfMigrateHub.exe `
-    --icon (Join-Path $repo 'src/EfMigrateHub.App/Assets/avalonia-logo.ico') `
+    --mainExe EfAssist.exe `
+    --icon (Join-Path $repo 'src/EfAssist.App/Assets/avalonia-logo.ico') `
     --runtime $runtime `
     --outputDir $releaseDir
 if ($LASTEXITCODE -ne 0) { throw "vpk pack failed." }
@@ -120,7 +120,7 @@ dotnet vpk upload github `
     --token $Token `
     --outputDir $releaseDir `
     --tag "v$Version" `
-    --releaseName "EfMigrateHub $Version" `
+    --releaseName "EfAssist $Version" `
     --merge `
     --publish $publishRelease
 if ($LASTEXITCODE -ne 0) { throw "vpk upload failed." }

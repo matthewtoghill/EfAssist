@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SampleEfApp;
 
-// Sample EF Core project used as a fixture target for EfMigrateHub.
+// Sample EF Core project used as a fixture target for EfAssist.
 // Two contexts, so dbcontext discovery has more than one thing to find.
 // ponytail: relative connection string, so this must be run from the project
 // directory to see the same database dotnet ef uses. Switch to an absolute

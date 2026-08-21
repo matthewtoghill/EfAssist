@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/EfAssist.App/EfAssist.App.csproj" />
+    <Project Path="src/EfAssist.Core/EfAssist.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/EfAssist.Core.Tests/EfAssist.Core.Tests.csproj" />
+  </Folder>
+</Solution>

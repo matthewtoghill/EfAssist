@@ -1,4 +1,4 @@
-# EfMigrateHub
+# EfAssist
 
 A cross-platform desktop GUI over the `dotnet ef` CLI, for managing Entity Framework Core
 migrations. Open a solution, pick a `DbContext`, and add, apply, roll back, remove and script
@@ -10,13 +10,13 @@ migrations without remembering which project is `--project` and which is `--star
 
 ## Install
 
-Download `EfMigrateHub-win-Setup.exe` from the
-[latest release](https://github.com/matthewtoghill/EfMigrateHub/releases) and run it. It installs
-per-user into `%LocalAppData%\EfMigrateHub` — no administrator rights, no .NET runtime needed.
+Download `EfAssist-win-Setup.exe` from the
+[latest release](https://github.com/matthewtoghill/EfAssist/releases) and run it. It installs
+per-user into `%LocalAppData%\EfAssist` — no administrator rights, no .NET runtime needed.
 
 The installer is not code-signed, so SmartScreen will warn on first run.
 
-`EfMigrateHub-win-Portable.zip` is the same application with no installer and no updates.
+`EfAssist-win-Portable.zip` is the same application with no installer and no updates.
 
 You still need the `dotnet-ef` tool itself, which is what the app drives:
 
@@ -35,9 +35,9 @@ of the public releases feed, and it fails silently when offline.
 ## Building
 
 ```
-dotnet build EfMigrateHub.slnx
-dotnet test EfMigrateHub.slnx
-dotnet run --project src/EfMigrateHub.App
+dotnet build EfAssist.slnx
+dotnet test EfAssist.slnx
+dotnet run --project src/EfAssist.App
 ```
 
 `samples/SampleEfApp` is a throwaway SQLite EF Core project, deliberately outside the solution, used
@@ -52,7 +52,7 @@ dotnet tool restore
 ```
 
 `-Upload` needs a GitHub token with `repo` scope, in `-Token` or `GITHUB_TOKEN`. The release number
-lives in `<Version>` in `src/EfMigrateHub.App/EfMigrateHub.App.csproj`; `-Version` overrides it.
+lives in `<Version>` in `src/EfAssist.App/EfAssist.App.csproj`; `-Version` overrides it.
 
 Keep the contents of `releases/` from the previous release around when building a new one — Velopack
 uses them to produce a delta package, so users download a patch rather than the whole application.

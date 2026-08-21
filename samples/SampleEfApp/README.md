@@ -2,10 +2,10 @@
 
 A small EF Core project used for two things:
 
-1. Capturing `dotnet ef` output fixtures for the parser tests in `tests/EfMigrateHub.Core.Tests/Fixtures/`.
-2. A manual test target for EfMigrateHub itself — a real solution to open in the GUI.
+1. Capturing `dotnet ef` output fixtures for the parser tests in `tests/EfAssist.Core.Tests/Fixtures/`.
+2. A manual test target for EfAssist itself — a real solution to open in the GUI.
 
-Deliberately **not** part of `EfMigrateHub.slnx`. Building the app must not build this, and the app under test needs to be a foreign project anyway.
+Deliberately **not** part of `EfAssist.slnx`. Building the app must not build this, and the app under test needs to be a foreign project anyway.
 
 ## Shape
 
