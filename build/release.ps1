@@ -95,7 +95,7 @@ dotnet vpk pack `
     --packTitle EfAssist `
     --packAuthors 'Matthew Toghill' `
     --mainExe EfAssist.exe `
-    --icon (Join-Path $repo 'src/EfAssist.App/Assets/avalonia-logo.ico') `
+    --icon (Join-Path $repo 'src/EfAssist.App/Assets/app-logo.ico') `
     --runtime $runtime `
     --outputDir $releaseDir
 if ($LASTEXITCODE -ne 0) { throw "vpk pack failed." }
