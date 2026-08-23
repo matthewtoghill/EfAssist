@@ -140,6 +140,39 @@ public class SettingsTests : IDisposable
     }
 
     [Fact]
+    public void Viewer_and_window_preferences_default_sensibly_and_round_trip()
+    {
+        var settings = SettingsStore.Load(SettingsPath);
+
+        // On, because that is how both viewers behaved before it was a choice. False is bool's
+        // default, so this only holds while the property initialiser does.
+        Assert.True(settings.Display.ShowLineNumbers);
+        Assert.True(settings.Display.MigrationActionsExpanded);
+        Assert.False(settings.Display.Window.Maximised);
+        Assert.Null(settings.Display.Window.Width);
+
+        settings.Display.ShowLineNumbers = false;
+        settings.Display.MigrationActionsExpanded = false;
+        settings.Display.Window.Maximised = true;
+        settings.Display.Window.Width = 1400;
+        settings.Display.Window.Height = 900;
+        settings.Display.Window.X = -1200;
+        settings.Display.Window.Y = 40;
+        SettingsStore.Save(settings, SettingsPath);
+
+        var reloaded = SettingsStore.Load(SettingsPath).Display;
+        Assert.False(reloaded.ShowLineNumbers);
+        Assert.False(reloaded.MigrationActionsExpanded);
+        Assert.True(reloaded.Window.Maximised);
+        Assert.Equal(1400, reloaded.Window.Width);
+        Assert.Equal(900, reloaded.Window.Height);
+
+        // Negative on purpose: a second monitor left of the primary one has negative coordinates.
+        Assert.Equal(-1200, reloaded.Window.X);
+        Assert.Equal(40, reloaded.Window.Y);
+    }
+
+    [Fact]
     public void A_workspace_file_is_only_read_when_that_workspace_is_asked_for()
     {
         var settings = SettingsStore.Load(SettingsPath);

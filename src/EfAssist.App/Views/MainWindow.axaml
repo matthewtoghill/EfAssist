@@ -85,6 +85,13 @@
             <Setter Property="Foreground" Value="{DynamicResource OutputMutedBrush}" />
         </Style>
 
+        <!-- Fluent's expander header is sized for touch. Folding the actions away is meant to buy
+             vertical space, so the collapsed bar keeps as little of it as it can. -->
+        <Style Selector="Expander /template/ ToggleButton">
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="10,4" />
+        </Style>
+
         <!-- Migration state badge -->
         <Style Selector="Border.badgeApplied">
             <Setter Property="Background" Value="{DynamicResource StateAppliedBrush}" />
@@ -417,7 +424,7 @@
                                         <ae:TextEditor x:Name="DetailEditor"
                                                        IsVisible="{Binding Migrations.Detail.HasText}"
                                                        IsReadOnly="True"
-                                                       ShowLineNumbers="True"
+                                                       ShowLineNumbers="{Binding ShowLineNumbers}"
                                                        WordWrap="{Binding WrapSql}"
                                                        FontFamily="Consolas,Menlo,monospace" FontSize="{DynamicResource AppFontSizeMono}"
                                                        Background="Transparent"
@@ -428,7 +435,12 @@
                             </Border>
                             </Grid>
 
-                            <Grid Grid.Row="3" ColumnDefinitions="*,*,*" Margin="0,10,0,0">
+                            <!-- Collapsible: these actions are needed occasionally, and folded away
+                                 they give their height back to the list and the detail pane. -->
+                            <Expander Grid.Row="3" Header="Actions" Margin="0,10,0,0"
+                                      HorizontalAlignment="Stretch"
+                                      IsExpanded="{Binding MigrationActionsExpanded}">
+                            <Grid ColumnDefinitions="*,*,*">
 
                                 <StackPanel Grid.Column="0" Margin="0,0,10,0">
                                     <TextBlock Text="Add migration" Classes="group" />
@@ -466,6 +478,7 @@
                                             Classes="danger" />
                                 </StackPanel>
                             </Grid>
+                            </Expander>
                         </Grid>
                     </TabItem>
                     <TabItem Header="Script">
@@ -551,7 +564,7 @@
                                     <ae:TextEditor x:Name="SqlEditor"
                                                    IsVisible="{Binding Script.HasSql}"
                                                    IsReadOnly="True"
-                                                   ShowLineNumbers="True"
+                                                   ShowLineNumbers="{Binding ShowLineNumbers}"
                                                    WordWrap="{Binding WrapSql}"
                                                    FontFamily="Consolas,Menlo,monospace" FontSize="{DynamicResource AppFontSizeMono}"
                                                    Background="Transparent"

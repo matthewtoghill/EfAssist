@@ -219,6 +219,32 @@
                             </StackPanel>
                         </Border>
 
+                        <!-- Bound to the main view model rather than to Appearance: these are the same
+                             properties the inline Wrap checkboxes on the workspace screen use, so both
+                             places stay in step without a second copy of the state. -->
+                        <Border Classes="section">
+                            <StackPanel Spacing="6">
+                                <TextBlock Classes="group" Text="Source viewer" />
+
+                                <CheckBox Content="Show line numbers" IsChecked="{Binding ShowLineNumbers}" />
+                                <CheckBox Content="Wrap long lines" IsChecked="{Binding WrapSql}" />
+
+                                <TextBlock Classes="hint"
+                                           Text="Covers the migration source and the generated SQL. Wrapping is off by default because EF's SQL has meaningful indentation that wrapping breaks up; the Wrap checkbox on the Script tab is this same setting." />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Classes="section">
+                            <StackPanel Spacing="6">
+                                <TextBlock Classes="group" Text="Window" />
+
+                                <CheckBox Content="Open as maximised window" IsChecked="{Binding OpenMaximised}" />
+
+                                <TextBlock Classes="hint"
+                                           Text="Takes effect on the next start, and follows how the window was last closed. Its size and position are remembered either way, unless the screen they were on is gone." />
+                            </StackPanel>
+                        </Border>
+
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

@@ -89,6 +89,32 @@ public enum AppTheme
     Dark,
 }
 
+/// <summary>
+/// The main window's remembered geometry. Written when the window closes rather than chosen on the
+/// settings screen — only <see cref="Maximised"/> is offered there as a checkbox.
+/// </summary>
+public sealed class WindowSettings
+{
+    /// <summary>Open maximised. Also updated to match how the window was last closed.</summary>
+    public bool Maximised { get; set; }
+
+    /// <summary>
+    /// The size of the restored — not maximised — window, in logical units. Null means nothing
+    /// remembered yet, so the window opens at its designed size.
+    /// </summary>
+    public double? Width { get; set; }
+
+    public double? Height { get; set; }
+
+    /// <summary>
+    /// Top-left of the restored window in physical pixels, which is what the platform deals in.
+    /// Null, or a point on no connected screen, means the OS picks the position.
+    /// </summary>
+    public int? X { get; set; }
+
+    public int? Y { get; set; }
+}
+
 /// <summary>Preferences that are the same wherever the app is pointed.</summary>
 public sealed class DisplaySettings
 {
@@ -106,6 +132,30 @@ public sealed class DisplaySettings
     /// order migrations are applied in.
     /// </summary>
     public bool SortNewestFirst { get; set; }
+
+    /// <summary>
+    /// Show line numbers in the migration source and SQL viewers. On by default, which is how the
+    /// viewers behaved before this was a choice.
+    /// </summary>
+    public bool ShowLineNumbers { get; set; } = true;
+
+    /// <summary>
+    /// Show the Migrations tab's action panel expanded. On by default; collapsing it gives the
+    /// height back to the migrations list and the detail pane.
+    /// </summary>
+    public bool MigrationActionsExpanded { get; set; } = true;
+
+    /// <summary>
+    /// Where the main window was last left, so it opens where it was closed rather than in the
+    /// middle of whichever screen the OS picks.
+    /// </summary>
+    public WindowSettings Window
+    {
+        get => _window;
+        set => _window = value ?? new WindowSettings();
+    }
+
+    private WindowSettings _window = new();
 
     /// <summary>
     /// Light, dark, or follow the OS. App-wide rather than per workspace: it is a property of the

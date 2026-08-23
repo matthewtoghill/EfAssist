@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -75,6 +75,9 @@ public partial class MainWindowViewModel : ObservableObject
             settings.RecentWorkspaces.Select(RecentWorkspace.FromPath));
         _wrapOutput = settings.Display.WrapOutput;
         _wrapSql = settings.Display.WrapSql;
+        _showLineNumbers = settings.Display.ShowLineNumbers;
+        _migrationActionsExpanded = settings.Display.MigrationActionsExpanded;
+        _openMaximised = settings.Display.Window.Maximised;
         Appearance = new SettingsViewModel(
             settings.Display,
             () => SettingsStore.Save(settings, settingsPath));
@@ -272,6 +275,57 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     private bool _wrapSql;
+
+    /// <summary>
+    /// Show line numbers beside the migration source and the generated SQL. App-wide for the same
+    /// reason as <see cref="WrapOutput"/>, and shared by both viewers because wrapping already is.
+    /// </summary>
+    [ObservableProperty]
+    private bool _showLineNumbers;
+
+    /// <summary>
+    /// Whether the Migrations tab's action panel is open. App-wide and persisted, so a user who
+    /// folds it away does not have to fold it again next launch.
+    /// </summary>
+    [ObservableProperty]
+    private bool _migrationActionsExpanded;
+
+    /// <summary>
+    /// Open the main window maximised. Also written when the window closes, so leaving it maximised
+    /// is enough to keep it that way without visiting the settings screen.
+    /// </summary>
+    [ObservableProperty]
+    private bool _openMaximised;
+
+    /// <summary>
+    /// Where the main window was last left. Exposed rather than mirrored property by property,
+    /// because a window's size and position are the view's to read and nothing else here needs them.
+    /// </summary>
+    public WindowSettings WindowLayout => _settings.Display.Window;
+
+    /// <summary>
+    /// Records how the window was left, so the next launch matches. Bounds are null for a maximised
+    /// window: its size is the screen's, and storing it would leave nothing to un-maximise to, so
+    /// the previously remembered bounds are kept instead.
+    /// </summary>
+    public void SaveWindowLayout(bool maximised, (int X, int Y, double Width, double Height)? bounds)
+    {
+        var window = _settings.Display.Window;
+        window.Maximised = maximised;
+
+        if (bounds is { } b && b.Width > 0 && b.Height > 0)
+        {
+            window.X = b.X;
+            window.Y = b.Y;
+            window.Width = b.Width;
+            window.Height = b.Height;
+        }
+
+        // Direct save rather than through OpenMaximised: this runs as the window closes, so no
+        // checkbox is left on screen to keep in step, and the property's handler would only write
+        // the same file a second time.
+        SettingsStore.Save(_settings, _settingsPath);
+    }
 
     public string WindowTitle => WorkspacePath is null
         ? "EfAssist"
@@ -839,6 +893,28 @@ public partial class MainWindowViewModel : ObservableObject
     {
         // App-wide, same as WrapOutput.
         _settings.Display.WrapSql = value;
+        SettingsStore.Save(_settings, _settingsPath);
+    }
+
+    partial void OnShowLineNumbersChanged(bool value)
+    {
+        // App-wide, same as WrapOutput.
+        _settings.Display.ShowLineNumbers = value;
+        SettingsStore.Save(_settings, _settingsPath);
+    }
+
+    partial void OnMigrationActionsExpandedChanged(bool value)
+    {
+        // App-wide, same as WrapOutput.
+        _settings.Display.MigrationActionsExpanded = value;
+        SettingsStore.Save(_settings, _settingsPath);
+    }
+
+    partial void OnOpenMaximisedChanged(bool value)
+    {
+        // Takes effect on the next launch: maximising the window from here would fight the user's
+        // own window management for the rest of the session.
+        _settings.Display.Window.Maximised = value;
         SettingsStore.Save(_settings, _settingsPath);
     }
 

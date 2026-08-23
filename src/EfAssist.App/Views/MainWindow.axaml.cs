@@ -12,6 +12,7 @@ using Avalonia.Platform.Storage;
 using AvaloniaEdit.Document;
 using AvaloniaEdit.Search;
 using EfAssist.App.ViewModels;
+using EfAssist.Core;
 
 namespace EfAssist.App.Views;
 
@@ -32,6 +33,9 @@ public partial class MainWindow : Window
         SearchPanel.Install(SqlEditor);
         SearchPanel.Install(DetailEditor);
 
+        // Subscribed here rather than in DataContextChanged, which can fire more than once.
+        Closing += OnClosing;
+
         // A definition holds literal colours, so a theme switch needs a different one. This fires
         // for a System user whose OS flips too, which a Theme-property handler would miss.
         SqlEditor.ActualThemeVariantChanged += (_, _) => ApplySqlHighlighting();
@@ -47,6 +51,8 @@ public partial class MainWindow : Window
             {
                 return;
             }
+
+            RestoreWindowLayout(viewModel.WindowLayout);
 
             viewModel.PickSolutionAsync = PickSolutionAsync;
             viewModel.PickFolderAsync = PickFolderAsync;
@@ -85,6 +91,52 @@ public partial class MainWindow : Window
 
     private void ApplySqlHighlighting() =>
         SqlEditor.SyntaxHighlighting = SyntaxHighlighting.Sql(SqlEditor.ActualThemeVariant);
+
+    /// <summary>
+    /// Puts the window back where it was closed. Runs from <c>DataContextChanged</c>, which fires
+    /// before the window is shown, so nothing jumps on screen.
+    /// </summary>
+    private void RestoreWindowLayout(WindowSettings layout)
+    {
+        // A remembered position is only used when it still lands on a connected screen: restoring
+        // onto a monitor that has since been unplugged leaves a window that cannot be reached.
+        if (layout is { Width: > 0, Height: > 0, X: { } x, Y: { } y }
+            && Screens.ScreenFromPoint(new PixelPoint(x, y)) is not null)
+        {
+            Width = layout.Width.Value;
+            Height = layout.Height.Value;
+            Position = new PixelPoint(x, y);
+            WindowStartupLocation = WindowStartupLocation.Manual;
+        }
+
+        if (layout.Maximised)
+        {
+            WindowState = Avalonia.Controls.WindowState.Maximized;
+        }
+    }
+
+    private void OnClosing(object? sender, WindowClosingEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+
+        var state = WindowState;
+
+        // Minimised says nothing about how the user wants the window, and Windows reports an
+        // off-screen position for it, so there is nothing here worth writing down.
+        if (state == Avalonia.Controls.WindowState.Minimized)
+        {
+            return;
+        }
+
+        viewModel.SaveWindowLayout(
+            maximised: state == Avalonia.Controls.WindowState.Maximized,
+            bounds: state == Avalonia.Controls.WindowState.Normal
+                ? (Position.X, Position.Y, ClientSize.Width, ClientSize.Height)
+                : null);
+    }
 
     /// <summary>
     /// The detail editor shows two languages, so which definition it wants depends on the view model
