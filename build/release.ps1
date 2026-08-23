@@ -1,7 +1,8 @@
-<#
+﻿<#
 .SYNOPSIS
-    Builds a Windows release of EfAssist: a self-contained publish, packed by Velopack into an
-    installer, a portable zip, and a delta package against the previous release.
+    Builds a Windows release of EfAssist: a self-contained publish, packed by Velopack into a
+    per-user installer, a machine-wide .msi, a portable zip, and a delta package against the
+    previous release.
 
 .DESCRIPTION
     Run from anywhere; paths are resolved relative to the repository root.
@@ -9,6 +10,10 @@
     The output lands in `releases/`. Velopack needs the *previous* releases in that folder to build
     a delta package — if it is empty, it produces a full release only, which still installs and
     still updates, just with a larger download.
+
+    The .msi is a machine-wide bootstrap: it installs the same per-user application for every
+    user on the box, which is what Group Policy and Intune deployments need. It carries no update
+    logic of its own — updates still come from the in-app Velopack updater.
 
     Nothing is signed. Windows SmartScreen will warn on first run of an unsigned installer until the
     download reputation builds. Add `--signParams` to the `vpk pack` call below if a code-signing
@@ -97,6 +102,7 @@ dotnet vpk pack `
     --mainExe EfAssist.exe `
     --icon (Join-Path $repo 'src/EfAssist.App/Assets/app-logo.ico') `
     --runtime $runtime `
+    --msi `
     --outputDir $releaseDir
 if ($LASTEXITCODE -ne 0) { throw "vpk pack failed." }
 

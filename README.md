@@ -18,6 +18,10 @@ The installer is not code-signed, so SmartScreen will warn on first run.
 
 `EfAssist-win-Portable.zip` is the same application with no installer and no updates.
 
+`EfAssist-win.msi` is a machine-wide installer for deploying via Group Policy or Intune.
+It needs administrator rights and installs the app for every user on the machine; updates still
+come from the in-app updater.
+
 You still need the `dotnet-ef` tool itself, which is what the app drives:
 
 ```
