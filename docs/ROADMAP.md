@@ -137,6 +137,14 @@ Window/taskbar/installer icon is still `Assets/avalonia-logo.ico`, the Avalonia 
 - **Revisit when:** releases start having notes worth reading.
 - **Cost:** hours, once the notes exist.
 
+### Model diagram view
+
+Visualise the `DbContext` model — entities, properties, relationships — as a diagram, either via existing EF-related SQL model diagram tooling or generated (e.g. Mermaid ER/class diagrams) from the model.
+
+- **Why parked:** needs investigation into what "existing EF-related SQL model diagram functionality" would mean to integrate (there's no first-party `dotnet ef` command for this) versus generating a diagram ourselves from model metadata (`dotnet ef dbcontext info` / a scaffolding-adjacent introspection) and rendering with something like Mermaid. Either path is new surface, not a small add.
+- **Revisit when:** someone has time to spike the two approaches and pick one, or a concrete need for seeing entity relationships at a glance comes up.
+- **Cost:** unknown until scoped — likely a day+ for investigation, more for a rendering pipeline (Mermaid text generation is cheap; an interactive in-app diagram viewer is not).
+
 ---
 
 ## Not planned

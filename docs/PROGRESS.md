@@ -2,7 +2,7 @@
 
 What is actually built and verified. `PLAN.md` is the agreed plan and spec; this is the record of implementation, and the only place implementation detail is written down.
 
-Last updated: 2026-08-19.
+Last updated: 2026-08-24.
 
 | Phase | Status |
 | --- | --- |
@@ -13,8 +13,9 @@ Last updated: 2026-08-19.
 | 4 — Script tab | **Done** |
 | 5 — Errors, diagnostics, polish | **Done** |
 | 6 — Publish + installer + in-app update (Windows) | **Done** |
+| D0–D2 — Model diagrams: extraction, views, layout, scene | **Done** (Core only; no UI yet) |
 
-Current state: `dotnet test EfAssist.slnx` → **314 passed, 0 failed**, about 70 seconds. The app launches, opens a real solution or folder, lists migrations with their applied state, can add, apply, roll back, remove and drop, generates SQL scripts into a syntax-highlighted viewer, and explains the common EF failures in plain language without hiding the raw output.
+Current state: `dotnet test EfAssist.slnx` → **475 passed, 0 failed**, about 70 seconds. The app launches, opens a real solution or folder, lists migrations with their applied state, can add, apply, roll back, remove and drop, generates SQL scripts into a syntax-highlighted viewer, and explains the common EF failures in plain language without hiding the raw output.
 
 Phases 2, 3 and 4 have each had a round of manual UI testing and follow-up fixes — see the review sections below.
 
@@ -25,7 +26,9 @@ Phases 2, 3 and 4 have each had a round of manual UI testing and follow-up fixes
 ### Built
 
 - `EfAssist.slnx` with three projects, all on `net10.0`:
-  - `src/EfAssist.Core` — class library, **no package references at all**
+  - `src/EfAssist.Core` — class library, no package references at the time (it picked up its first,
+    `Microsoft.CodeAnalysis.CSharp`, with the Diagrams work; the absence was where the project had got
+    to, not a rule)
   - `src/EfAssist.App` — Avalonia 12.1.1 + CommunityToolkit.Mvvm (template default, untouched so far)
   - `tests/EfAssist.Core.Tests` — xunit
 - `samples/SampleEfApp` — SQLite EF Core project, deliberately outside the solution. Two contexts (`BlogContext`, `AuditContext`), two migrations, only the first applied. See its `README.md`.
@@ -1080,6 +1083,89 @@ that matched what the preview had shown.
 
 ---
 
+## Model diagrams — Phases D0 to D2 (Core only)
+
+`docs/DIAGRAMS-PLAN.md` is the research and the decisions; `docs/DIAGRAMS-IMPLEMENTATION.md` is the
+build plan. This is what exists so far: everything in Core, fully tested, with no UI yet. Phases D3
+onwards — the tab itself, persistence and export — are not started.
+
+### Built
+
+`src/EfAssist.Core/Diagrams/`:
+
+| File | What it does |
+| --- | --- |
+| `DiagramModel.cs` | `DiagramModel`, `DiagramEntity`, `DiagramProperty`, `DiagramIndex`, `DiagramRelationship`. Records, `System.Text.Json`-friendly, so this doubles as the JSON export format and the persisted payload. |
+| `ModelSnapshotLocator.cs` | Finds `*ModelSnapshot.cs` for a context inside the migrations project, matching on the `[DbContext(typeof(X))]` attribute rather than the file name. Also `FindForMigration`, for the per-migration diagrams parked in the roadmap. |
+| `ModelSnapshotParser.cs` | Roslyn syntax-only parse of a snapshot into a `DiagramModel`. |
+| `DiagramViewOptions.cs` | `DiagramKind` and every display toggle. |
+| `DiagramNodeContent.cs` | Model to nodes and edges. The only place the ER and class views differ. |
+| `DiagramLayout.cs` | `DiagramLayoutEngine.Compute` — layered layout and orthogonal edge routing, as a pure function. |
+| `DiagramScene.cs` | Layout to a flat list of `RectShape` / `PolylineShape` / `TextShape`, plus `SceneState` for selection and search. |
+| `DiagramGeometry.cs` | `DiagramPoint`, `DiagramSize`, `DiagramRect` — Core has no Avalonia reference and layout must not need one. |
+
+`samples/SampleRichModel` — a new sample project, outside the solution like `SampleEfApp`, holding a
+model with every construct the parser has to cope with. See its `README.md` for the table of
+construct to snapshot call. `SampleEfApp` was deliberately left alone: `MigrationRoundTripTests`
+asserts its migration list verbatim and `dbcontext-list.txt` captures exactly its two contexts, so
+adding anything there breaks working tests for no gain.
+
+Fixtures: `snapshot-rich` and `snapshot-simple` are real EF 10.0.10 output from the two samples.
+`snapshot-wrapped-args` and `snapshot-future` are hand-written, for formatting the samples cannot
+produce.
+
+### Verified
+
+`dotnet test EfAssist.slnx` → **475 passed, 0 failed**. 121 of those are new:
+`ModelSnapshotParserTests` (37), `ModelSnapshotLocatorTests` (14), `DiagramNodeContentTests` (30),
+`DiagramLayoutTests` (23), `DiagramSceneTests` (17).
+
+### What the real snapshots taught us
+
+Every one of these was found by parsing actual EF output rather than by reasoning about the format,
+and each would have been a bug:
+
+- **EF writes several `modelBuilder.Entity("X", …)` blocks for the same entity** — properties and keys
+  in one, foreign keys in a later one, navigations in a later one still. The parser merges by name.
+  Without that, `snapshot-rich`'s eleven entities come back as fifteen, four of them duplicates with
+  half the detail each.
+- **The same method name means different things in different chain positions.** `IsRequired()` after
+  `Property<T>` is a non-nullable column; the identical call after `HasOne` is a required
+  relationship. So the parser works on flattened invocation chains, not on method names in isolation.
+- **`HasForeignKey` has two shapes.** `HasForeignKey("BlogId")` names a column;
+  `HasForeignKey("Ns.PostStatistics", "PostId")` names the dependent type first. Taking the first
+  argument literally puts a phantom column called `Ns.PostStatistics` on the diagram.
+- **Nullability is never stated.** EF emits `IsRequired()` only where it is not already implied, so
+  `Property<string>("Url")` with nothing after it is optional while `Property<int>("Views")` with
+  nothing after it is not. `DiagramProperty.IsNotNull` combines the key, the `?` and a
+  reference-type name list to get this right; that list is the one genuine heuristic in the parser.
+- **`(string)null` appears as a real argument.** `SampleEfApp`'s own snapshot says
+  `ToTable("Blogs", (string)null)`, so casts are unwrapped or the schema reads as the text `null`.
+- **A literal `null` appears as a navigation name** on an implicit join entity's relationships:
+  `HasOne("Ns.Post", null)`.
+- **Two entities can own the same owned type.** Keyed on the bare type name they merge into one node,
+  so owned types get EF's own `Owner.Navigation#OwnedType` name.
+- **A TPH derived type declares no table.** It inherits the base's, and a node titled with the raw
+  value would be blank.
+- **Arguments wrap across lines.** This is what settled Roslyn over a line parser — it is in real
+  committed snapshots, not hypothetical, and `snapshot-wrapped-args` pins it.
+
+### Deviations from the plan
+
+- **No shadow-property flag, and no toggle for it.** The plan had `IsShadow` and a "show shadow
+  properties" option. There is no signal for it: EF writes a shadow property identically to a real
+  one, and a syntax-only parse has no CLR type to compare against. `samples/SampleRichModel`'s
+  `Blog.Owner` produces a shadow `OwnerId` that is indistinguishable from a declared column. Claiming
+  to know would have been a guess dressed as a fact, so the field and the toggle are both gone.
+- **`DiagramLayoutEngine`, not `DiagramLayout.Compute`.** `DiagramLayout` is the result record, so the
+  engine needed its own name.
+- **Edge attachment points are allocated by counting first, then spreading.** A running per-edge
+  offset — the obvious approach, and what was written first — lets two edges into one node land on the
+  same point, where they draw as one line and the diagram silently loses a relationship. Four
+  relationships arrive at `Person` in the rich model, which is what caught it.
+
+---
+
 ## Deliberate shortcuts
 
 Tracked so they do not rot into "later means never". Each is marked with a `ponytail:` comment at the site.
@@ -1106,3 +1192,8 @@ Tracked so they do not rot into "later means never". Each is marked with a `pony
 | `Theming` | Colour changes need a restart, because repainting them means reloading Fluent, which corrupts every ComboBox — AvaloniaUI/Avalonia#17917 | That issue is fixed, or `ColorPaletteResources` changes become live; either turns this into one call moving from `Initialise` to `Apply` |
 | `Theming.Sample` | The preview tile derives its own opaque approximation of the palette rather than rendering real controls under it | Live colour changes become possible, at which point the tile is unnecessary |
 | `Theming.BuildPalette` | Chrome fractions are single values averaged from WinUI's differing light and dark constants | A preset looks visibly wrong in one variant and right in the other |
+| `ModelSnapshotParser` | Skips fluent calls it does not recognise rather than reporting them | Never for correctness — it is what stops a new EF version breaking the tab. Revisit only if a silently-dropped construct turns out to matter, in which case surface it as a note on the diagram rather than an error |
+| `DiagramProperty.IsReferenceType` | A name list (`string`, `object`, arrays) instead of a semantic model | A mapped complex type shows up as a property and reads as non-nullable |
+| `DiagramLayoutEngine` | Hand-rolled layered layout with two barycentre passes, not a real Sugiyama implementation | The output looks bad on a real model. Manual dragging plus Re-layout is the escape hatch, and MSAGL only touches `Compute` |
+| `DiagramLayoutEngine.Rank` | Breaks a cycle by ignoring the edge that closes it, so which edge gets ignored depends on traversal order | Someone cares which way round a mutually-optional pair is drawn |
+| `LayoutOptions.Default.MeasureText` | Character count times font size times 0.55 | Never — it is the deliberate fallback. The app injects a `FormattedText` measurement; this exists so Core and the tests need no font |
