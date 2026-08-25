@@ -132,7 +132,14 @@
              vertical space, so the collapsed bar keeps as little of it as it can. -->
         <Style Selector="Expander /template/ ToggleButton">
             <Setter Property="MinHeight" Value="0" />
-            <Setter Property="Padding" Value="10,4" />
+            <Setter Property="Padding" Value="10,0" />
+        </Style>
+
+        <!-- The console expander is the whole bottom pane, so its header bar and its content both
+             have to take the width and the height rather than shrink to their text. -->
+        <Style Selector="Expander.output /template/ ToggleButton">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
         </Style>
 
         <!-- Migration state badge -->
@@ -345,7 +352,7 @@
             </ScrollViewer>
 
             <!-- Tabs above, console below, draggable divider between. -->
-            <Grid Grid.Column="1" RowDefinitions="*,Auto,200" Margin="0,12,12,0">
+            <Grid Name="MainPane" Grid.Column="1" RowDefinitions="*,Auto,200" Margin="0,12,12,0">
 
                 <TabControl Grid.Row="0" SelectedIndex="{Binding SelectedTabIndex}">
                     <TabItem Header="Migrations">
@@ -480,47 +487,48 @@
 
                             <!-- Collapsible: these actions are needed occasionally, and folded away
                                  they give their height back to the list and the detail pane. -->
-                            <Expander Grid.Row="3" Header="Actions" Margin="0,10,0,0"
-                                      HorizontalAlignment="Stretch"
-                                      IsExpanded="{Binding MigrationActionsExpanded}">
-                            <Grid ColumnDefinitions="*,*,*">
+                            <Expander Grid.Row="3" Margin="0,10,0,0" HorizontalAlignment="Stretch" IsExpanded="{Binding MigrationActionsExpanded}">
+                                <Expander.Header>
+                                    <TextBlock Text="Actions" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                </Expander.Header>
+                                <Grid ColumnDefinitions="*,*,*">
 
-                                <StackPanel Grid.Column="0" Margin="0,0,10,0">
-                                    <TextBlock Text="Add migration" Classes="group" />
-                                    <TextBox Text="{Binding Migrations.NewMigrationName}" PlaceholderText="MigrationName" />
-                                    <TextBlock Text="{Binding Migrations.NewMigrationNameError}"
-                                               IsVisible="{Binding Migrations.HasNewMigrationNameError}"
-                                               Classes="danger" FontSize="{DynamicResource AppFontSizeTiny}" TextWrapping="Wrap"
-                                               Margin="0,4,0,0" />
-                                    <TextBox Text="{Binding Migrations.OutputDirectory}"
-                                             PlaceholderText="Output folder (optional)" Margin="0,6,0,0" />
-                                    <Button Content="Add" Command="{Binding Migrations.AddCommand}"
-                                            HorizontalAlignment="Stretch" Margin="0,6,0,0" />
-                                </StackPanel>
+                                    <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                                        <TextBlock Text="Add migration" Classes="group" />
+                                        <TextBox Text="{Binding Migrations.NewMigrationName}" PlaceholderText="MigrationName" />
+                                        <TextBlock Text="{Binding Migrations.NewMigrationNameError}"
+                                                   IsVisible="{Binding Migrations.HasNewMigrationNameError}"
+                                                   Classes="danger" FontSize="{DynamicResource AppFontSizeTiny}" TextWrapping="Wrap"
+                                                   Margin="0,4,0,0" />
+                                        <TextBox Text="{Binding Migrations.OutputDirectory}"
+                                                 PlaceholderText="Output folder (optional)" Margin="0,6,0,0" />
+                                        <Button Content="Add" Command="{Binding Migrations.AddCommand}"
+                                                HorizontalAlignment="Stretch" Margin="0,6,0,0" />
+                                    </StackPanel>
 
-                                <StackPanel Grid.Column="1" Margin="0,0,10,0">
-                                    <TextBlock Text="Apply to database" Classes="group" />
-                                    <Button Content="Update to latest" Command="{Binding Migrations.UpdateToLatestCommand}"
-                                            HorizontalAlignment="Stretch" />
-                                    <Button Content="Update to selected" Command="{Binding Migrations.UpdateToSelectedCommand}"
-                                            HorizontalAlignment="Stretch" Margin="0,6,0,0" />
-                                    <TextBlock Classes="hint"
-                                               Text="Rolling back to an earlier migration is confirmed first, and names what would be reverted." />
-                                </StackPanel>
+                                    <StackPanel Grid.Column="1" Margin="0,0,10,0">
+                                        <TextBlock Text="Apply to database" Classes="group" />
+                                        <Button Content="Update to latest" Command="{Binding Migrations.UpdateToLatestCommand}"
+                                                HorizontalAlignment="Stretch" />
+                                        <Button Content="Update to selected" Command="{Binding Migrations.UpdateToSelectedCommand}"
+                                                HorizontalAlignment="Stretch" Margin="0,6,0,0" />
+                                        <TextBlock Classes="hint"
+                                                   Text="Rolling back to an earlier migration is confirmed first, and names what would be reverted." />
+                                    </StackPanel>
 
-                                <StackPanel Grid.Column="2">
-                                    <TextBlock Text="Destructive" Classes="group danger" />
-                                    <Button Content="Remove last migration" Command="{Binding Migrations.RemoveCommand}"
-                                            HorizontalAlignment="Stretch" />
-                                    <CheckBox Content="Force (revert if applied)"
-                                              IsChecked="{Binding Migrations.ForceRemove}" Margin="0,4,0,0" />
-                                    <Button Content="Revert all migrations" Command="{Binding Migrations.RevertAllCommand}"
-                                            HorizontalAlignment="Stretch" Margin="0,6,0,0" />
-                                    <Button Content="Drop database…" Command="{Binding Migrations.DropDatabaseCommand}"
-                                            HorizontalAlignment="Stretch" Margin="0,6,0,0"
-                                            Classes="danger" />
-                                </StackPanel>
-                            </Grid>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="Destructive" Classes="group danger" />
+                                        <Button Content="Remove last migration" Command="{Binding Migrations.RemoveCommand}"
+                                                HorizontalAlignment="Stretch" />
+                                        <CheckBox Content="Force (revert if applied)"
+                                                  IsChecked="{Binding Migrations.ForceRemove}" Margin="0,4,0,0" />
+                                        <Button Content="Revert all migrations" Command="{Binding Migrations.RevertAllCommand}"
+                                                HorizontalAlignment="Stretch" Margin="0,6,0,0" />
+                                        <Button Content="Drop database…" Command="{Binding Migrations.DropDatabaseCommand}"
+                                                HorizontalAlignment="Stretch" Margin="0,6,0,0"
+                                                Classes="danger" />
+                                    </StackPanel>
+                                </Grid>
                             </Expander>
                         </Grid>
                     </TabItem>
@@ -874,12 +882,18 @@
                     </TabItem>
                 </TabControl>
 
+                <!-- Nothing to resize while the console is folded away. The splitter's own height is
+                     what separates the console from the tab above it, so a spacer of the same height
+                     stands in for it while it is hidden. -->
                 <GridSplitter Grid.Row="1" Classes="pane" ResizeDirection="Rows"
                               HorizontalAlignment="Stretch"
+                              IsVisible="{Binding OutputExpanded}"
                               ToolTip.Tip="Drag to resize the output panel" />
+                <Border Grid.Row="1" Height="12" IsVisible="{Binding !OutputExpanded}" />
 
-                <!-- Output console -->
-                <Grid Grid.Row="2" RowDefinitions="Auto,Auto,*">
+                <!-- Output console. Inset horizontally so its frame lines up with the tab content
+                     above it rather than standing 8px wider on each side, and off the status bar. -->
+                <Grid Grid.Row="2" RowDefinitions="Auto,*" Margin="12,0,11,10">
 
                     <!-- Guidance for a recognised failure. Sits directly above the raw output it
                          explains, so the real message is never more than a glance away. -->
@@ -904,39 +918,50 @@
                         </Grid>
                     </Border>
 
-                    <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
-                        <TextBlock Text="Output" VerticalAlignment="Center" FontWeight="SemiBold" />
-                        <CheckBox Content="Wrap" IsChecked="{Binding WrapOutput}" VerticalAlignment="Center"
-                                  ToolTip.Tip="Wrap long lines instead of scrolling sideways. Applies to every workspace." />
-                        <Button Content="Copy all" Command="{Binding Session.CopyOutputCommand}"
-                                ToolTip.Tip="Copy the whole console. Individual lines can also be selected directly." />
-                        <Button Content="Copy diagnostics" Command="{Binding Session.CopyDiagnosticsCommand}" />
-                        <Button Content="Clear" Command="{Binding Session.ClearOutputCommand}" />
-                        <ProgressBar IsIndeterminate="True" Width="120" VerticalAlignment="Center"
-                                     IsVisible="{Binding Session.IsRunning}" />
-                    </StackPanel>
+                    <!-- Header keeps the console's controls reachable while it is folded away: Clear and
+                         Copy are worth having without unfolding, and so is the running indicator. -->
+                    <Expander Grid.Row="1" Classes="output" IsExpanded="{Binding OutputExpanded}"
+                              Padding="0"
+                              HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                              HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+                        <Expander.Header>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="Output" VerticalAlignment="Center" FontWeight="SemiBold" />
+                                <CheckBox Content="Wrap" IsChecked="{Binding WrapOutput}" VerticalAlignment="Center"
+                                          ToolTip.Tip="Wrap long lines instead of scrolling sideways. Applies to every workspace." />
+                                <Button Content="Copy all" Command="{Binding Session.CopyOutputCommand}"
+                                        ToolTip.Tip="Copy the whole console. Individual lines can also be selected directly." />
+                                <Button Content="Copy diagnostics" Command="{Binding Session.CopyDiagnosticsCommand}" />
+                                <Button Content="Clear" Command="{Binding Session.ClearOutputCommand}" />
+                                <ProgressBar IsIndeterminate="True" Width="120" VerticalAlignment="Center"
+                                             IsVisible="{Binding Session.IsRunning}" />
+                            </StackPanel>
+                        </Expander.Header>
 
-                    <Border Grid.Row="2" BorderThickness="1" BorderBrush="{DynamicResource SubtleBorderBrush}" Background="{DynamicResource PanelBackgroundBrush}">
-                        <!-- Horizontal scrolling only makes sense when lines are not wrapped. -->
-                        <ScrollViewer Name="OutputScroller" Padding="8"
-                                      HorizontalScrollBarVisibility="{Binding WrapOutput, Converter={x:Static app:OutputConverters.HorizontalScrollBar}}">
-                            <ItemsControl ItemsSource="{Binding Session.Output}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="core:OutputLine">
-                                        <!-- Selectable so a single line can be copied without reaching for the whole diagnostics block. -->
-                                        <SelectableTextBlock
-                                            Text="{Binding Text}"
-                                            Classes.channelError="{Binding Channel, Converter={x:Static app:OutputConverters.IsErrorChannel}}"
-                                            Classes.channelWarn="{Binding Channel, Converter={x:Static app:OutputConverters.IsWarnChannel}}"
-                                            Classes.channelInfo="{Binding Channel, Converter={x:Static app:OutputConverters.IsInfoChannel}}"
-                                            FontFamily="Consolas,Menlo,monospace"
-                                            FontSize="{DynamicResource AppFontSizeMono}"
-                                            TextWrapping="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).WrapOutput, Converter={x:Static app:OutputConverters.Wrapping}}" />
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
-                    </Border>
+                        <!-- No border of its own: the expander already draws one round the pane, and
+                             two lines a pixel apart just look like a mistake. -->
+                        <Border BorderThickness="0" Background="{DynamicResource PanelBackgroundBrush}">
+                            <!-- Horizontal scrolling only makes sense when lines are not wrapped. -->
+                            <ScrollViewer Name="OutputScroller" Padding="8"
+                                          HorizontalScrollBarVisibility="{Binding WrapOutput, Converter={x:Static app:OutputConverters.HorizontalScrollBar}}">
+                                <ItemsControl ItemsSource="{Binding Session.Output}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="core:OutputLine">
+                                            <!-- Selectable so a single line can be copied without reaching for the whole diagnostics block. -->
+                                            <SelectableTextBlock
+                                                Text="{Binding Text}"
+                                                Classes.channelError="{Binding Channel, Converter={x:Static app:OutputConverters.IsErrorChannel}}"
+                                                Classes.channelWarn="{Binding Channel, Converter={x:Static app:OutputConverters.IsWarnChannel}}"
+                                                Classes.channelInfo="{Binding Channel, Converter={x:Static app:OutputConverters.IsInfoChannel}}"
+                                                FontFamily="Consolas,Menlo,monospace"
+                                                FontSize="{DynamicResource AppFontSizeMono}"
+                                                TextWrapping="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).WrapOutput, Converter={x:Static app:OutputConverters.Wrapping}}" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Border>
+                    </Expander>
                 </Grid>
             </Grid>
         </Grid>

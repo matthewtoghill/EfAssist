@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -95,6 +95,7 @@ public partial class MainWindowViewModel : ObservableObject
         _wrapSql = settings.Display.WrapSql;
         _showLineNumbers = settings.Display.ShowLineNumbers;
         _migrationActionsExpanded = settings.Display.MigrationActionsExpanded;
+        _outputExpanded = settings.Display.OutputExpanded;
         _defaultDiagramKind = settings.Display.DefaultDiagramKind;
         _openMaximised = settings.Display.Window.Maximised;
         Appearance = new SettingsViewModel(
@@ -323,6 +324,14 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     private bool _showLineNumbers;
+
+    /// <summary>
+    /// Whether the output console is open. App-wide and persisted, on the same footing as
+    /// <see cref="MigrationActionsExpanded"/>: the console is shared by every tab, so folding it
+    /// away is a single choice rather than one per screen.
+    /// </summary>
+    [ObservableProperty]
+    private bool _outputExpanded;
 
     /// <summary>
     /// Whether the Migrations tab's action panel is open. App-wide and persisted, so a user who
@@ -974,6 +983,13 @@ public partial class MainWindowViewModel : ObservableObject
     {
         // App-wide, same as WrapOutput.
         _settings.Display.MigrationActionsExpanded = value;
+        SettingsStore.Save(_settings, _settingsPath);
+    }
+
+    partial void OnOutputExpandedChanged(bool value)
+    {
+        // App-wide, same as WrapOutput.
+        _settings.Display.OutputExpanded = value;
         SettingsStore.Save(_settings, _settingsPath);
     }
 

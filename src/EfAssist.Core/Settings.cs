@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
 using EfAssist.Core.Diagrams;
 
@@ -173,6 +173,12 @@ public sealed class DisplaySettings
     /// height back to the migrations list and the detail pane.
     /// </summary>
     public bool MigrationActionsExpanded { get; set; } = true;
+
+    /// <summary>
+    /// Show the output console expanded. On by default; collapsing it folds the console down to its
+    /// header bar and gives the height back to whichever tab is open.
+    /// </summary>
+    public bool OutputExpanded { get; set; } = true;
 
     /// <summary>
     /// Show the Diagrams tab's view options expanded. Off by default: the surface wants the height,

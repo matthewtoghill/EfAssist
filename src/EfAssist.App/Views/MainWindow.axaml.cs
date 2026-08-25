@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -23,6 +23,12 @@ public partial class MainWindow : Window
 
     /// <summary>The view model behind the migration detail pane.</summary>
     private MigrationDetailViewModel? _detail;
+
+    /// <summary>
+    /// The console row's height while expanded, so folding it away and back does not throw away a
+    /// height the user set with the splitter.
+    /// </summary>
+    private GridLength _outputHeight = new(200);
 
     public MainWindow()
     {
@@ -78,6 +84,11 @@ public partial class MainWindow : Window
             viewModel.Diagrams.FitToWindow = DiagramView.FitToWindow;
 
             viewModel.Session.Output.CollectionChanged += ScrollOutputToEnd;
+
+            // The expander folds its own content, but the row it sits in still has to give the
+            // height back — a fixed row would leave the fold showing as empty space.
+            viewModel.PropertyChanged += OnMainPropertyChanged;
+            ApplyOutputHeight(viewModel.OutputExpanded);
 
             if (_script is not null)
             {
@@ -216,6 +227,30 @@ public partial class MainWindow : Window
     {
         ApplyDetailHighlighting();
         DetailEditor.Document = new TextDocument(_detail?.Text ?? "");
+    }
+
+    private void OnMainPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MainWindowViewModel.OutputExpanded)
+            && sender is MainWindowViewModel viewModel)
+        {
+            ApplyOutputHeight(viewModel.OutputExpanded);
+        }
+    }
+
+    private void ApplyOutputHeight(bool expanded)
+    {
+        var row = MainPane.RowDefinitions[2];
+
+        if (expanded)
+        {
+            row.Height = _outputHeight;
+            return;
+        }
+
+        // Remember what the splitter left it at before collapsing to the header bar.
+        _outputHeight = row.Height;
+        row.Height = GridLength.Auto;
     }
 
     private void ScrollOutputToEnd(object? sender, NotifyCollectionChangedEventArgs e)
