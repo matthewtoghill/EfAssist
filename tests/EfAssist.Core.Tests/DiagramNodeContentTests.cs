@@ -29,13 +29,31 @@ public class DiagramNodeContentTests
     }
 
     [Fact]
-    public void ErViewTitlesADerivedTypeWithTheTableItInherits()
+    public void ErViewTitlesADerivedTypeWithItsOwnNameAndSaysWhichTableItSharoes()
     {
-        // A type-per-hierarchy derived type declares no table of its own. Using the raw value would
-        // leave the node untitled.
-        var employee = Node(Build(), "Employee");
+        // Person, Employee and Customer all map to People. Titling each with its table gives three
+        // nodes called "People" that only the subtitle tells apart, so the type is the title here and
+        // the shared table is the subtitle.
+        var content = Build();
 
-        Assert.Equal("People", employee.Title);
+        var employee = Node(content, "Employee");
+        Assert.Equal("Employee", employee.Title);
+        Assert.Equal("in People", employee.Subtitle);
+
+        // The base still reads the usual way round, because it does own the table.
+        var person = Node(content, "Person");
+        Assert.Equal("People", person.Title);
+        Assert.Equal("Person", person.Subtitle);
+    }
+
+    [Fact]
+    public void DropsASubtitleThatOnlyRepeatsTheTitle()
+    {
+        // Common: a table named exactly after its type, which is the default for an owned collection.
+        var content = Build();
+
+        Assert.Null(content.Nodes.Single(n => n.Title == "PostStatistics").Subtitle);
+        Assert.Null(content.Nodes.Single(n => n.Title == "ContactMethod").Subtitle);
     }
 
     [Fact]
@@ -124,14 +142,38 @@ public class DiagramNodeContentTests
     }
 
     [Fact]
-    public void BothViewsCoverTheSameEntities()
+    public void BothViewsCoverTheSameEntitiesApartFromInlinedOwnedTypes()
     {
+        // Inlining is entity-relationship only, so the class view has the owned Address as a node of
+        // its own. Everything else matches.
         var er = Build();
         var @class = Build(new DiagramViewOptions { Kind = DiagramKind.Class });
 
-        Assert.Equal(
-            er.Nodes.Select(n => n.EntityName).Order(),
-            @class.Nodes.Select(n => n.EntityName).Order());
+        var extra = @class.Nodes.Select(n => n.EntityName)
+            .Except(er.Nodes.Select(n => n.EntityName))
+            .ToList();
+
+        Assert.All(extra, name => Assert.EndsWith("#SampleRichModel.Address", name));
+        Assert.Empty(er.Nodes.Select(n => n.EntityName).Except(@class.Nodes.Select(n => n.EntityName)));
+    }
+
+    [Fact]
+    public void ClassViewNeverInlinesAnOwnedType()
+    {
+        // The relational reading is "these columns live in the owner's table". In the class view an
+        // owned reference is a property, so inlining would give Author both an Address navigation and
+        // a set of Address.City rows describing the same thing twice.
+        var content = Build(new DiagramViewOptions
+        {
+            Kind = DiagramKind.Class,
+            InlineOwnedTypes = true,
+        });
+
+        var author = Node(content, "Author");
+
+        Assert.DoesNotContain(author.Rows, r => r.Name.StartsWith("Address.", StringComparison.Ordinal));
+        Assert.Contains(author.Rows, r => r.Name == "Address" && r.Kind == RowKind.Navigation);
+        Assert.Contains(content.Nodes, n => n.EntityName.EndsWith("#SampleRichModel.Address"));
     }
 
     // ---- Property detail ----

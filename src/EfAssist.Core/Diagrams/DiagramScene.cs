@@ -228,13 +228,20 @@ public static class SceneBuilder
             var badge = row.Badge.Length > 0 ? row.Badge + " " : "";
             var nullable = view.ShowNullability && row.IsNullable ? " ?" : "";
 
+            // The type gets what it needs and the name gets the rest, capped so a long type can
+            // never squeeze the name out entirely. A fixed half-and-half split truncates
+            // "ICollection<ContactMethod>" in a node that had the room for it.
+            var typeWidth = row.Type is null
+                ? 0
+                : Math.Min(options.MeasureText(row.Type, options.RowFontSize), inner * 0.62);
+
             yield return new TextShape(
                 badge + row.Name + nullable,
                 new DiagramPoint(textLeft, y),
                 role,
                 options.RowFontSize,
                 Monospace: true,
-                MaxWidth: inner) { EntityName = entity };
+                MaxWidth: Math.Max(20, inner - typeWidth - options.ColumnSpacing)) { EntityName = entity };
 
             if (row.Type is not null)
             {
@@ -245,7 +252,7 @@ public static class SceneBuilder
                     options.RowFontSize,
                     Monospace: true,
                     Alignment: TextAlignment.Right,
-                    MaxWidth: inner / 2) { EntityName = entity };
+                    MaxWidth: typeWidth) { EntityName = entity };
             }
         }
     }

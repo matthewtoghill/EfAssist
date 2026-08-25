@@ -10,6 +10,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EfAssist.App.Updates;
 using EfAssist.Core;
+using EfAssist.Core.Diagrams;
 
 namespace EfAssist.App.ViewModels;
 
@@ -35,6 +36,23 @@ public sealed record RecentWorkspace(string Name, string Location, string Path)
             location,
             path);
     }
+}
+
+/// <summary>
+/// The tabs, in the order they appear in <c>MainWindow.axaml</c>.
+/// </summary>
+/// <remarks>
+/// Bound to <see cref="TabControl.SelectedIndex"/> through its numeric value, so the order here and
+/// the order there have to match. It exists because the tab-activation switch used to compare against
+/// a bare <c>1</c>, which is exactly the kind of thing that silently means something else the moment a
+/// tab is inserted — as the Diagrams tab did.
+/// </remarks>
+public enum SelectedTab
+{
+    Migrations = 0,
+    Script = 1,
+    Diagrams = 2,
+    Tools = 3,
 }
 
 /// <summary>
@@ -77,6 +95,7 @@ public partial class MainWindowViewModel : ObservableObject
         _wrapSql = settings.Display.WrapSql;
         _showLineNumbers = settings.Display.ShowLineNumbers;
         _migrationActionsExpanded = settings.Display.MigrationActionsExpanded;
+        _defaultDiagramKind = settings.Display.DefaultDiagramKind;
         _openMaximised = settings.Display.Window.Maximised;
         Appearance = new SettingsViewModel(
             settings.Display,
@@ -111,6 +130,12 @@ public partial class MainWindowViewModel : ObservableObject
             canUseIdempotent: () => Script.CanUseIdempotent,
             ensureProviderKnownAsync: Script.EnsureProviderKnownAsync);
         Tools = new ToolsViewModel(Session, BuildTargetForCommands);
+        Diagrams = new DiagramsViewModel(
+            Session,
+            BuildTargetForCommands,
+            () => SelectedContext?.Name ?? _savedContextName,
+            Persist,
+            settings.Display);
         Update = new UpdateViewModel(updater ?? new VelopackUpdater());
     }
 
@@ -123,6 +148,9 @@ public partial class MainWindowViewModel : ObservableObject
 
     public ToolsViewModel Tools { get; }
 
+    /// <summary>The Diagrams tab: the model snapshot, drawn.</summary>
+    public DiagramsViewModel Diagrams { get; }
+
     /// <summary>The in-app updater. Independent of any workspace, so it lives on the shell.</summary>
     public UpdateViewModel Update { get; }
 
@@ -133,11 +161,14 @@ public partial class MainWindowViewModel : ObservableObject
     public SettingsViewModel Appearance { get; }
 
     /// <summary>
-    /// Which tab is showing. The Script tab probes the provider on first sight rather than on every
-    /// context change, so it needs to know when it becomes visible.
+    /// Which tab is showing, as the index the <c>TabControl</c> binds to. Some tabs do work on first
+    /// sight rather than on every context change, so they need to know when they become visible.
     /// </summary>
     [ObservableProperty]
     private int _selectedTabIndex;
+
+    /// <summary>The same thing, named. See <see cref="SelectedTab"/>.</summary>
+    public SelectedTab CurrentTab => (SelectedTab)SelectedTabIndex;
 
     // ---- Supplied by the view, which owns the TopLevel these need ----
 
@@ -166,6 +197,7 @@ public partial class MainWindowViewModel : ObservableObject
         {
             Migrations.ConfirmAsync = value;
             Script.ConfirmAsync = value;
+            Diagrams.ConfirmAsync = value;
         }
     }
 
@@ -275,6 +307,15 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     private bool _wrapSql;
+
+    /// <summary>
+    /// Which diagram a workspace opens on before it has been switched. App-wide: it is a property of
+    /// how the person thinks about their model, not of the solution.
+    /// </summary>
+    [ObservableProperty]
+    private DiagramKind _defaultDiagramKind;
+
+    public IReadOnlyList<DiagramKind> DiagramKinds { get; } = Enum.GetValues<DiagramKind>();
 
     /// <summary>
     /// Show line numbers beside the migration source and the generated SQL. App-wide for the same
@@ -416,6 +457,7 @@ public partial class MainWindowViewModel : ObservableObject
         Migrations.Clear();
         Script.Clear();
         Tools.Clear();
+        Diagrams.Clear();
         Session.Reset();
     }
 
@@ -609,6 +651,7 @@ public partial class MainWindowViewModel : ObservableObject
 
             Migrations.Restore(saved);
             Script.Restore(saved);
+            Diagrams.Restore(saved, _settings.Root, SolutionPath ?? WorkspacePath!);
         }
         finally
         {
@@ -656,6 +699,7 @@ public partial class MainWindowViewModel : ObservableObject
 
         Migrations.Store(saved);
         Script.Store(saved);
+        Diagrams.Store(saved);
         SettingsStore.Save(_settings, _settingsPath);
     }
 
@@ -815,17 +859,28 @@ public partial class MainWindowViewModel : ObservableObject
         Migrations.NotifyTargetChanged();
         Script.NotifyTargetChanged();
         Tools.NotifyTargetChanged();
+        Diagrams.NotifyTargetChanged();
     }
 
     partial void OnWorkspacePathChanged(string? value) => OnPropertyChanged(nameof(WindowTitle));
 
     partial void OnSelectedTabIndexChanged(int value)
     {
-        // Index 1 is the Script tab. Probing the provider costs a build, so it happens on first
-        // sight rather than every time a context is selected.
-        if (value == 1)
+        OnPropertyChanged(nameof(CurrentTab));
+
+        switch ((SelectedTab)value)
         {
-            _ = Script.OnActivatedAsync();
+            // Probing the provider costs a build, so it happens on first sight rather than every time
+            // a context is selected.
+            case SelectedTab.Script:
+                _ = Script.OnActivatedAsync();
+                break;
+
+            // Loads a saved diagram if there is one. Never generates: reading a file is free, parsing
+            // a snapshot the user did not ask for is not the deal.
+            case SelectedTab.Diagrams:
+                _ = Diagrams.OnActivatedAsync();
+                break;
         }
     }
 
@@ -868,6 +923,10 @@ public partial class MainWindowViewModel : ObservableObject
             Migrations.Clear();
             Script.Clear();
             Tools.Clear();
+
+            // Not Clear(): each context has its own saved diagram, so this swaps one for another
+            // rather than throwing the feature's state away on every context switch.
+            Diagrams.NotifyContextChanged();
             _ = Migrations.LoadForContextAsync();
         }
     }
@@ -900,6 +959,14 @@ public partial class MainWindowViewModel : ObservableObject
     {
         // App-wide, same as WrapOutput.
         _settings.Display.ShowLineNumbers = value;
+        SettingsStore.Save(_settings, _settingsPath);
+    }
+
+    partial void OnDefaultDiagramKindChanged(DiagramKind value)
+    {
+        // Only decides which view a workspace opens on the first time. A workspace that has been
+        // switched keeps its own choice, so changing this never overrides one already made.
+        _settings.Display.DefaultDiagramKind = value;
         SettingsStore.Save(_settings, _settingsPath);
     }
 

@@ -13,9 +13,12 @@ Last updated: 2026-08-24.
 | 4 — Script tab | **Done** |
 | 5 — Errors, diagnostics, polish | **Done** |
 | 6 — Publish + installer + in-app update (Windows) | **Done** |
-| D0–D2 — Model diagrams: extraction, views, layout, scene | **Done** (Core only; no UI yet) |
+| D0–D2 — Model diagrams: extraction, views, layout, scene | **Done** (Core) |
+| D3–D4 — Model diagrams: the tab, interaction, persistence | **Done** |
 
-Current state: `dotnet test EfAssist.slnx` → **475 passed, 0 failed**, about 70 seconds. The app launches, opens a real solution or folder, lists migrations with their applied state, can add, apply, roll back, remove and drop, generates SQL scripts into a syntax-highlighted viewer, and explains the common EF failures in plain language without hiding the raw output.
+Current state: `dotnet test EfAssist.slnx` → **525 passed, 0 failed**, about 70 seconds. The app launches, opens a real solution or folder, lists migrations with their applied state, can add, apply, roll back, remove and drop, generates SQL scripts into a syntax-highlighted viewer, draws the model as an interactive entity-relationship or class diagram that survives a restart, and explains the common EF failures in plain language without hiding the raw output.
+
+Still outstanding on the diagrams: export (D5). Nothing else.
 
 Phases 2, 3 and 4 have each had a round of manual UI testing and follow-up fixes — see the review sections below.
 
@@ -1116,7 +1119,7 @@ produce.
 
 ### Verified
 
-`dotnet test EfAssist.slnx` → **475 passed, 0 failed**. 121 of those are new:
+`dotnet test EfAssist.slnx` → **475 passed, 0 failed** at the end of D2. 121 of those were new:
 `ModelSnapshotParserTests` (37), `ModelSnapshotLocatorTests` (14), `DiagramNodeContentTests` (30),
 `DiagramLayoutTests` (23), `DiagramSceneTests` (17).
 
@@ -1166,6 +1169,86 @@ and each would have been a bug:
 
 ---
 
+## Model diagrams — Phases D3 and D4 (the tab, and persistence)
+
+### Built
+
+| File | What it does |
+| --- | --- |
+| `src/EfAssist.App/ViewModels/DiagramsViewModel.cs` | The tab. Generate, view switch, lock, re-layout, search, selection, the detail pane, and the saved-diagram lifecycle. |
+| `src/EfAssist.App/Views/DiagramSurface.cs` | Custom-drawn `Control`. Replays a `DiagramScene`, owns the pan and zoom matrix, hit-tests nodes and drags them. |
+| `src/EfAssist.App/DiagramTheme.cs` | `DiagramRole` to brush against the current theme variant, plus the `FormattedText` measurement layout needs. |
+| `src/EfAssist.Core/Diagrams/DiagramStore.cs` | `SavedDiagram`, and load, save and staleness under `%AppData%/EfAssist/diagrams/<workspace-key>/<context>.json`. |
+
+Changed: `App.axaml` gained thirteen `Diagram*Brush` entries per variant; `CommandSession` gained
+`RunLocalAsync`; `MainWindowViewModel` gained the `SelectedTab` enum and the `Diagrams` wiring;
+`Settings.cs` gained the diagram settings and a public `SettingsStore.WorkspaceKey`;
+`MainWindow.axaml` gained the tab; `SettingsWindow.axaml` gained the default-view preference.
+
+### Decisions
+
+- **Diagram colours are fixed neutrals per variant, not derived from the configured accent.** Every
+  other named brush in `App.axaml` is a literal per variant, an accent chosen for buttons can leave
+  node text unreadable, and colour changes need a restart anyway (AvaloniaUI/Avalonia#17917) so a
+  derived palette could not even be previewed.
+- **Hand-dragged positions are stored per view, not shared.** The two views put different rows in a
+  node, so the same entity is a different height in each; one shared set means an arrangement made in
+  one view overlaps in the other, and with the diagram locked there is no way to pull it apart again.
+- **The ten display toggles live in a collapsible "View options" expander**, reusing the Migrations
+  tab's Actions pattern including its compact-header style.
+- **A saved diagram loads on tab activation; nothing ever generates unprompted.** Reading a file is
+  free; parsing a snapshot the user did not ask for is not the deal — the same rule as
+  `DiscoveryMode.Cached`.
+- **No `Avalonia.Controls.PanAndZoom`.** It is marked deprecated on NuGet, its latest release
+  (11.3.0) requires Avalonia 11, and this app is on 12.1.1. Pan and zoom is about 80 lines here.
+- **`RunLocalAsync` sets neither `LastResult` nor `Diagnosis`.** There is no `EfResult` behind
+  in-process work, and inventing one would put a fabricated command line into "Copy diagnostics".
+
+### Verified
+
+`dotnet test EfAssist.slnx` → **525 passed, 0 failed**. 50 new: `DiagramStoreTests` (16) and
+`DiagramsViewModelTests` (32), plus two rewritten in `DiagramNodeContentTests`.
+
+Rendered as well as tested. A throwaway headless harness — Avalonia headless plus Skia, not
+committed — drew the real `DiagramSurface`, and then the real `MainWindow` with the tab selected and
+a diagram generated, in both variants, from `samples/SampleRichModel`. Five defects that only a
+picture would have found:
+
+- **Three nodes titled "People".** Titling a node with its table gives a type-per-hierarchy
+  hierarchy — `Person`, `Employee`, `Customer` — three identically titled nodes with only the
+  subtitle telling them apart. A derived type is now titled with its own name and subtitled
+  "in People".
+- **Subtitles repeating their titles.** `ContactMethod` over `ContactMethod`, `PostStatistics` over
+  `PostStatistics` — which happens whenever a table is named after its type, the default for an
+  owned collection. Suppressed when identical.
+- **The class view inlined owned types**, so `Author` had both an `Address` navigation and a set of
+  `Address.City` rows describing the same thing twice. Inlining is a statement about where columns
+  live, which is a relational idea; it is now entity-relationship only.
+- **Row text truncated a character early.** The scene divides a node's width back into a name column
+  and a type column, and an exact fit rounded the wrong way, so `PK FK BlogId` came out as
+  `PK FK Blo…` in a node that had the room for it. Fixed with two pixels of slack in the measured
+  width, and a type column budgeted from what the type actually measures rather than a fixed
+  half-and-half split.
+- **Detail rows drawn as grey bands.** Fluent gives a `Button`'s `ContentPresenter` its own
+  background per state, so setting the Button's own is not enough, and a pane of non-link rows came
+  out striped.
+
+One defect the tests found without help: the search counter read **"0 of 9"** before Next had been
+pressed, describing a position that does not exist. It now reads as a total until there is a current
+match.
+
+### Deliberately not done
+
+- **Obstacle-avoiding edge routing.** A route spanning three ranks crosses whatever sits in the
+  middle one. The layout is a deliberate simplification with MSAGL as the parked upgrade, and
+  dragging nodes is the escape hatch meanwhile.
+- **Re-fitting the view on every re-render.** A fit happens when a diagram is generated or loaded and
+  never afterwards, because re-fitting on an option toggle or a drag would fight whatever zoom the
+  user had chosen. A fit asked for before the tab has ever been shown is deferred to the first
+  `SizeChanged`, since there is no viewport to fit into yet.
+
+---
+
 ## Deliberate shortcuts
 
 Tracked so they do not rot into "later means never". Each is marked with a `ponytail:` comment at the site.
@@ -1196,4 +1279,8 @@ Tracked so they do not rot into "later means never". Each is marked with a `pony
 | `DiagramProperty.IsReferenceType` | A name list (`string`, `object`, arrays) instead of a semantic model | A mapped complex type shows up as a property and reads as non-nullable |
 | `DiagramLayoutEngine` | Hand-rolled layered layout with two barycentre passes, not a real Sugiyama implementation | The output looks bad on a real model. Manual dragging plus Re-layout is the escape hatch, and MSAGL only touches `Compute` |
 | `DiagramLayoutEngine.Rank` | Breaks a cycle by ignoring the edge that closes it, so which edge gets ignored depends on traversal order | Someone cares which way round a mutually-optional pair is drawn |
+| `DiagramSurface` | Hit-tests by scanning every node rectangle, and rebuilds the whole scene on each drag frame | A model large enough for the scan to show up. Under 100 entities, which is the expected case, a loop is the right answer |
+| `DiagramSurface` pan and zoom | Hand-rolled matrix maths rather than a pan-and-zoom library | Never, most likely — the obvious library is deprecated and Avalonia-11-only |
+| `DiagramsViewModel.RefreshMatches` | Substring match over every node and entity on each keystroke | Typing in the search box gets visibly laggy on a real model |
+| `DiagramStore` | Saved diagrams are never pruned, so a renamed context leaves its file behind | Someone notices the folder. The files are small and only ever read after being written |
 | `LayoutOptions.Default.MeasureText` | Character count times font size times 0.55 | Never — it is the deliberate fallback. The app injects a `FormattedText` measurement; this exists so Core and the tests need no font |

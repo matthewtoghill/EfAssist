@@ -36,6 +36,8 @@ public partial class MainWindow : Window
         // Subscribed here rather than in DataContextChanged, which can fire more than once.
         Closing += OnClosing;
 
+        WireDiagramSurface();
+
         // A definition holds literal colours, so a theme switch needs a different one. This fires
         // for a System user whose OS flips too, which a Theme-property handler would miss.
         SqlEditor.ActualThemeVariantChanged += (_, _) => ApplySqlHighlighting();
@@ -67,6 +69,13 @@ public partial class MainWindow : Window
             viewModel.Script.RevealFileAsync = path => OpenWithShellAsync(path, reveal: true);
             viewModel.Migrations.Detail.OpenFileAsync = path => OpenWithShellAsync(path, reveal: false);
 
+            // Layout sizes nodes from measured text, which Core cannot do — it has no Avalonia
+            // reference and no font. Without this it falls back to a character-count approximation
+            // and nodes come out slightly too narrow or too wide.
+            viewModel.Diagrams.MeasureText = DiagramTheme.Measure(FontFamily, DiagramView.RowFontFamily);
+            viewModel.Diagrams.CentreOn = DiagramView.CentreOn;
+            viewModel.Diagrams.FitToWindow = DiagramView.FitToWindow;
+
             viewModel.Session.Output.CollectionChanged += ScrollOutputToEnd;
 
             if (_script is not null)
@@ -91,6 +100,30 @@ public partial class MainWindow : Window
 
     private void ApplySqlHighlighting() =>
         SqlEditor.SyntaxHighlighting = SyntaxHighlighting.Sql(SqlEditor.ActualThemeVariant);
+
+    /// <summary>
+    /// Connects the diagram surface to the view model. Done in code rather than XAML because the
+    /// surface raises plain events rather than commands — a pointer drag is a stream of positions,
+    /// not something a <c>CommandParameter</c> can carry.
+    /// </summary>
+    private void WireDiagramSurface()
+    {
+        DiagramZoomIn.Click += (_, _) => DiagramView.ZoomBy(1.2);
+        DiagramZoomOut.Click += (_, _) => DiagramView.ZoomBy(1 / 1.2);
+        DiagramZoomReset.Click += (_, _) => DiagramView.ResetView();
+        DiagramFit.Click += (_, _) => DiagramView.FitToWindow();
+
+        DiagramView.SelectionRequested += (_, entity) =>
+            (DataContext as MainWindowViewModel)?.Diagrams.Select(entity);
+
+        DiagramView.NodeMoved += (_, move) =>
+            (DataContext as MainWindowViewModel)?.Diagrams.MoveNode(move.Entity, move.Position);
+
+        // Saving on every pointer move would write the file dozens of times per drag. Once the
+        // pointer is up, the position is what the user meant.
+        DiagramView.PointerReleased += (_, _) =>
+            (DataContext as MainWindowViewModel)?.Diagrams.CommitMove();
+    }
 
     /// <summary>
     /// Puts the window back where it was closed. Runs from <c>DataContextChanged</c>, which fires

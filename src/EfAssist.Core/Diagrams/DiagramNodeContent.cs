@@ -119,7 +119,7 @@ public static class DiagramNodeContent
 
         if (options.InlineOwnedTypes)
         {
-            foreach (var entity in model.Entities.Where(e => IsInlineable(e, model)))
+            foreach (var entity in model.Entities.Where(e => IsInlineable(e, model, options)))
             {
                 hidden.Add(entity.Name);
             }
@@ -132,9 +132,16 @@ public static class DiagramNodeContent
     /// An owned type whose columns live in the owner's table, so folding it in matches the database.
     /// An owned collection has a table of its own and is never inlined, whatever the option says.
     /// </summary>
-    private static bool IsInlineable(DiagramEntity entity, DiagramModel model)
+    /// <remarks>
+    /// Entity-relationship view only. Inlining is a statement about where columns live, which is a
+    /// relational idea; in the class view an owned reference is a property, and folding it in gives a
+    /// node with both an <c>Address</c> navigation and a set of <c>Address.City</c> rows describing
+    /// the same thing twice.
+    /// </remarks>
+    private static bool IsInlineable(
+        DiagramEntity entity, DiagramModel model, DiagramViewOptions options)
     {
-        if (!entity.IsOwned || entity.OwnerName is null)
+        if (options.Kind == DiagramKind.Class || !entity.IsOwned || entity.OwnerName is null)
         {
             return false;
         }
@@ -161,7 +168,7 @@ public static class DiagramNodeContent
             return result;
         }
 
-        foreach (var owned in model.Entities.Where(e => IsInlineable(e, model)))
+        foreach (var owned in model.Entities.Where(e => IsInlineable(e, model, options)))
         {
             var ownership = model.Relationships.First(r =>
                 r.IsOwnership && r.DependentEntity == owned.Name);
@@ -217,16 +224,35 @@ public static class DiagramNodeContent
                 Kind: RowKind.Index)));
         }
 
+        var title = Title(entity, model, options);
+        var subtitle = Subtitle(entity, model, options);
+
         return new DiagramNode(
             entity.Name,
-            Title: options.Kind == DiagramKind.EntityRelationship
-                ? ResolvedTable(entity, model) ?? entity.ShortName
-                : entity.ShortName,
-            Subtitle: Subtitle(entity, model, options),
+            title,
+            // A subtitle repeating the title says nothing. It happens whenever a table is named
+            // exactly after its type, which for an owned collection is the default.
+            Subtitle: subtitle == title ? null : subtitle,
             Rows: rows,
             IsOwned: entity.IsOwned,
             IsJoin: entity.IsImplicitJoin,
             IsAbstractBase: model.Entities.Any(e => e.BaseType == entity.Name));
+    }
+
+    private static string Title(
+        DiagramEntity entity, DiagramModel model, DiagramViewOptions options)
+    {
+        if (options.Kind == DiagramKind.Class)
+        {
+            return entity.ShortName;
+        }
+
+        // A type-per-hierarchy derived type shares its base's table, so titling it with the table
+        // gives a diagram with three nodes all called "People" and only the subtitle telling them
+        // apart. The type is what distinguishes them, so the type is the title.
+        return entity.BaseType is not null
+            ? entity.ShortName
+            : ResolvedTable(entity, model) ?? entity.ShortName;
     }
 
     private static bool Include(DiagramProperty property, DiagramViewOptions options) =>
@@ -320,8 +346,16 @@ public static class DiagramNodeContent
     {
         if (options.Kind == DiagramKind.EntityRelationship)
         {
-            // The title is already the table, so the subtitle carries the type it maps from.
-            return entity.IsImplicitJoin ? "join table" : entity.ShortName;
+            if (entity.IsImplicitJoin)
+            {
+                return "join table";
+            }
+
+            // A derived type is titled with its own name, so the subtitle says where its rows land —
+            // which for a shared table is the thing worth knowing.
+            return entity.BaseType is not null
+                ? $"in {ResolvedTable(entity, model)}"
+                : entity.ShortName;
         }
 
         // In the class view the title is the type, so the subtitle carries where it lands.

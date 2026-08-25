@@ -180,8 +180,11 @@ public static class DiagramLayoutEngine
             y += options.RowHeight;
         }
 
+        // Two pixels of slack past what the text measured. The scene divides this same width back
+        // into a name column and a type column, and without the slack an exact fit rounds the wrong
+        // way and every row comes out ellipsised one character early.
         width = Math.Clamp(
-            width + (2 * options.NodePadding), options.MinNodeWidth, options.MaxNodeWidth);
+            width + (2 * options.NodePadding) + 2, options.MinNodeWidth, options.MaxNodeWidth);
 
         // An empty node still needs a body, or its border collapses onto the header.
         var height = y + options.NodePadding;
