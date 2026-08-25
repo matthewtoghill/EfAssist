@@ -9,7 +9,7 @@
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <!-- The shipped version. build/release.ps1 reads this, and vpk stamps the release with it, so
          this is the one place a release number is written down. -->
-    <Version>1.0.3</Version>
+    <Version>1.0.4</Version>
     <AssemblyName>EfAssist</AssemblyName>
     <Product>EfAssist</Product>
   </PropertyGroup>
@@ -35,6 +35,9 @@
       <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
     </PackageReference>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <!-- PNG and PDF export of the model diagram. Already in the restore graph at this version via
+         Avalonia.Skia, so referencing it explicitly adds an API surface, not a native asset. -->
+    <PackageReference Include="SkiaSharp" Version="3.119.4" />
     <PackageReference Include="Velopack" Version="1.2.0" />
   </ItemGroup>
 

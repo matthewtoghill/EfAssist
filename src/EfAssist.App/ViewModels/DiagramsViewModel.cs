@@ -23,6 +23,20 @@ public sealed record DetailRow(
     public bool IsLink => Target is not null;
 }
 
+/// <summary>The file formats the diagram can be exported as.</summary>
+public enum DiagramFormat
+{
+    /// <summary>The extracted model. The useful artefact for another tool to read.</summary>
+    Json,
+
+    Svg,
+    Png,
+    Pdf,
+
+    /// <summary>Mermaid source, for pasting into a document that renders it.</summary>
+    Mermaid,
+}
+
 /// <summary>A group of <see cref="DetailRow"/>s under a heading.</summary>
 public sealed record DetailGroup(string Title, IReadOnlyList<DetailRow> Rows)
 {
@@ -69,6 +83,9 @@ public partial class DiagramsViewModel : ObservableObject
     /// <summary>Suppresses persistence and re-rendering while state is restored in bulk.</summary>
     private bool _restoring;
 
+    /// <summary>Where the last export went, so the next Save As dialog opens somewhere useful.</summary>
+    private string? _lastSaveAsFolder;
+
     public DiagramsViewModel(
         CommandSession session,
         Func<EfTarget?> target,
@@ -109,6 +126,9 @@ public partial class DiagramsViewModel : ObservableObject
     public Action? FitToWindow { get; set; }
 
     public Func<ConfirmRequest, Task<bool>>? ConfirmAsync { get; set; }
+
+    /// <summary>Save As dialog: suggested file name and starting folder in, chosen path out.</summary>
+    public Func<string, string?, Task<string?>>? PickSaveFileAsync { get; set; }
 
     // ---- The diagram ----
 
@@ -300,6 +320,7 @@ public partial class DiagramsViewModel : ObservableObject
 
             Kind = saved.DiagramView ?? _display.DefaultDiagramKind;
             IsUnlocked = !saved.DiagramLocked;
+            _lastSaveAsFolder = saved.DiagramSaveFolder;
             ApplyOptions(saved.DiagramOptions ?? new DiagramViewOptions());
 
             ClearDiagram();
@@ -317,6 +338,7 @@ public partial class DiagramsViewModel : ObservableObject
         saved.DiagramView = Kind;
         saved.DiagramLocked = !IsUnlocked;
         saved.DiagramOptions = CurrentOptions();
+        saved.DiagramSaveFolder = _lastSaveAsFolder;
     }
 
     public void Clear()
@@ -517,6 +539,122 @@ public partial class DiagramsViewModel : ObservableObject
         SelectedEntity = entityName;
         CentreOn?.Invoke(entityName);
     }
+
+    // ---- Export ----
+
+    /// <summary>
+    /// Writes the diagram out in one of the five formats.
+    /// </summary>
+    /// <remarks>
+    /// One command taking the format as its parameter rather than five near-identical ones: the
+    /// destination handling, the error handling and the status line are the same either way, and only
+    /// the last two lines differ.
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(CanExport))]
+    private async Task ExportAsync(string? format)
+    {
+        var scene = Scene;
+        var model = _saved.Model;
+
+        if (scene is null || model is null
+            || !Enum.TryParse<DiagramFormat>(format, ignoreCase: true, out var chosen))
+        {
+            return;
+        }
+
+        // Always a dialog. A diagram is exported to be pasted somewhere specific, unlike a script that
+        // a project writes to the same folder every time, so a configured folder would be one more
+        // setting to explain and no fewer clicks.
+        var path = PickSaveFileAsync is null
+            ? null
+            : await PickSaveFileAsync(SuggestFileName(chosen), _lastSaveAsFolder);
+
+        if (path is null)
+        {
+            return;
+        }
+
+        _lastSaveAsFolder = Path.GetDirectoryName(path);
+        _persist();
+
+        try
+        {
+            switch (chosen)
+            {
+                case DiagramFormat.Json:
+                    File.WriteAllText(path, DiagramStore.ToJson(model));
+                    break;
+
+                case DiagramFormat.Svg:
+                    File.WriteAllText(
+                        path,
+                        SvgWriter.Write(
+                            scene,
+                            DiagramPalette.Light,
+                            MeasureText ?? LayoutOptions.Default.MeasureText));
+                    break;
+
+                case DiagramFormat.Png:
+                    DiagramExport.WritePng(scene, path);
+                    break;
+
+                case DiagramFormat.Pdf:
+                    DiagramExport.WritePdf(scene, path);
+                    break;
+
+                case DiagramFormat.Mermaid:
+                    File.WriteAllText(path, MermaidWriter.Write(model, CurrentOptions()));
+                    break;
+            }
+
+            _session.StatusMessage = $"Diagram exported to {path}.";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _session.StatusMessage = $"Could not write {path}: {ex.Message}";
+        }
+    }
+
+    private bool CanExport(string? format) => HasDiagram;
+
+    /// <summary>
+    /// Mermaid to the clipboard, since pasting it into a pull request description is what it is for.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(HasDiagram))]
+    private async Task CopyMermaidAsync()
+    {
+        if (_saved.Model is not { } model || _session.CopyToClipboardAsync is null)
+        {
+            return;
+        }
+
+        await _session.CopyToClipboardAsync(MermaidWriter.Write(model, CurrentOptions()));
+        _session.StatusMessage = "Mermaid diagram copied to the clipboard.";
+    }
+
+    /// <summary>
+    /// The context, the view it is of, and the extension — enough that two exports of the same model
+    /// do not land on top of each other.
+    /// </summary>
+    private string SuggestFileName(DiagramFormat format)
+    {
+        var context = Short(_contextName() ?? "model");
+        var view = Kind == DiagramKind.Class ? "classes" : "tables";
+        var safe = string.Concat(
+            context.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c));
+
+        return $"{safe}-{view}.{Extension(format)}";
+    }
+
+    private static string Extension(DiagramFormat format) => format switch
+    {
+        DiagramFormat.Json => "json",
+        DiagramFormat.Svg => "svg",
+        DiagramFormat.Png => "png",
+        DiagramFormat.Pdf => "pdf",
+        // .mmd is what the Mermaid CLI and the editor extensions expect.
+        _ => "mmd",
+    };
 
     // ---- Called by the view ----
 
@@ -942,6 +1080,8 @@ public partial class DiagramsViewModel : ObservableObject
         OnPropertyChanged(nameof(HasDiagram));
         OnPropertyChanged(nameof(DetailPlaceholder));
         ReLayoutCommand.NotifyCanExecuteChanged();
+        ExportCommand.NotifyCanExecuteChanged();
+        CopyMermaidCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnKindChanged(DiagramKind value)

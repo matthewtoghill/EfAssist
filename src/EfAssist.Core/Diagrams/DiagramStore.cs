@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace EfAssist.Core.Diagrams;
 
 /// <summary>
@@ -103,6 +105,17 @@ public static class DiagramStore
             return false;
         }
     }
+
+    /// <summary>
+    /// The extracted model as the JSON export.
+    /// </summary>
+    /// <remarks>
+    /// The model, not the scene: node positions and shape lists are this app's business, while the
+    /// entities, keys and relationships are the part another tool could use. Written with the same
+    /// options as the settings files, so enums read as names rather than numbers.
+    /// </remarks>
+    public static string ToJson(DiagramModel model) =>
+        JsonSerializer.Serialize(model, SettingsStore.Options);
 
     public static void Delete(string? root, string workspacePath, string? contextName)
     {

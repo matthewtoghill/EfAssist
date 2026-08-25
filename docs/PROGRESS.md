@@ -2,7 +2,7 @@
 
 What is actually built and verified. `PLAN.md` is the agreed plan and spec; this is the record of implementation, and the only place implementation detail is written down.
 
-Last updated: 2026-08-24.
+Last updated: 2026-08-25.
 
 | Phase | Status |
 | --- | --- |
@@ -15,10 +15,11 @@ Last updated: 2026-08-24.
 | 6 — Publish + installer + in-app update (Windows) | **Done** |
 | D0–D2 — Model diagrams: extraction, views, layout, scene | **Done** (Core) |
 | D3–D4 — Model diagrams: the tab, interaction, persistence | **Done** |
+| D5–D6 — Model diagrams: export, settings, docs | **Done** |
 
-Current state: `dotnet test EfAssist.slnx` → **525 passed, 0 failed**, about 70 seconds. The app launches, opens a real solution or folder, lists migrations with their applied state, can add, apply, roll back, remove and drop, generates SQL scripts into a syntax-highlighted viewer, draws the model as an interactive entity-relationship or class diagram that survives a restart, and explains the common EF failures in plain language without hiding the raw output.
+Current state: `dotnet test EfAssist.slnx` → **554 passed, 0 failed**, about 70 seconds. The app launches, opens a real solution or folder, lists migrations with their applied state, can add, apply, roll back, remove and drop, generates SQL scripts into a syntax-highlighted viewer, draws the model as an interactive entity-relationship or class diagram that survives a restart and exports to JSON, SVG, PNG, PDF and Mermaid, and explains the common EF failures in plain language without hiding the raw output.
 
-Still outstanding on the diagrams: export (D5). Nothing else.
+The diagrams work is complete through D6. The four follow-ups it raised — MSAGL layout, per-migration diffing, cross-context diagrams and diagram editing — are parked in `ROADMAP.md` with reasons.
 
 Phases 2, 3 and 4 have each had a round of manual UI testing and follow-up fixes — see the review sections below.
 
@@ -1246,6 +1247,73 @@ match.
   never afterwards, because re-fitting on an option toggle or a drag would fight whatever zoom the
   user had chosen. A fit asked for before the tab has ever been shown is deferred to the first
   `SizeChanged`, since there is no viewport to fit into yet.
+
+---
+
+## Model diagrams — Phases D5 and D6 (export, and the finish)
+
+### Built
+
+| File | What it does |
+| --- | --- |
+| `src/EfAssist.Core/Diagrams/DiagramPalette.cs` | `DiagramRole` to hex, plus the surface colour and the two font stacks. Light only. |
+| `src/EfAssist.Core/Diagrams/SvgWriter.cs` | Hand-written SVG from a `DiagramScene`, one `<g id="Entity_…">` per node. Also `DiagramText`, the ellipsis and baseline helpers both export backends share. |
+| `src/EfAssist.Core/Diagrams/MermaidWriter.cs` | `erDiagram` or `classDiagram`, built from `DiagramNodeContent` so the text matches the view on screen. |
+| `src/EfAssist.App/DiagramExport.cs` | PNG via `SKSurface` at 2×, PDF via `SKDocument.CreatePdf` as one page. One replay serves both. |
+
+Changed: `DiagramStore` gained `ToJson`; `DiagramsViewModel` gained `Export` and `CopyMermaid`;
+`WorkspaceSettings` gained `DiagramSaveFolder`; `MainWindow.axaml` gained the Export menu, four
+missing tooltips and the "as of the last migration" hint; `MainWindow.axaml.cs`'s Save As dialog
+now derives its file type from the suggested name rather than hardcoding SQL;
+`EfAssist.App.csproj` gained an explicit `SkiaSharp` reference.
+
+### Decisions
+
+- **Exports are always light, whatever the app's theme.** A file has no theme to follow, and a
+  dark-background diagram in a printed document or a pull request is rarely what was wanted. This is
+  the one place a literal colour is allowed, and it is why `DiagramPalette` exists at all — the scene
+  still carries roles only.
+- **One `Export` command taking the format as a parameter, behind one menu button.** The destination
+  handling, the error handling and the status line are identical across five formats, and the toolbar
+  already carries ten controls.
+- **Save As every time, no configured output folder.** A diagram is exported to be pasted somewhere
+  specific, unlike a script that a project writes to the same place every time. The last folder is
+  remembered in `DiagramSaveFolder` — its own field rather than sharing the Script tab's
+  `LastSaveAsFolder`, because both tabs write their settings on every persist and one field would
+  mean whichever ran last wins.
+- **PNG is a fixed 2×.** Right for a screenshot in a pull request, which is what it is for. A
+  1×/2×/4× picker is one constant away if a poster is ever needed.
+- **Mermaid is built from the node content, not from the model.** The export describes the diagram
+  actually on screen — same collapsed join tables, same inlined owned types, same property detail. A
+  writer that read the model directly would be a second, differently-shaped diagram that happened to
+  share a button.
+- **Mermaid identifiers are sanitised to letters, digits and underscores.** Fully-qualified CLR names,
+  generic navigations and column types like `nvarchar(450)` all arrive here and none of them is a
+  legal Mermaid identifier. A short name that collides with another entity's falls back to the
+  sanitised full name — ugly, and not two classes silently merged into one box.
+- **Inheritance is drawn in the class view only.** An ER diagram has no notation for a type-per-
+  hierarchy mapping, and drawing it as a foreign key would claim a join that does not exist.
+
+### Verified
+
+`dotnet test EfAssist.slnx` → **554 passed, 0 failed**. 29 new: `SvgWriterTests` (7),
+`MermaidWriterTests` (9), `DiagramExportTests` (3) and ten export tests in `DiagramsViewModelTests`.
+
+The SVG tests parse the output as XML rather than matching strings, assert one legal-id group per
+entity, and check that a `de-DE` culture cannot turn a coordinate into two. PNG and PDF get magic
+bytes and a non-empty file — deliberately no pixel comparison, because Skia's text rendering varies
+with the fonts installed and a golden image would fail on a build agent for a reason that is not a
+bug. Mermaid asserts structure rather than matching a golden file, for the same brittleness reason.
+
+### Deliberately not done
+
+- **A golden-file Mermaid test.** Structure is asserted instead: block count per visible entity, key
+  markers, inheritance in the right view, and that no unquoted token contains a character Mermaid
+  would choke on. A golden file would fail on every cosmetic change to the writer.
+- **Export with the current theme's colours.** Cut in favour of always-light, above.
+- **Open file / Open folder after an export.** The Script tab has them because it writes into a
+  configured folder the user may not be looking at. Here the user has just chosen the destination in
+  a dialog, so they know where it went.
 
 ---
 

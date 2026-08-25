@@ -634,6 +634,37 @@
                                             ToolTip.Tip="{Binding Diagrams.LockTooltip}" />
                                     <Button Content="Re-layout" Command="{Binding Diagrams.ReLayoutCommand}"
                                             ToolTip.Tip="Arrange this view automatically, discarding nodes you have moved by hand." />
+
+                                    <!-- One menu rather than five buttons: the toolbar already carries
+                                         ten controls, and an export is a deliberate act rather than
+                                         something reached for mid-thought. -->
+                                    <DropDownButton Content="Export"
+                                                    IsEnabled="{Binding Diagrams.HasDiagram}"
+                                                    ToolTip.Tip="Write the diagram out as a file. Vector and image exports always use light colours, which is what a document or a pull request wants.">
+                                        <DropDownButton.Flyout>
+                                            <MenuFlyout>
+                                                <MenuItem Header="Model as JSON…"
+                                                          Command="{Binding Diagrams.ExportCommand}" CommandParameter="Json"
+                                                          ToolTip.Tip="The extracted model — entities, keys, indexes and relationships — for another tool to read." />
+                                                <MenuItem Header="Diagram as SVG…"
+                                                          Command="{Binding Diagrams.ExportCommand}" CommandParameter="Svg"
+                                                          ToolTip.Tip="Vector, one group per entity, so it stays editable." />
+                                                <MenuItem Header="Diagram as PNG…"
+                                                          Command="{Binding Diagrams.ExportCommand}" CommandParameter="Png"
+                                                          ToolTip.Tip="Twice the on-screen size, so it stays sharp when scaled up." />
+                                                <MenuItem Header="Diagram as PDF…"
+                                                          Command="{Binding Diagrams.ExportCommand}" CommandParameter="Pdf"
+                                                          ToolTip.Tip="One page sized to the whole diagram, never tiled." />
+                                                <Separator />
+                                                <MenuItem Header="Mermaid source…"
+                                                          Command="{Binding Diagrams.ExportCommand}" CommandParameter="Mermaid"
+                                                          ToolTip.Tip="Mermaid text matching the current view and its options." />
+                                                <MenuItem Header="Copy Mermaid"
+                                                          Command="{Binding Diagrams.CopyMermaidCommand}"
+                                                          ToolTip.Tip="Copy the Mermaid source to the clipboard, for pasting into a pull request." />
+                                            </MenuFlyout>
+                                        </DropDownButton.Flyout>
+                                    </DropDownButton>
                                 </StackPanel>
 
                                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6"
@@ -688,17 +719,20 @@
                                                 </ComboBox.ItemTemplate>
                                             </ComboBox>
                                         </StackPanel>
-                                        <CheckBox Content="Show types" IsChecked="{Binding Diagrams.ShowTypes}" />
+                                        <CheckBox Content="Show types" IsChecked="{Binding Diagrams.ShowTypes}"
+                                                  ToolTip.Tip="The column type beside each row in the table view, or the CLR type in the class view." />
                                         <CheckBox Content="Mark nullable" IsChecked="{Binding Diagrams.ShowNullability}"
                                                   ToolTip.Tip="A trailing ? on columns that allow null." />
                                     </StackPanel>
 
                                     <StackPanel Grid.Column="1" Spacing="6">
-                                        <CheckBox Content="Show indexes" IsChecked="{Binding Diagrams.ShowIndexes}" />
+                                        <CheckBox Content="Show indexes" IsChecked="{Binding Diagrams.ShowIndexes}"
+                                                  ToolTip.Tip="An extra row per index. Useful when reading the schema, noisy at a glance." />
                                         <CheckBox Content="Show navigations" IsChecked="{Binding Diagrams.ShowNavigations}"
                                                   IsEnabled="{Binding Diagrams.CanShowNavigations}"
                                                   ToolTip.Tip="Class view only — a navigation is not a column." />
-                                        <CheckBox Content="Show inheritance" IsChecked="{Binding Diagrams.ShowInheritance}" />
+                                        <CheckBox Content="Show inheritance" IsChecked="{Binding Diagrams.ShowInheritance}"
+                                                  ToolTip.Tip="Dashed edges from a derived type to its base in a type-per-hierarchy mapping." />
                                     </StackPanel>
 
                                     <StackPanel Grid.Column="2" Spacing="6">
@@ -706,7 +740,8 @@
                                                   ToolTip.Tip="Draw a many-to-many as one edge instead of showing the table EF generated for it." />
                                         <CheckBox Content="Inline owned types" IsChecked="{Binding Diagrams.InlineOwnedTypes}"
                                                   ToolTip.Tip="Fold an owned reference into its owner, which is where its columns actually live. An owned collection has its own table and always stays separate." />
-                                        <CheckBox Content="Label delete behaviour" IsChecked="{Binding Diagrams.ShowDeleteBehavior}" />
+                                        <CheckBox Content="Label delete behaviour" IsChecked="{Binding Diagrams.ShowDeleteBehavior}"
+                                                  ToolTip.Tip="Write Cascade, Restrict or SetNull on each relationship. Accurate, and a lot of text." />
                                     </StackPanel>
                                 </Grid>
                             </Expander>
@@ -757,6 +792,12 @@
                                                        IsVisible="{Binding Diagrams.HasSelection}"
                                                        FontWeight="SemiBold" TextWrapping="Wrap" />
                                             <TextBlock Text="{Binding Diagrams.SourceSummary}" Classes="hint" />
+                                            <!-- The one thing a reader can get wrong about this tab:
+                                                 it draws the mapped model as of the last migration,
+                                                 not whatever the code says right now. -->
+                                            <TextBlock IsVisible="{Binding Diagrams.HasDiagram}"
+                                                       Classes="hint" TextWrapping="Wrap" Margin="0,4,0,0"
+                                                       Text="This is the relational model EF mapped as of the last migration. Anything unmapped is not here, and changes made since are not either." />
                                         </StackPanel>
 
                                         <ScrollViewer Grid.Row="1" Padding="10,0,10,10">

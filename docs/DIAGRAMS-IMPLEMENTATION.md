@@ -3,7 +3,9 @@
 The actionable build plan for the Diagrams tab. `DIAGRAMS-PLAN.md` is the research and the reasoning;
 this document is the work. Every decision it depends on is settled in `DIAGRAMS-PLAN.md` §8.
 
-Status: **D0 to D4 done, D5 and D6 outstanding.** See `PROGRESS.md` for what was built and what the rendering turned up.
+Status: **D0 to D6 done.** See `PROGRESS.md` for what was built, what the rendering turned up, and where
+the plan below was deliberately departed from (export palette, export destination, PNG scale, the
+export menu).
 
 ---
 

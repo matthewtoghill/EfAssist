@@ -72,6 +72,7 @@ public partial class MainWindow : Window
             // Layout sizes nodes from measured text, which Core cannot do — it has no Avalonia
             // reference and no font. Without this it falls back to a character-count approximation
             // and nodes come out slightly too narrow or too wide.
+            viewModel.Diagrams.PickSaveFileAsync = PickSaveFileAsync;
             viewModel.Diagrams.MeasureText = DiagramTheme.Measure(FontFamily, DiagramView.RowFontFamily);
             viewModel.Diagrams.CentreOn = DiagramView.CentreOn;
             viewModel.Diagrams.FitToWindow = DiagramView.FitToWindow;
@@ -303,17 +304,37 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// The Save As dialog, shared by the Script tab and the Diagrams tab's five export formats.
+    /// </summary>
+    /// <remarks>
+    /// The file type comes from the suggested name's extension rather than from a parameter. Every
+    /// caller already has to decide the extension to build the name, and asking for it twice is how
+    /// the two end up disagreeing.
+    /// </remarks>
     private async Task<string?> PickSaveFileAsync(string suggestedName, string? startFolder)
     {
+        var extension = System.IO.Path.GetExtension(suggestedName).TrimStart('.').ToLowerInvariant();
+        var label = extension switch
+        {
+            "sql" => "SQL script",
+            "json" => "JSON file",
+            "svg" => "SVG image",
+            "png" => "PNG image",
+            "pdf" => "PDF document",
+            "mmd" => "Mermaid diagram",
+            _ => "File",
+        };
+
         var options = new FilePickerSaveOptions
         {
-            Title = "Save SQL script",
+            Title = "Save " + label.ToLowerInvariant(),
             SuggestedFileName = suggestedName,
-            DefaultExtension = "sql",
+            DefaultExtension = extension,
             // The OS dialog does its own overwrite prompt, which is why the app only asks when
             // writing straight into a configured scripts folder.
             ShowOverwritePrompt = true,
-            FileTypeChoices = [new FilePickerFileType("SQL script") { Patterns = ["*.sql"] }],
+            FileTypeChoices = [new FilePickerFileType(label) { Patterns = ["*." + extension] }],
         };
 
         if (startFolder is not null)

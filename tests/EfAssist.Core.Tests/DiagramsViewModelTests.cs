@@ -67,6 +67,8 @@ public class DiagramsViewModelTests : IDisposable
 
         public required NeverRuns Runner { get; init; }
 
+        public required CommandSession Session { get; init; }
+
         public required WorkspaceSettings Workspace { get; init; }
 
         public required DisplaySettings Display { get; init; }
@@ -94,6 +96,7 @@ public class DiagramsViewModelTests : IDisposable
         {
             ViewModel = viewModel,
             Runner = runner,
+            Session = session,
             Workspace = workspace,
             Display = settings,
         };
@@ -613,6 +616,124 @@ public class DiagramsViewModelTests : IDisposable
         // And back again, without regenerating.
         var back = Build();
         Assert.True(back.ViewModel.HasDiagram);
+    }
+
+    // ---- Export ----
+
+    [Theory]
+    [InlineData("Json", "json")]
+    [InlineData("Svg", "svg")]
+    [InlineData("Png", "png")]
+    [InlineData("Pdf", "pdf")]
+    [InlineData("Mermaid", "mmd")]
+    public async Task ExportsEachFormatToTheChosenFile(string format, string extension)
+    {
+        var harness = Build();
+        await harness.ViewModel.GenerateCommand.ExecuteAsync(null);
+
+        string? suggested = null;
+        var path = Path.Combine(_root, "export." + extension);
+        harness.ViewModel.PickSaveFileAsync = (name, _) =>
+        {
+            suggested = name;
+            return Task.FromResult<string?>(path);
+        };
+
+        await harness.ViewModel.ExportCommand.ExecuteAsync(format);
+
+        Assert.Equal($"RichContext-tables.{extension}", suggested);
+        Assert.True(new FileInfo(path).Length > 0);
+    }
+
+    [Fact]
+    public async Task ExportWritesNothingWhenTheDialogIsCancelled()
+    {
+        var harness = Build();
+        await harness.ViewModel.GenerateCommand.ExecuteAsync(null);
+        harness.ViewModel.PickSaveFileAsync = (_, _) => Task.FromResult<string?>(null);
+
+        await harness.ViewModel.ExportCommand.ExecuteAsync("Svg");
+
+        Assert.Empty(Directory.GetFiles(_root));
+    }
+
+    [Fact]
+    public async Task RemembersTheFolderTheLastExportWentTo()
+    {
+        var harness = Build();
+        await harness.ViewModel.GenerateCommand.ExecuteAsync(null);
+        harness.ViewModel.PickSaveFileAsync =
+            (_, _) => Task.FromResult<string?>(Path.Combine(_root, "first.svg"));
+
+        await harness.ViewModel.ExportCommand.ExecuteAsync("Svg");
+        harness.ViewModel.Store(harness.Workspace);
+
+        Assert.Equal(_root, harness.Workspace.DiagramSaveFolder);
+
+        // And it comes back as the dialog's starting folder next session.
+        string? offered = null;
+        var next = Build();
+        next.ViewModel.Restore(harness.Workspace, _root, Workspace);
+        next.ViewModel.PickSaveFileAsync = (_, start) =>
+        {
+            offered = start;
+            return Task.FromResult<string?>(null);
+        };
+
+        await next.ViewModel.ExportCommand.ExecuteAsync("Svg");
+
+        Assert.Equal(_root, offered);
+    }
+
+    [Fact]
+    public async Task ExportIsUnavailableUntilThereIsADiagram()
+    {
+        var harness = Build("AuditContext");
+
+        Assert.False(harness.ViewModel.ExportCommand.CanExecute("Svg"));
+        Assert.False(harness.ViewModel.CopyMermaidCommand.CanExecute(null));
+
+        var withDiagram = Build();
+        await withDiagram.ViewModel.GenerateCommand.ExecuteAsync(null);
+
+        Assert.True(withDiagram.ViewModel.ExportCommand.CanExecute("Svg"));
+    }
+
+    [Fact]
+    public async Task TheSuggestedNameFollowsTheViewOnScreen()
+    {
+        var harness = Build();
+        await harness.ViewModel.GenerateCommand.ExecuteAsync(null);
+        harness.ViewModel.SwitchViewCommand.Execute(null);
+
+        string? suggested = null;
+        harness.ViewModel.PickSaveFileAsync = (name, _) =>
+        {
+            suggested = name;
+            return Task.FromResult<string?>(null);
+        };
+
+        await harness.ViewModel.ExportCommand.ExecuteAsync("Svg");
+
+        Assert.Equal("RichContext-classes.svg", suggested);
+    }
+
+    [Fact]
+    public async Task CopiesMermaidForTheCurrentView()
+    {
+        var harness = Build();
+        await harness.ViewModel.GenerateCommand.ExecuteAsync(null);
+
+        string? copied = null;
+        harness.Session.CopyToClipboardAsync = text =>
+        {
+            copied = text;
+            return Task.CompletedTask;
+        };
+
+        await harness.ViewModel.CopyMermaidCommand.ExecuteAsync(null);
+
+        Assert.StartsWith("erDiagram", copied);
     }
 
     [Fact]

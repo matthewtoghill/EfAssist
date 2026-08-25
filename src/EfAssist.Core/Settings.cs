@@ -95,6 +95,16 @@ public sealed class WorkspaceSettings
     /// hand-arranged diagram wants to stay that way between sessions.
     /// </summary>
     public bool DiagramLocked { get; set; } = true;
+
+    /// <summary>
+    /// Last folder a diagram was exported to.
+    /// </summary>
+    /// <remarks>
+    /// Its own field rather than sharing <see cref="LastSaveAsFolder"/> with the Script tab. Both tabs
+    /// write their settings on every persist, so one field would mean whichever ran last wins — and
+    /// a null from the tab that has not saved anything yet would quietly wipe the other's.
+    /// </remarks>
+    public string? DiagramSaveFolder { get; set; }
 }
 
 /// <summary>Which theme variant the UI uses.</summary>

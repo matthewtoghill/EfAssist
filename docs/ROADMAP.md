@@ -137,13 +137,17 @@ Window/taskbar/installer icon is still `Assets/avalonia-logo.ico`, the Avalonia 
 - **Revisit when:** releases start having notes worth reading.
 - **Cost:** hours, once the notes exist.
 
-### Model diagram view
+### Model diagram view — done
 
-Visualise the `DbContext` model — entities, properties, relationships — as a diagram, either via existing EF-related SQL model diagram tooling or generated (e.g. Mermaid ER/class diagrams) from the model.
+Shipped as the Diagrams tab in phases D0–D6. The model is extracted from the EF model snapshot with Roslyn — no build, no database — and drawn as an interactive entity-relationship or class diagram that survives a restart and exports to JSON, SVG, PNG, PDF and Mermaid. See `docs/DIAGRAMS-PLAN.md` for the reasoning and `docs/DIAGRAMS-IMPLEMENTATION.md` for the build.
 
-- **Why parked:** needs investigation into what "existing EF-related SQL model diagram functionality" would mean to integrate (there's no first-party `dotnet ef` command for this) versus generating a diagram ourselves from model metadata (`dotnet ef dbcontext info` / a scaffolding-adjacent introspection) and rendering with something like Mermaid. Either path is new surface, not a small add.
-- **Revisit when:** someone has time to spike the two approaches and pick one, or a concrete need for seeing entity relationships at a glance comes up.
-- **Cost:** unknown until scoped — likely a day+ for investigation, more for a rendering pipeline (Mermaid text generation is cheap; an interactive in-app diagram viewer is not).
+Five follow-ups came out of it, parked with reasons of their own:
+
+- **MSAGL layout.** The shipped layout is hand-rolled: rank by dependency depth, two barycentre passes, orthogonal routing. Good enough as a starting point, and manual dragging plus Re-layout is the escape hatch. *Revisit when* the automatic arrangement disappoints on a real model of 50+ entities. *Cost:* a package reference and a rewrite of `DiagramLayoutEngine.Compute` and nothing else — the scene, the renderer and every export are downstream of it.
+- **Vertical/horizontal layout toggle.** The layout ranks nodes by dependency depth and places each rank as a *column*, stacking that rank's nodes down the page — so a model with only two or three ranks but a dozen entities in each comes out tall and narrow, using far more height than width. A toggle would place ranks as *rows* instead, flowing top-to-bottom with each rank spread across the width, and let the user pick whichever shape suits the model in front of them. *Why parked:* it is more than transposing the coordinates. `DiagramLayoutEngine.Place` is the easy half; edge routing exits a node's right edge and enters the next node's left, and `SceneBuilder.EndMarker` decides which way a crow's foot points from the route's x-direction, so both need an orientation to work from. The barycentre ordering pass is orientation-agnostic and would not change. It also wants a third setting persisted per view alongside the hand-dragged positions, since the two orientations arrange nodes differently enough that one set of positions cannot serve both — the same reason positions are already stored per `DiagramKind`. *Revisit when:* someone hits a model where the column layout wastes the screen, which is most likely on a wide, shallow model. *Cost:* around a day, most of it in routing and markers; MSAGL above would subsume it, since a real layout engine takes a flow direction as a parameter.
+- **Per-migration diagram diffing.** Draw the model as of migration N, or highlight what migration N changed. Every migration has its own snapshot in git history, so the data is there. *Why parked:* needs a git read or a checkout to get the older snapshot, which is a new dependency and a new failure mode. `ModelSnapshotLocator.FindForMigration` is already written for it. *Cost:* a day, most of it in getting the historical file safely.
+- **Cross-context diagrams.** One diagram spanning two `DbContext`s. *Why parked:* two contexts are usually two databases, and drawing them as one schema implies a join that cannot exist. *Revisit when* someone has a genuine multi-context single-database model.
+- **Diagram editing.** Editing an entity on the diagram and generating a migration from it. *Why parked:* that is a modelling tool, not a migrations tool, and it inverts the direction this app works in — code is the source of truth and the snapshot is downstream of it.
 
 ---
 

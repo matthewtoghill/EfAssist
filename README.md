@@ -4,6 +4,9 @@ A cross-platform desktop GUI over the `dotnet ef` CLI, for managing Entity Frame
 migrations. Open a solution, pick a `DbContext`, and add, apply, roll back, remove and script
 migrations without remembering which project is `--project` and which is `--startup-project`.
 
+The Diagrams tab draws your model as an entity-relationship or class diagram — read from the EF model
+snapshot, so it needs no build and no database — and exports it as JSON, SVG, PNG, PDF or Mermaid.
+
 - `PLAN.md` — the agreed scope and the decisions behind it.
 - `PROGRESS.md` — what is actually built, verified, and deliberately not done.
 - `ROADMAP.md` — ideas parked with a reason and a trigger to revisit.
