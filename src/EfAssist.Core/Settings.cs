@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using EfAssist.Core.Diagrams;
 
 namespace EfAssist.Core;
 
@@ -76,6 +77,34 @@ public sealed class WorkspaceSettings
     public string? LastSaveAsFolder { get; set; }
 
     public bool NoBuild { get; set; }
+
+    /// <summary>
+    /// Which diagram view this workspace was last left on. Null means never chosen here, so the
+    /// app-wide <see cref="DisplaySettings.DefaultDiagramKind"/> decides.
+    /// </summary>
+    public DiagramKind? DiagramView { get; set; }
+
+    /// <summary>
+    /// The diagram's display toggles. Per workspace rather than app-wide: how much of a model is
+    /// worth showing at once depends on the model.
+    /// </summary>
+    public DiagramViewOptions? DiagramOptions { get; set; }
+
+    /// <summary>
+    /// Whether node dragging is unlocked. Locked by default, and remembered per workspace — a
+    /// hand-arranged diagram wants to stay that way between sessions.
+    /// </summary>
+    public bool DiagramLocked { get; set; } = true;
+
+    /// <summary>
+    /// Last folder a diagram was exported to.
+    /// </summary>
+    /// <remarks>
+    /// Its own field rather than sharing <see cref="LastSaveAsFolder"/> with the Script tab. Both tabs
+    /// write their settings on every persist, so one field would mean whichever ran last wins — and
+    /// a null from the tab that has not saved anything yet would quietly wipe the other's.
+    /// </remarks>
+    public string? DiagramSaveFolder { get; set; }
 }
 
 /// <summary>Which theme variant the UI uses.</summary>
@@ -144,6 +173,26 @@ public sealed class DisplaySettings
     /// height back to the migrations list and the detail pane.
     /// </summary>
     public bool MigrationActionsExpanded { get; set; } = true;
+
+    /// <summary>
+    /// Show the Diagrams tab's view options expanded. Off by default: the surface wants the height,
+    /// and the defaults are the useful ones.
+    /// </summary>
+    public bool DiagramOptionsExpanded { get; set; }
+
+    /// <summary>
+    /// Show the Diagrams tab's entity detail pane. On by default — it is where the metadata a node
+    /// has no room for lives — but closing it gives the whole width back to the diagram.
+    /// </summary>
+    public bool DiagramDetailVisible { get; set; } = true;
+
+    /// <summary>
+    /// Which diagram a workspace opens on the first time it is looked at. App-wide, because it is a
+    /// property of how the person thinks about their model rather than of the solution. A workspace
+    /// that has been switched remembers its own choice in
+    /// <see cref="WorkspaceSettings.DiagramView"/>.
+    /// </summary>
+    public DiagramKind DefaultDiagramKind { get; set; } = DiagramKind.EntityRelationship;
 
     /// <summary>
     /// Where the main window was last left, so it opens where it was closed rather than in the
@@ -279,7 +328,11 @@ public sealed class AppSettings
 /// </summary>
 public static class SettingsStore
 {
-    private static readonly JsonSerializerOptions Options = new()
+    /// <summary>
+    /// Shared by everything the app writes as JSON, including <see cref="Diagrams.DiagramStore"/>,
+    /// so a settings file and a saved diagram never disagree about how an enum is written.
+    /// </summary>
+    internal static readonly JsonSerializerOptions Options = new()
     {
         WriteIndented = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
@@ -348,7 +401,20 @@ public static class SettingsStore
     /// plus a hash of the full path so that two <c>Api.slnx</c> files in different repos, or paths
     /// differing only in case, never collide.
     /// </summary>
-    public static string WorkspaceFile(string root, string workspacePath)
+    public static string WorkspaceFile(string root, string workspacePath) =>
+        Path.Combine(root, "workspaces", WorkspaceKey(workspacePath) + ".json");
+
+    /// <summary>
+    /// A filename-safe identity for a workspace: its solution or folder name, so a human reading the
+    /// directory can tell what is what, plus a hash of the full path so that two <c>Api.slnx</c>
+    /// files in different repositories, or paths differing only in case, never collide.
+    /// </summary>
+    /// <remarks>
+    /// Public because saved diagrams are filed under the same key —
+    /// <c>diagrams/&lt;key&gt;/&lt;context&gt;.json</c> beside <c>workspaces/&lt;key&gt;.json</c>. One
+    /// hashing rule for both, rather than two that could disagree about the same workspace.
+    /// </remarks>
+    public static string WorkspaceKey(string workspacePath)
     {
         var full = Path.GetFullPath(workspacePath);
         var hash = Convert.ToHexString(
@@ -362,10 +428,14 @@ public static class SettingsStore
             slug = slug[..40];
         }
 
-        return Path.Combine(root, "workspaces", $"{slug}-{hash}.json");
+        return $"{slug}-{hash}";
     }
 
-    private static T? ReadOrDefault<T>(string path) where T : class
+    /// <summary>
+    /// Reads one JSON file. Never throws: a missing file, an unreadable one and a corrupt one all mean
+    /// "nothing remembered". A corrupt file is set aside as <c>.corrupt</c> rather than overwritten.
+    /// </summary>
+    internal static T? ReadOrDefault<T>(string path) where T : class
     {
         if (!File.Exists(path))
         {
@@ -395,7 +465,7 @@ public static class SettingsStore
     /// Writes to a temp file and moves it into place, so a crash or a full disk part-way through
     /// leaves the previous settings intact rather than a truncated file.
     /// </summary>
-    private static void WriteAtomic<T>(string path, T value)
+    internal static void WriteAtomic<T>(string path, T value)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 

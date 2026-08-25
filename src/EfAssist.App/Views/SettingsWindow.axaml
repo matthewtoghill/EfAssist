@@ -236,6 +236,27 @@
 
                         <Border Classes="section">
                             <StackPanel Spacing="6">
+                                <TextBlock Classes="group" Text="Diagrams" />
+
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="Open on" VerticalAlignment="Center" Opacity="0.7" />
+                                    <ComboBox ItemsSource="{Binding DiagramKinds}"
+                                              SelectedItem="{Binding DefaultDiagramKind}" MinWidth="200">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding Converter={x:Static app:OutputConverters.SpacedName}}" />
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                </StackPanel>
+
+                                <TextBlock Classes="hint"
+                                           Text="Which diagram a workspace shows the first time. A workspace you have switched keeps its own choice, and the button on the Diagrams tab switches either at any time." />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Classes="section">
+                            <StackPanel Spacing="6">
                                 <TextBlock Classes="group" Text="Window" />
 
                                 <CheckBox Content="Open as maximised window" IsChecked="{Binding OpenMaximised}" />

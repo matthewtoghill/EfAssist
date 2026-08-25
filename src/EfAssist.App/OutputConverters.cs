@@ -1,3 +1,5 @@
+using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
@@ -46,6 +48,17 @@ public static class OutputConverters
     /// </summary>
     public static readonly FuncValueConverter<Color, IBrush> Brush =
         new(colour => new SolidColorBrush(colour));
+
+    /// <summary>
+    /// The Diagrams tab's detail column: its remembered width when open, nothing at all when closed.
+    /// </summary>
+    /// <remarks>
+    /// A collapsed column has to be an actual zero-width <see cref="GridLength"/>, not a hidden child.
+    /// An <c>Auto</c> column does collapse when its content is hidden, but a <c>GridSplitter</c>
+    /// cannot resize one, and the pane needs to be draggable while it is open.
+    /// </remarks>
+    public static readonly FuncValueConverter<bool, GridLength> DetailColumnWidth =
+        new(open => open ? new GridLength(320) : new GridLength(0));
 
     public static readonly FuncValueConverter<bool, TextWrapping> Wrapping =
         new(wrap => wrap ? TextWrapping.Wrap : TextWrapping.NoWrap);

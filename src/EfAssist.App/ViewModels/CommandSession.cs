@@ -114,6 +114,67 @@ public partial class CommandSession : ObservableObject
         }
     }
 
+    /// <summary>
+    /// Runs work that happens in this process rather than in <c>dotnet ef</c>, under the same busy
+    /// state, the same Cancel button and the same status line.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Diagram generation reads and parses a file; there is no process to launch. Giving it its own
+    /// cancellation source and its own Cancel button would mean two notions of "busy" on one screen,
+    /// and would let a diagram be generated while a migration was being applied — which is exactly
+    /// what the one-command-at-a-time rule exists to prevent, since generating reads files a running
+    /// <c>migrations add</c> is in the middle of writing.
+    /// </para>
+    /// <para>
+    /// Deliberately does not touch <see cref="LastResult"/> or <see cref="Diagnosis"/>. There is no
+    /// <see cref="EfResult"/> behind this, and inventing one would put a fabricated command line into
+    /// the "Copy diagnostics" block.
+    /// </para>
+    /// </remarks>
+    /// <returns>
+    /// The work's result, or <c>default</c> when another command is already running, the user
+    /// cancelled, or the work threw — in every one of those cases the caller should do nothing
+    /// further.
+    /// </returns>
+    public async Task<T?> RunLocalAsync<T>(string label, Func<CancellationToken, Task<T>> work)
+    {
+        ArgumentNullException.ThrowIfNull(work);
+
+        if (IsRunning)
+        {
+            return default;
+        }
+
+        IsRunning = true;
+        Diagnosis = null;
+        _cancellation = new CancellationTokenSource();
+        StatusMessage = $"{label}…";
+
+        try
+        {
+            return await work(_cancellation.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            StatusMessage = $"{label} cancelled.";
+            Append(new OutputLine(OutputChannel.Warn, $"{label} cancelled."));
+            return default;
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"{label} failed: {ex.Message}";
+            Append(new OutputLine(OutputChannel.Error, ex.ToString()));
+            return default;
+        }
+        finally
+        {
+            _cancellation?.Dispose();
+            _cancellation = null;
+            IsRunning = false;
+        }
+    }
+
     /// <summary>Reports a failure using EF's own message, which is already readable.</summary>
     public void ReportFailure(EfResult result, string fallback) =>
         StatusMessage = result.ErrorMessage.Length > 0 ? FirstLine(result.ErrorMessage) : fallback;

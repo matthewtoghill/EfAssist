@@ -8,6 +8,13 @@ namespace EfAssist.Core.Tests;
 /// </summary>
 internal static class Fixture
 {
+    /// <summary>
+    /// The raw fixture text. Used by the model-snapshot fixtures, which are captured C# source
+    /// rather than captured CLI output and so have no <c>--prefix-output</c> channels to parse.
+    /// </summary>
+    public static string Text(string name) =>
+        File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", name + ".txt"));
+
     public static EfResult Load(string name)
     {
         var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", name + ".txt");

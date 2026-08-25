@@ -3,6 +3,7 @@
         xmlns:vm="using:EfAssist.App.ViewModels"
         xmlns:app="using:EfAssist.App"
         xmlns:core="using:EfAssist.Core"
+        xmlns:views="using:EfAssist.App.Views"
         xmlns:ae="using:AvaloniaEdit"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -61,6 +62,48 @@
         <Style Selector="GridSplitter.pane:pointerover /template/ Border#Grip">
             <Setter Property="Background" Value="{DynamicResource SplitterGripHoverBrush}" />
             <Setter Property="Height" Value="5" />
+        </Style>
+
+        <!-- The same grip turned on its side, for the Diagrams tab's surface/detail divider. -->
+        <Style Selector="GridSplitter.paneV">
+            <Setter Property="Width" Value="10" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Cursor" Value="SizeWestEast" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Background="{TemplateBinding Background}">
+                        <Border Name="Grip" Width="4" Height="64" CornerRadius="2"
+                                Background="{DynamicResource SplitterGripBrush}"
+                                HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="GridSplitter.paneV:pointerover /template/ Border#Grip">
+            <Setter Property="Background" Value="{DynamicResource SplitterGripHoverBrush}" />
+            <Setter Property="Width" Value="5" />
+        </Style>
+
+        <!-- Detail pane rows. A relationship row navigates to the other end of the relationship; a
+             plain property row does not, so only the link rows get hover chrome and a pointer. -->
+        <Style Selector="Button.detailLink">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="2,1" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+        <!-- Fluent gives a Button's ContentPresenter its own background per state, so setting the
+             Button's is not enough: a pane of non-link rows comes out as grey bands. -->
+        <Style Selector="Button.detailLink /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.detailLink:disabled /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Opacity" Value="1" />
+        </Style>
+        <Style Selector="Button.detailLink:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource PanelBackgroundBrush}" />
         </Style>
 
         <!-- Recent-workspace row: the remove button only shows while the row is hovered. Both
@@ -572,6 +615,240 @@
                                                    VerticalScrollBarVisibility="Auto" />
                                 </Grid>
                             </Border>
+                        </Grid>
+                    </TabItem>
+                    <TabItem Header="Diagrams">
+                        <Grid RowDefinitions="Auto,Auto,Auto,*" Margin="0,8,0,0">
+
+                            <!-- Toolbar -->
+                            <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,8">
+                                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6"
+                                            VerticalAlignment="Center">
+                                    <Button Content="Generate diagram" Command="{Binding Diagrams.GenerateCommand}"
+                                            ToolTip.Tip="Reads the model snapshot for this context. No build, no database." />
+                                    <Button Content="{Binding Diagrams.SwitchViewLabel}"
+                                            Command="{Binding Diagrams.SwitchViewCommand}"
+                                            ToolTip.Tip="Switch between the table view and the class view. Each keeps its own arrangement." />
+                                    <Button Content="{Binding Diagrams.LockLabel}"
+                                            Command="{Binding Diagrams.ToggleLockCommand}"
+                                            ToolTip.Tip="{Binding Diagrams.LockTooltip}" />
+                                    <Button Content="Re-layout" Command="{Binding Diagrams.ReLayoutCommand}"
+                                            ToolTip.Tip="Arrange this view automatically, discarding nodes you have moved by hand." />
+
+                                    <!-- One menu rather than five buttons: the toolbar already carries
+                                         ten controls, and an export is a deliberate act rather than
+                                         something reached for mid-thought. -->
+                                    <DropDownButton Content="Export"
+                                                    IsEnabled="{Binding Diagrams.HasDiagram}"
+                                                    ToolTip.Tip="Write the diagram out as a file. Vector and image exports always use light colours, which is what a document or a pull request wants.">
+                                        <DropDownButton.Flyout>
+                                            <MenuFlyout>
+                                                <MenuItem Header="Model as JSON…"
+                                                          Command="{Binding Diagrams.ExportCommand}" CommandParameter="Json"
+                                                          ToolTip.Tip="The extracted model — entities, keys, indexes and relationships — for another tool to read." />
+                                                <MenuItem Header="Diagram as SVG…"
+                                                          Command="{Binding Diagrams.ExportCommand}" CommandParameter="Svg"
+                                                          ToolTip.Tip="Vector, one group per entity, so it stays editable." />
+                                                <MenuItem Header="Diagram as PNG…"
+                                                          Command="{Binding Diagrams.ExportCommand}" CommandParameter="Png"
+                                                          ToolTip.Tip="Twice the on-screen size, so it stays sharp when scaled up." />
+                                                <MenuItem Header="Diagram as PDF…"
+                                                          Command="{Binding Diagrams.ExportCommand}" CommandParameter="Pdf"
+                                                          ToolTip.Tip="One page sized to the whole diagram, never tiled." />
+                                                <Separator />
+                                                <MenuItem Header="Mermaid source…"
+                                                          Command="{Binding Diagrams.ExportCommand}" CommandParameter="Mermaid"
+                                                          ToolTip.Tip="Mermaid text matching the current view and its options." />
+                                                <MenuItem Header="Copy Mermaid"
+                                                          Command="{Binding Diagrams.CopyMermaidCommand}"
+                                                          ToolTip.Tip="Copy the Mermaid source to the clipboard, for pasting into a pull request." />
+                                            </MenuFlyout>
+                                        </DropDownButton.Flyout>
+                                    </DropDownButton>
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6"
+                                            VerticalAlignment="Center">
+                                    <TextBox Text="{Binding Diagrams.Search}" MinWidth="170"
+                                             PlaceholderText="Search entities, columns, indexes" />
+                                    <TextBlock Text="{Binding Diagrams.SearchSummary}" Classes="hint"
+                                               VerticalAlignment="Center" MinWidth="58" />
+                                    <Button Content="Next" Command="{Binding Diagrams.NextMatchCommand}" />
+                                    <Button Name="DiagramZoomOut" Content="&#x2212;" MinWidth="32"
+                                            ToolTip.Tip="Zoom out" />
+                                    <Button Name="DiagramZoomReset" Content="100%"
+                                            ToolTip.Tip="Reset the zoom and position" />
+                                    <Button Name="DiagramZoomIn" Content="+" MinWidth="32"
+                                            ToolTip.Tip="Zoom in" />
+                                    <Button Name="DiagramFit" Content="Fit"
+                                            ToolTip.Tip="Fit the whole diagram in the window" />
+                                    <ToggleButton Content="Details" IsChecked="{Binding Diagrams.DetailVisible}"
+                                                  ToolTip.Tip="Show the metadata pane for the selected entity." />
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- Two separate staleness signals, worded differently on purpose: one says
+                                 the diagram is behind its snapshot, the other says the snapshot is
+                                 behind the code. -->
+                            <StackPanel Grid.Row="1" Spacing="6" Margin="0,0,0,8">
+                                <Border IsVisible="{Binding Diagrams.IsStale}" Classes="caution"
+                                        CornerRadius="4" Padding="10,8">
+                                    <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource AppFontSizeSmall}"
+                                               Text="The model snapshot has changed since this diagram was drawn. Choose Generate diagram to bring it up to date." />
+                                </Border>
+                                <Border IsVisible="{Binding Diagrams.ShowsPendingChangesWarning}" Classes="caution"
+                                        CornerRadius="4" Padding="10,8">
+                                    <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource AppFontSizeSmall}"
+                                               Text="Your code has changed since the last migration, so this diagram is behind it. Add a migration to capture the changes." />
+                                </Border>
+                            </StackPanel>
+
+                            <Expander Grid.Row="2" Header="View options" Margin="0,0,0,8"
+                                      HorizontalAlignment="Stretch"
+                                      IsExpanded="{Binding Diagrams.OptionsExpanded}">
+                                <Grid ColumnDefinitions="*,*,*" Margin="4,6,4,2">
+                                    <StackPanel Grid.Column="0" Spacing="6">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <TextBlock Text="Properties" VerticalAlignment="Center" Opacity="0.7" />
+                                            <ComboBox ItemsSource="{Binding Diagrams.PropertyDetails}"
+                                                      SelectedItem="{Binding Diagrams.Properties}" MinWidth="170">
+                                                <ComboBox.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Text="{Binding Converter={x:Static app:OutputConverters.SpacedName}}" />
+                                                    </DataTemplate>
+                                                </ComboBox.ItemTemplate>
+                                            </ComboBox>
+                                        </StackPanel>
+                                        <CheckBox Content="Show types" IsChecked="{Binding Diagrams.ShowTypes}"
+                                                  ToolTip.Tip="The column type beside each row in the table view, or the CLR type in the class view." />
+                                        <CheckBox Content="Mark nullable" IsChecked="{Binding Diagrams.ShowNullability}"
+                                                  ToolTip.Tip="A trailing ? on columns that allow null." />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="1" Spacing="6">
+                                        <CheckBox Content="Show indexes" IsChecked="{Binding Diagrams.ShowIndexes}"
+                                                  ToolTip.Tip="An extra row per index. Useful when reading the schema, noisy at a glance." />
+                                        <CheckBox Content="Show navigations" IsChecked="{Binding Diagrams.ShowNavigations}"
+                                                  IsEnabled="{Binding Diagrams.CanShowNavigations}"
+                                                  ToolTip.Tip="Class view only — a navigation is not a column." />
+                                        <CheckBox Content="Show inheritance" IsChecked="{Binding Diagrams.ShowInheritance}"
+                                                  ToolTip.Tip="Dashed edges from a derived type to its base in a type-per-hierarchy mapping." />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="2" Spacing="6">
+                                        <CheckBox Content="Collapse join tables" IsChecked="{Binding Diagrams.CollapseJoinEntities}"
+                                                  ToolTip.Tip="Draw a many-to-many as one edge instead of showing the table EF generated for it." />
+                                        <CheckBox Content="Inline owned types" IsChecked="{Binding Diagrams.InlineOwnedTypes}"
+                                                  ToolTip.Tip="Fold an owned reference into its owner, which is where its columns actually live. An owned collection has its own table and always stays separate." />
+                                        <CheckBox Content="Label delete behaviour" IsChecked="{Binding Diagrams.ShowDeleteBehavior}"
+                                                  ToolTip.Tip="Write Cascade, Restrict or SetNull on each relationship. Accurate, and a lot of text." />
+                                    </StackPanel>
+                                </Grid>
+                            </Expander>
+
+                            <!-- Surface, divider, detail. The detail column collapses to a zero-width
+                                 column rather than hiding its content, so the diagram gets the space
+                                 back rather than leaving a gap. -->
+                            <Grid Grid.Row="3">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition MinWidth="0"
+                                                      Width="{Binding Diagrams.DetailVisible, Converter={x:Static app:OutputConverters.DetailColumnWidth}}" />
+                                </Grid.ColumnDefinitions>
+
+                                <Border Grid.Column="0" BorderThickness="1"
+                                        BorderBrush="{DynamicResource SubtleBorderBrush}">
+                                    <Grid>
+                                        <views:DiagramSurface x:Name="DiagramView"
+                                                              Scene="{Binding Diagrams.Scene}"
+                                                              IsUnlocked="{Binding Diagrams.IsUnlocked}"
+                                                              IsVisible="{Binding Diagrams.HasDiagram}" />
+
+                                        <!-- Empty state. Never an error: a context with no migrations
+                                             legitimately has no snapshot to draw. -->
+                                        <StackPanel IsVisible="{Binding !Diagrams.HasDiagram}"
+                                                    Margin="24" Spacing="8" MaxWidth="440"
+                                                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <TextBlock TextWrapping="Wrap" Opacity="0.6"
+                                                       HorizontalAlignment="Center" TextAlignment="Center"
+                                                       Text="No diagram yet. Choose Generate diagram to read the model snapshot for this context." />
+                                            <TextBlock IsVisible="{Binding Diagrams.EmptyReason, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                                       Text="{Binding Diagrams.EmptyReason}"
+                                                       TextWrapping="Wrap" TextAlignment="Center"
+                                                       Classes="hint caution" />
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+
+                                <GridSplitter Grid.Column="1" Classes="paneV" ResizeDirection="Columns"
+                                              IsVisible="{Binding Diagrams.DetailVisible}" />
+
+                                <Border Grid.Column="2" IsVisible="{Binding Diagrams.DetailVisible}"
+                                        BorderThickness="1" BorderBrush="{DynamicResource SubtleBorderBrush}">
+                                    <Grid RowDefinitions="Auto,*">
+                                        <StackPanel Grid.Row="0" Margin="10,8" Spacing="2">
+                                            <TextBlock Text="{Binding Diagrams.SelectedEntityTitle}"
+                                                       IsVisible="{Binding Diagrams.HasSelection}"
+                                                       FontWeight="SemiBold" TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding Diagrams.SourceSummary}" Classes="hint" />
+                                            <!-- The one thing a reader can get wrong about this tab:
+                                                 it draws the mapped model as of the last migration,
+                                                 not whatever the code says right now. -->
+                                            <TextBlock IsVisible="{Binding Diagrams.HasDiagram}"
+                                                       Classes="hint" TextWrapping="Wrap" Margin="0,4,0,0"
+                                                       Text="This is the relational model EF mapped as of the last migration. Anything unmapped is not here, and changes made since are not either." />
+                                        </StackPanel>
+
+                                        <ScrollViewer Grid.Row="1" Padding="10,0,10,10">
+                                            <StackPanel Spacing="12">
+                                                <TextBlock IsVisible="{Binding !Diagrams.HasSelection}"
+                                                           Text="{Binding Diagrams.DetailPlaceholder}"
+                                                           Classes="hint" Margin="0,8,0,0" />
+
+                                                <ItemsControl ItemsSource="{Binding Diagrams.Detail}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="vm:DetailGroup">
+                                                            <StackPanel Margin="0,0,0,10" IsVisible="{Binding HasRows}">
+                                                                <TextBlock Text="{Binding Title}" Classes="group" />
+                                                                <ItemsControl ItemsSource="{Binding Rows}">
+                                                                    <ItemsControl.ItemTemplate>
+                                                                        <DataTemplate x:DataType="vm:DetailRow">
+                                                                            <Button Classes="detailLink"
+                                                                                    IsEnabled="{Binding IsLink}"
+                                                                                    CommandParameter="{Binding Target}"
+                                                                                    Command="{Binding $parent[TabItem].((vm:MainWindowViewModel)DataContext).Diagrams.SelectEntityCommand}">
+                                                                                <Grid ColumnDefinitions="*,Auto">
+                                                                                    <StackPanel Grid.Column="0">
+                                                                                        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"
+                                                                                                   FontFamily="Consolas,Menlo,monospace"
+                                                                                                   FontSize="{DynamicResource AppFontSizeMono}" />
+                                                                                        <TextBlock Text="{Binding Note}" Classes="hint"
+                                                                                                   IsVisible="{Binding Note, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                                                                                    </StackPanel>
+                                                                                    <TextBlock Grid.Column="1" Text="{Binding Value}" Opacity="0.7"
+                                                                                               Margin="8,0,0,0" VerticalAlignment="Top"
+                                                                                               FontFamily="Consolas,Menlo,monospace"
+                                                                                               FontSize="{DynamicResource AppFontSizeMono}" />
+                                                                                </Grid>
+                                                                            </Button>
+                                                                        </DataTemplate>
+                                                                    </ItemsControl.ItemTemplate>
+                                                                </ItemsControl>
+                                                            </StackPanel>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+
+                                                <Button Content="Check for pending model changes"
+                                                        Command="{Binding Diagrams.CheckPendingChangesCommand}"
+                                                        HorizontalAlignment="Stretch"
+                                                        ToolTip.Tip="Asks EF whether the code has moved on since the last migration. Builds the startup project, which drawing the diagram does not." />
+                                            </StackPanel>
+                                        </ScrollViewer>
+                                    </Grid>
+                                </Border>
+                            </Grid>
                         </Grid>
                     </TabItem>
                     <TabItem Header="Tools">
