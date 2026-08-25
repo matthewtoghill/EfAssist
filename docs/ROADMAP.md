@@ -123,12 +123,14 @@ General review of layout, spacing, information density and visual polish across 
 - **Revisit when:** there's a specific list of layout/UX complaints to work through, or a design pass is scheduled.
 - **Cost:** unknown until scoped — likely several small changes rather than one big one.
 
-### App icon
-Window/taskbar/installer icon is still `Assets/avalonia-logo.ico`, the Avalonia template default, not a icon for EfAssist. Referenced from `MainWindow.axaml` (`Icon=`) and `build/release.ps1` (`--icon`, feeds the Velopack-packed exe).
+### App icon — done
+`Assets/app-logo.ico` replaced the Avalonia template default. It is referenced from three places, and each one covers a different surface:
 
-- **Why parked:** needs actual icon artwork, which is a design task, not a code task.
-- **Revisit when:** artwork exists. Then it's swapping the `.ico` file both places reference.
-- **Cost:** minutes once the `.ico` exists.
+- `MainWindow.axaml` (`Icon=`) — the icon of the running window, which is what the taskbar shows while the app is open. This is the only one that applies when running from Visual Studio, which is why a debug run always looked right.
+- `EfAssist.App.csproj` (`<ApplicationIcon>`) — embeds the icon as a Win32 resource in `EfAssist.exe`. Anything that reads an icon off the file rather than off a window — a pinned taskbar shortcut, an Explorer listing, the Start tile, the Alt-Tab entry before the window exists — uses this one. Without it those surfaces fall back to the generic executable icon, which is what made an installed-and-pinned EfAssist look broken while a debug run looked fine ([velopack#581](https://github.com/velopack/velopack/issues/581) is the same confusion from the other direction).
+- `build/release.ps1` (`vpk pack --icon`) — the installer and the shortcuts Velopack creates.
+
+All three want the same `.ico`, and it is a multi-resolution one (16 through 256) because Windows picks a size per surface rather than scaling one bitmap.
 
 ### Release notes in the update banner
 `vpk pack --releaseNotes` takes a markdown file, and Velopack carries the notes through to `VelopackAsset.NotesMarkdown`, so the banner could say what changed rather than only which version.
