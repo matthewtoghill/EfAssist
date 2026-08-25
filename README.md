@@ -6,6 +6,8 @@ migrations without remembering which project is `--project` and which is `--star
 
 The Diagrams tab draws your model as an entity-relationship or class diagram — read from the EF model
 snapshot, so it needs no build and no database — and exports it as JSON, SVG, PNG, PDF or Mermaid.
+Pick any migration to see the model as of that point in the history, with what it added, removed and
+changed marked up against the migration before it.
 
 - `PLAN.md` — the agreed scope and the decisions behind it.
 - `PROGRESS.md` — what is actually built, verified, and deliberately not done.

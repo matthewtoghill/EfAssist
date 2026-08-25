@@ -634,6 +634,14 @@
                                             VerticalAlignment="Center">
                                     <Button Content="Generate diagram" Command="{Binding Diagrams.GenerateCommand}"
                                             ToolTip.Tip="Reads the model snapshot for this context. No build, no database." />
+                                    <ComboBox ItemsSource="{Binding Diagrams.SnapshotOptions}"
+                                              SelectedItem="{Binding Diagrams.SelectedSnapshot}"
+                                              MinWidth="180"
+                                              ToolTip.Tip="Which snapshot to draw: the context's current model, or the model as of one migration, from its .Designer.cs file." />
+                                    <CheckBox Content="Mark changes"
+                                              IsChecked="{Binding Diagrams.HighlightChanges}"
+                                              IsEnabled="{Binding Diagrams.IsMigrationSelected}"
+                                              ToolTip.Tip="Colour what the selected migration added, removed and changed, against the migration before it. Removed tables and columns are drawn from the earlier snapshot so there is something to strike out." />
                                     <Button Content="{Binding Diagrams.SwitchViewLabel}"
                                             Command="{Binding Diagrams.SwitchViewCommand}"
                                             ToolTip.Tip="Switch between the table view and the class view. Each keeps its own arrangement." />
@@ -704,6 +712,22 @@
                                     <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource AppFontSizeSmall}"
                                                Text="The model snapshot has changed since this diagram was drawn. Choose Generate diagram to bring it up to date." />
                                 </Border>
+                                <!-- The diff legend, not a warning: it says what the selected
+                                     migration changed, and which colour means what. -->
+                                <StackPanel IsVisible="{Binding Diagrams.ShowsDiff}"
+                                            Orientation="Horizontal" Spacing="12">
+                                    <TextBlock Text="{Binding Diagrams.DiffSummary}" Classes="hint"
+                                               VerticalAlignment="Center" TextWrapping="Wrap" />
+                                    <TextBlock Text="+ added" VerticalAlignment="Center"
+                                               FontSize="{DynamicResource AppFontSizeSmall}"
+                                               Foreground="{DynamicResource DiagramAddedBrush}" />
+                                    <TextBlock Text="&#x2212; removed" VerticalAlignment="Center"
+                                               FontSize="{DynamicResource AppFontSizeSmall}"
+                                               Foreground="{DynamicResource DiagramRemovedBrush}" />
+                                    <TextBlock Text="~ changed" VerticalAlignment="Center"
+                                               FontSize="{DynamicResource AppFontSizeSmall}"
+                                               Foreground="{DynamicResource DiagramModifiedBrush}" />
+                                </StackPanel>
                                 <Border IsVisible="{Binding Diagrams.ShowsPendingChangesWarning}" Classes="caution"
                                         CornerRadius="4" Padding="10,8">
                                     <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource AppFontSizeSmall}"

@@ -403,9 +403,10 @@ One more decision, from §5.1: **replace the `if (value == 1)` magic number in
 
 - **Editing the model from the diagram.** Dragging a relationship to create an FK would mean writing
   C# back into the user's project. Firmly out.
-- **Diagram diffing between two migrations.** Every `.Designer.cs` holds its own snapshot, so this is
-  tantalisingly close to free — but it is a second feature with its own UI. Park it; just do not let
-  the extraction API assume there is only one snapshot.
+- ~~**Diagram diffing between two migrations.**~~ Shipped after the fact, and it did stay nearly
+  free: `DiagramDiff.Compare` merges the selected migration's snapshot with the previous one and
+  marks the differences, `DiagramNodeContent` carries them onto the nodes and rows, and the layout,
+  the scene and every export were untouched. The UI is a picker and one checkbox.
 - **Cross-context diagrams.** Blocked by the same N-builds problem as the multi-context tree view
   already parked in `ROADMAP.md`.
 - **Custom colours per entity, annotations, sticky notes.** Diagram-editor features, not

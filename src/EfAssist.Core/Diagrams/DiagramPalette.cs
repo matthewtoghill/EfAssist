@@ -33,6 +33,9 @@ public sealed record DiagramPalette
         [DiagramRole.Highlight] = "#1F6FEB",
         [DiagramRole.Selection] = "#0A4FBF",
         [DiagramRole.Dimmed] = "#D0D0D0",
+        [DiagramRole.Added] = "#1A7F37",
+        [DiagramRole.Removed] = "#CF222E",
+        [DiagramRole.Modified] = "#9A6700",
     };
 
     public static DiagramPalette Light { get; } = new();

@@ -135,6 +135,7 @@ public partial class MainWindowViewModel : ObservableObject
             Session,
             BuildTargetForCommands,
             () => SelectedContext?.Name ?? _savedContextName,
+            () => Migrations.Ordered,
             Persist,
             settings.Display);
         Update = new UpdateViewModel(updater ?? new VelopackUpdater());
@@ -599,6 +600,7 @@ public partial class MainWindowViewModel : ObservableObject
         {
             await Migrations.LoadForContextAsync();
             Script.RefreshOptions();
+            Diagrams.RefreshSnapshotOptions();
         }
     }
 

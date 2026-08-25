@@ -67,7 +67,7 @@ Two rules that keep this from turning into a mess:
 | File | Contents |
 | --- | --- |
 | `DiagramModel.cs` | `DiagramModel`, `DiagramEntity`, `DiagramProperty`, `DiagramIndex`, `DiagramRelationship`, `Cardinality`. Records, `System.Text.Json`-friendly. Shape is in `DIAGRAMS-PLAN.md` §3.1. |
-| `ModelSnapshotLocator.cs` | `Find(string migrationsProjectPath, string contextName) -> string?`. Also `FindForMigration(...)` for later per-migration diagrams — see §9. |
+| `ModelSnapshotLocator.cs` | `Find(string migrationsProjectPath, string contextName) -> string?`. Also `FindForMigration(...)`, which the snapshot picker uses to draw the model as of one migration. |
 | `ModelSnapshotParser.cs` | `Parse(string source, string sourcePath) -> DiagramModel`. Roslyn syntax walk. Never throws on unrecognised fluent calls. |
 | `DiagramViewOptions.cs` | `DiagramKind` (`EntityRelationship`, `Class`) plus every toggle: property categories, collapse implicit join entities, inline owned types, show indexes, show column types, show nullability, show shadow properties. |
 | `DiagramNodeContent.cs` | `Build(DiagramModel, DiagramViewOptions) -> IReadOnlyList<DiagramNode>` — the node title, the visible rows, and the edge list, for the chosen kind. The **only** place the ER/class difference lives. |

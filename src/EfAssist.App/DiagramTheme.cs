@@ -40,6 +40,9 @@ public sealed class DiagramTheme
         [DiagramRole.Highlight] = "DiagramHighlightBrush",
         [DiagramRole.Selection] = "DiagramSelectionBrush",
         [DiagramRole.Dimmed] = "DiagramDimmedBrush",
+        [DiagramRole.Added] = "DiagramAddedBrush",
+        [DiagramRole.Removed] = "DiagramRemovedBrush",
+        [DiagramRole.Modified] = "DiagramModifiedBrush",
     };
 
     /// <summary>Last-resort colour when a resource is missing, so a typo shows up rather than crashes.</summary>

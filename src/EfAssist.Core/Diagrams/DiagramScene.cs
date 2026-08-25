@@ -37,6 +37,27 @@ public enum DiagramRole
 
     /// <summary>A node that does not match the current search, so it recedes rather than vanishing.</summary>
     Dimmed,
+
+    /// <summary>Added by the migration being compared. Green, by the convention every diff uses.</summary>
+    Added,
+
+    /// <summary>Removed by it, and only on screen because the earlier model still had it.</summary>
+    Removed,
+
+    /// <summary>Present in both, but changed — a retyped or renullabled column.</summary>
+    Modified,
+}
+
+/// <summary>The role a change is drawn in. Nothing outside a diff ever resolves to one.</summary>
+internal static class ChangeRole
+{
+    internal static DiagramRole? For(DiagramChange change) => change switch
+    {
+        DiagramChange.Added => DiagramRole.Added,
+        DiagramChange.Removed => DiagramRole.Removed,
+        DiagramChange.Modified => DiagramRole.Modified,
+        _ => null,
+    };
 }
 
 public enum TextAlignment
@@ -167,11 +188,14 @@ public static class SceneBuilder
         var dimmed = state.IsDimmed(entity);
         var bounds = node.Bounds;
 
+        // Selection and search win over the diff colours: both are things the user is doing right
+        // now, and losing track of what is selected is worse than losing a colour that the rows
+        // inside the node repeat anyway.
         var border = entity == state.Selected
             ? DiagramRole.Selection
             : state.IsMatch(entity) ? DiagramRole.Highlight
             : dimmed ? DiagramRole.Dimmed
-            : DiagramRole.NodeBorder;
+            : ChangeRole.For(node.Node.Change) ?? DiagramRole.NodeBorder;
 
         yield return new RectShape(
             bounds,
@@ -189,9 +213,11 @@ public static class SceneBuilder
         var inner = bounds.Width - (2 * options.NodePadding);
 
         yield return new TextShape(
-            node.Node.Title,
+            DiagramDiff.Marker(node.Node.Change) + node.Node.Title,
             new DiagramPoint(textLeft, bounds.Y + 5),
-            dimmed ? DiagramRole.Dimmed : DiagramRole.HeaderText,
+            dimmed
+                ? DiagramRole.Dimmed
+                : ChangeRole.For(node.Node.Change) ?? DiagramRole.HeaderText,
             options.TitleFontSize,
             Bold: true,
             MaxWidth: inner) { EntityName = entity };
@@ -220,11 +246,15 @@ public static class SceneBuilder
             var row = node.Node.Rows[i];
             var y = bounds.Y + node.RowOffsets[i];
 
+            // A changed row's colour beats its key colour. What changed is the question being
+            // asked when a diff is on screen, and the PK badge still says the rest.
             var role = dimmed ? DiagramRole.Dimmed
+                : ChangeRole.For(row.Change) is { } changed ? changed
                 : row.IsKey || row.IsForeignKey ? DiagramRole.KeyText
                 : row.Kind == RowKind.Property ? DiagramRole.Text
                 : DiagramRole.MutedText;
 
+            var marker = DiagramDiff.Marker(row.Change);
             var badge = row.Badge.Length > 0 ? row.Badge + " " : "";
             var nullable = view.ShowNullability && row.IsNullable ? " ?" : "";
 
@@ -236,7 +266,7 @@ public static class SceneBuilder
                 : Math.Min(options.MeasureText(row.Type, options.RowFontSize), inner * 0.62);
 
             yield return new TextShape(
-                badge + row.Name + nullable,
+                marker + badge + row.Name + nullable,
                 new DiagramPoint(textLeft, y),
                 role,
                 options.RowFontSize,
@@ -263,7 +293,9 @@ public static class SceneBuilder
         LaidOutEdge edge, SceneState state, LayoutOptions options)
     {
         var dimmed = state.IsDimmed(edge.Edge.From) && state.IsDimmed(edge.Edge.To);
-        var role = dimmed ? DiagramRole.Dimmed : DiagramRole.Edge;
+        var role = dimmed
+            ? DiagramRole.Dimmed
+            : ChangeRole.For(edge.Edge.Change) ?? DiagramRole.Edge;
 
         yield return new PolylineShape(
             edge.Points,
