@@ -79,6 +79,9 @@
                     <SolidColorBrush x:Key="DiagramHighlightBrush" Color="#1F6FEB" />
                     <SolidColorBrush x:Key="DiagramSelectionBrush" Color="#0A4FBF" />
                     <SolidColorBrush x:Key="DiagramDimmedBrush" Color="#D0D0D0" />
+                    <SolidColorBrush x:Key="DiagramAddedBrush" Color="#1A7F37" />
+                    <SolidColorBrush x:Key="DiagramRemovedBrush" Color="#CF222E" />
+                    <SolidColorBrush x:Key="DiagramModifiedBrush" Color="#9A6700" />
                 </ResourceDictionary>
 
                 <ResourceDictionary x:Key="Dark">
@@ -126,6 +129,9 @@
                     <SolidColorBrush x:Key="DiagramHighlightBrush" Color="#58A6FF" />
                     <SolidColorBrush x:Key="DiagramSelectionBrush" Color="#79B8FF" />
                     <SolidColorBrush x:Key="DiagramDimmedBrush" Color="#3A3A3A" />
+                    <SolidColorBrush x:Key="DiagramAddedBrush" Color="#3FB950" />
+                    <SolidColorBrush x:Key="DiagramRemovedBrush" Color="#F85149" />
+                    <SolidColorBrush x:Key="DiagramModifiedBrush" Color="#D29922" />
                 </ResourceDictionary>
 
             </ResourceDictionary.ThemeDictionaries>

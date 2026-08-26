@@ -17,9 +17,9 @@ Last updated: 2026-08-25.
 | D3–D4 — Model diagrams: the tab, interaction, persistence | **Done** |
 | D5–D6 — Model diagrams: export, settings, docs | **Done** |
 
-Current state: `dotnet test EfAssist.slnx` → **554 passed, 0 failed**, about 70 seconds. The app launches, opens a real solution or folder, lists migrations with their applied state, can add, apply, roll back, remove and drop, generates SQL scripts into a syntax-highlighted viewer, draws the model as an interactive entity-relationship or class diagram that survives a restart and exports to JSON, SVG, PNG, PDF and Mermaid, and explains the common EF failures in plain language without hiding the raw output.
+Current state: `dotnet test EfAssist.slnx` → **576 passed, 0 failed**, about 70 seconds. The app launches, opens a real solution or folder, lists migrations with their applied state, can add, apply, roll back, remove and drop, generates SQL scripts into a syntax-highlighted viewer, draws the model as an interactive entity-relationship or class diagram that survives a restart and exports to JSON, SVG, PNG, PDF and Mermaid, and explains the common EF failures in plain language without hiding the raw output.
 
-The diagrams work is complete through D6. The four follow-ups it raised — MSAGL layout, per-migration diffing, cross-context diagrams and diagram editing — are parked in `ROADMAP.md` with reasons.
+The diagrams work is complete through D6, plus per-migration diagrams and diffing: the snapshot picker draws the model as of any migration from its `.Designer.cs`, and marks what that migration added, removed and changed against the one before it. The three remaining follow-ups — MSAGL layout, cross-context diagrams and diagram editing — are parked in `ROADMAP.md` with reasons.
 
 Phases 2, 3 and 4 have each had a round of manual UI testing and follow-up fixes — see the review sections below.
 
@@ -1100,7 +1100,8 @@ onwards — the tab itself, persistence and export — are not started.
 | File | What it does |
 | --- | --- |
 | `DiagramModel.cs` | `DiagramModel`, `DiagramEntity`, `DiagramProperty`, `DiagramIndex`, `DiagramRelationship`. Records, `System.Text.Json`-friendly, so this doubles as the JSON export format and the persisted payload. |
-| `ModelSnapshotLocator.cs` | Finds `*ModelSnapshot.cs` for a context inside the migrations project, matching on the `[DbContext(typeof(X))]` attribute rather than the file name. Also `FindForMigration`, for the per-migration diagrams parked in the roadmap. |
+| `ModelSnapshotLocator.cs` | Finds `*ModelSnapshot.cs` for a context inside the migrations project, matching on the `[DbContext(typeof(X))]` attribute rather than the file name. Also `FindForMigration`, which resolves a migration's `.Designer.cs` for the per-migration diagrams. |
+| `DiagramDiff.cs` | `DiagramDiff.Compare(previous, current)` — merges two models so removed entities and columns still have something to draw, and records each change as `Added`, `Removed` or `Modified` by name. Everything downstream reads `DiagramRow.Change`; nothing but `DiagramNodeContent.Build` sees the diff itself. |
 | `ModelSnapshotParser.cs` | Roslyn syntax-only parse of a snapshot into a `DiagramModel`. |
 | `DiagramViewOptions.cs` | `DiagramKind` and every display toggle. |
 | `DiagramNodeContent.cs` | Model to nodes and edges. The only place the ER and class views differ. |

@@ -31,6 +31,11 @@ public enum EdgeKind
 /// Drives the nullability marker. Always false for navigation and index rows, which have no
 /// nullability of their own.
 /// </param>
+/// <param name="Change">
+/// How this row differs from the model being compared against, when there is one. Set here rather
+/// than looked up downstream, so the layout can measure the marker it adds and the renderer can
+/// colour it without either knowing what a diff is.
+/// </param>
 public sealed record DiagramRow(
     string Name,
     string? Type = null,
@@ -38,7 +43,8 @@ public sealed record DiagramRow(
     RowKind Kind = RowKind.Property,
     bool IsKey = false,
     bool IsForeignKey = false,
-    bool IsNullable = false);
+    bool IsNullable = false,
+    DiagramChange Change = DiagramChange.None);
 
 /// <param name="EntityName">
 /// The <see cref="DiagramEntity.Name"/> this node came from. The identity used by selection, by
@@ -52,7 +58,8 @@ public sealed record DiagramNode(
     IReadOnlyList<DiagramRow> Rows = null!,
     bool IsOwned = false,
     bool IsJoin = false,
-    bool IsAbstractBase = false)
+    bool IsAbstractBase = false,
+    DiagramChange Change = DiagramChange.None)
 {
     public IReadOnlyList<DiagramRow> Rows { get; init; } = Rows ?? [];
 }
@@ -66,7 +73,8 @@ public sealed record DiagramEdge(
     EdgeKind Kind = EdgeKind.ForeignKey,
     string? Label = null,
     string? FromLabel = null,
-    string? ToLabel = null);
+    string? ToLabel = null,
+    DiagramChange Change = DiagramChange.None);
 
 /// <summary>
 /// Turns a <see cref="DiagramModel"/> into the nodes and edges a layout can place, applying the
@@ -81,22 +89,29 @@ public static class DiagramNodeContent
 {
     public sealed record Content(IReadOnlyList<DiagramNode> Nodes, IReadOnlyList<DiagramEdge> Edges);
 
-    public static Content Build(DiagramModel model, DiagramViewOptions options)
+    /// <param name="diff">
+    /// The changes to mark up, from <see cref="DiagramDiff.Compare"/>. Null — the normal case — is a
+    /// diagram of one model with nothing to compare it against.
+    /// </param>
+    public static Content Build(
+        DiagramModel model, DiagramViewOptions options, DiagramDiff? diff = null)
     {
         ArgumentNullException.ThrowIfNull(model);
         ArgumentNullException.ThrowIfNull(options);
 
+        diff ??= DiagramDiff.Empty;
+
         var hidden = HiddenEntities(model, options);
-        var inlined = InlinedOwnedTypes(model, options);
+        var inlined = InlinedOwnedTypes(model, options, diff);
 
         var nodes = model.Entities
             .Where(e => !hidden.Contains(e.Name))
-            .Select(e => BuildNode(e, model, options, inlined.GetValueOrDefault(e.Name, [])))
+            .Select(e => BuildNode(e, model, options, inlined.GetValueOrDefault(e.Name, []), diff))
             .ToList();
 
         var visible = nodes.Select(n => n.EntityName).ToHashSet(StringComparer.Ordinal);
 
-        return new Content(nodes, [.. BuildEdges(model, options, visible, hidden)]);
+        return new Content(nodes, [.. BuildEdges(model, options, visible, hidden, diff)]);
     }
 
     // ---- Which entities disappear ----
@@ -160,7 +175,7 @@ public static class DiagramNodeContent
 
     /// <summary>Owner name to the rows folded in from its inlined owned references.</summary>
     private static Dictionary<string, List<DiagramRow>> InlinedOwnedTypes(
-        DiagramModel model, DiagramViewOptions options)
+        DiagramModel model, DiagramViewOptions options, DiagramDiff diff)
     {
         var result = new Dictionary<string, List<DiagramRow>>(StringComparer.Ordinal);
         if (!options.InlineOwnedTypes)
@@ -181,7 +196,9 @@ public static class DiagramNodeContent
             foreach (var property in owned.Properties.Where(p =>
                 !ownership.ForeignKeyProperties.Contains(p.Name)))
             {
-                rows.Add(PropertyRow(property, options) with { Name = $"{prefix}.{property.Name}" });
+                rows.Add(
+                    PropertyRow(property, options, diff.ForRow(owned.Name, property.Name))
+                        with { Name = $"{prefix}.{property.Name}" });
             }
 
             result[owned.OwnerName!] = rows;
@@ -196,7 +213,8 @@ public static class DiagramNodeContent
         DiagramEntity entity,
         DiagramModel model,
         DiagramViewOptions options,
-        IReadOnlyList<DiagramRow> inlinedRows)
+        IReadOnlyList<DiagramRow> inlinedRows,
+        DiagramDiff diff)
     {
         var rows = new List<DiagramRow>();
 
@@ -204,7 +222,7 @@ public static class DiagramNodeContent
         {
             if (Include(property, options))
             {
-                rows.Add(PropertyRow(property, options));
+                rows.Add(PropertyRow(property, options, diff.ForRow(entity.Name, property.Name)));
             }
         }
 
@@ -212,7 +230,7 @@ public static class DiagramNodeContent
 
         if (options.Kind == DiagramKind.Class && options.ShowNavigations)
         {
-            rows.AddRange(NavigationRows(entity, model, options));
+            rows.AddRange(NavigationRows(entity, model, options, diff));
         }
 
         if (options.ShowIndexes)
@@ -236,7 +254,8 @@ public static class DiagramNodeContent
             Rows: rows,
             IsOwned: entity.IsOwned,
             IsJoin: entity.IsImplicitJoin,
-            IsAbstractBase: model.Entities.Any(e => e.BaseType == entity.Name));
+            IsAbstractBase: model.Entities.Any(e => e.BaseType == entity.Name),
+            Change: diff.ForEntity(entity.Name));
     }
 
     private static string Title(
@@ -264,7 +283,8 @@ public static class DiagramNodeContent
             _ => true,
         };
 
-    private static DiagramRow PropertyRow(DiagramProperty property, DiagramViewOptions options) =>
+    private static DiagramRow PropertyRow(
+        DiagramProperty property, DiagramViewOptions options, DiagramChange change) =>
         new(
             property.Name,
             Type: options.ShowTypes
@@ -274,7 +294,8 @@ public static class DiagramNodeContent
             Kind: RowKind.Property,
             IsKey: property.IsKey,
             IsForeignKey: property.IsForeignKey,
-            IsNullable: options.ShowNullability && !property.IsNotNull);
+            IsNullable: options.ShowNullability && !property.IsNotNull,
+            Change: change);
 
     private static string Badge(DiagramProperty property)
     {
@@ -305,14 +326,15 @@ public static class DiagramNodeContent
     /// come from which end of which relationship the name appears on.
     /// </summary>
     private static IEnumerable<DiagramRow> NavigationRows(
-        DiagramEntity entity, DiagramModel model, DiagramViewOptions options)
+        DiagramEntity entity, DiagramModel model, DiagramViewOptions options, DiagramDiff diff)
     {
         foreach (var navigation in entity.Navigations)
         {
             yield return new DiagramRow(
                 navigation,
                 Type: options.ShowTypes ? NavigationType(entity, navigation, model) : null,
-                Kind: RowKind.Navigation);
+                Kind: RowKind.Navigation,
+                Change: diff.ForRow(entity.Name, navigation));
         }
     }
 
@@ -394,7 +416,8 @@ public static class DiagramNodeContent
         DiagramModel model,
         DiagramViewOptions options,
         HashSet<string> visible,
-        HashSet<string> hidden)
+        HashSet<string> hidden,
+        DiagramDiff diff)
     {
         foreach (var relationship in model.Relationships)
         {
@@ -417,10 +440,11 @@ public static class DiagramNodeContent
                 relationship.IsOwnership ? EdgeKind.Ownership : EdgeKind.ForeignKey,
                 Label: options.ShowDeleteBehavior ? relationship.DeleteBehavior : null,
                 FromLabel: relationship.Cardinality == Cardinality.OneToOne ? "1" : "*",
-                ToLabel: relationship.IsRequired ? "1" : "0..1");
+                ToLabel: relationship.IsRequired ? "1" : "0..1",
+                Change: diff.ForEdge(relationship.DependentEntity, relationship.PrincipalEntity));
         }
 
-        foreach (var edge in ManyToManyEdges(model, options, visible))
+        foreach (var edge in ManyToManyEdges(model, options, visible, diff))
         {
             yield return edge;
         }
@@ -434,7 +458,15 @@ public static class DiagramNodeContent
         {
             if (visible.Contains(entity.Name) && visible.Contains(entity.BaseType!))
             {
-                yield return new DiagramEdge(entity.Name, entity.BaseType!, EdgeKind.Inheritance);
+                yield return new DiagramEdge(
+                    entity.Name,
+                    entity.BaseType!,
+                    EdgeKind.Inheritance,
+                    // A new derived type brings a new inheritance edge; nothing else about a
+                    // hierarchy can change without one of its types being added or removed.
+                    Change: diff.ForEntity(entity.Name) == DiagramChange.Added
+                        ? DiagramChange.Added
+                        : DiagramChange.None);
             }
         }
     }
@@ -445,7 +477,7 @@ public static class DiagramNodeContent
     /// off, the two foreign keys are drawn as themselves and a third edge would double them up.
     /// </summary>
     private static IEnumerable<DiagramEdge> ManyToManyEdges(
-        DiagramModel model, DiagramViewOptions options, HashSet<string> visible)
+        DiagramModel model, DiagramViewOptions options, HashSet<string> visible, DiagramDiff diff)
     {
         if (!options.CollapseJoinEntities)
         {
@@ -463,7 +495,14 @@ public static class DiagramNodeContent
             if (ends.Count == 2)
             {
                 yield return new DiagramEdge(
-                    ends[0], ends[1], EdgeKind.ManyToMany, FromLabel: "*", ToLabel: "*");
+                    ends[0],
+                    ends[1],
+                    EdgeKind.ManyToMany,
+                    FromLabel: "*",
+                    ToLabel: "*",
+                    // The join entity carries the change: a new many-to-many is a new join table,
+                    // and the relationships that make it up arrive with it.
+                    Change: diff.ForEntity(join.Name));
             }
         }
     }

@@ -157,7 +157,8 @@ public static class DiagramLayoutEngine
     private static (DiagramSize Size, List<double> RowOffsets) Measure(
         DiagramNode node, LayoutOptions options)
     {
-        var width = options.MeasureText(node.Title, options.TitleFontSize);
+        var width = options.MeasureText(
+            DiagramDiff.Marker(node.Change) + node.Title, options.TitleFontSize);
 
         if (node.Subtitle is not null)
         {
@@ -192,12 +193,16 @@ public static class DiagramLayoutEngine
         return (new DiagramSize(width, height), offsets);
     }
 
-    /// <summary>The measured text of a row: badge, name, and the nullability marker.</summary>
+    /// <summary>
+    /// The measured text of a row: the change marker, the badge, the name, and the nullability
+    /// marker. Kept in step with what <see cref="SceneBuilder"/> draws — a marker measured here and
+    /// not drawn wastes width, and one drawn without being measured is clipped.
+    /// </summary>
     private static string RowLabel(DiagramRow row)
     {
         var badge = row.Badge.Length > 0 ? row.Badge + " " : "";
         var nullable = row.IsNullable ? " ?" : "";
-        return badge + row.Name + nullable;
+        return DiagramDiff.Marker(row.Change) + badge + row.Name + nullable;
     }
 
     // ---- Ranking ----

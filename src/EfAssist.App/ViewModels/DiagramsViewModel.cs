@@ -64,6 +64,13 @@ public partial class DiagramsViewModel : ObservableObject
     private readonly CommandSession _session;
     private readonly Func<EfTarget?> _target;
     private readonly Func<string?> _contextName;
+
+    /// <summary>
+    /// The migrations list as the Migrations tab last loaded it, in the order they are applied. Read
+    /// rather than fetched: the picker offers what is already known, exactly like the Script tab's
+    /// range pickers do.
+    /// </summary>
+    private readonly Func<IReadOnlyList<MigrationInfo>> _migrations;
     private readonly Action _persist;
     private readonly DisplaySettings _display;
 
@@ -80,6 +87,12 @@ public partial class DiagramsViewModel : ObservableObject
     private DiagramNodeContent.Content _content = new([], []);
     private DiagramLayout _layout = DiagramLayout.Empty;
 
+    /// <summary>
+    /// The merged model and the changes in it, when a migration is being compared with the one
+    /// before it. Null means there is nothing to compare and the model is drawn as it is.
+    /// </summary>
+    private DiagramComparison? _comparison;
+
     /// <summary>Suppresses persistence and re-rendering while state is restored in bulk.</summary>
     private bool _restoring;
 
@@ -90,12 +103,14 @@ public partial class DiagramsViewModel : ObservableObject
         CommandSession session,
         Func<EfTarget?> target,
         Func<string?> contextName,
+        Func<IReadOnlyList<MigrationInfo>> migrations,
         Action persist,
         DisplaySettings display)
     {
         _session = session;
         _target = target;
         _contextName = contextName;
+        _migrations = migrations;
         _persist = persist;
         _display = display;
 
@@ -138,6 +153,60 @@ public partial class DiagramsViewModel : ObservableObject
     public bool HasDiagram => Scene is { IsEmpty: false };
 
     public DiagramModel? Model => _saved.Model;
+
+    /// <summary>
+    /// The model actually drawn: the merged one while a diff is on screen, so a removed entity still
+    /// has a node and a removed column still has a row.
+    /// </summary>
+    private DiagramModel? Rendered => _comparison?.Model ?? _saved.Model;
+
+    // ---- Which snapshot ----
+
+    /// <summary>The picker entry for the context's own <c>ModelSnapshot.cs</c> rather than a migration.</summary>
+    public const string CurrentModel = "Current model";
+
+    /// <summary>
+    /// <see cref="CurrentModel"/> followed by every migration, in the order they are applied. Names
+    /// rather than ids, because the id is a timestamp and the name is what the user chose.
+    /// </summary>
+    public ObservableCollection<string> SnapshotOptions { get; } = [CurrentModel];
+
+    [ObservableProperty]
+    private string _selectedSnapshot = CurrentModel;
+
+    /// <summary>
+    /// Mark up what the selected migration added, removed and changed, against the migration before
+    /// it. Meaningless for <see cref="CurrentModel"/>, which is not a point in the history.
+    /// </summary>
+    [ObservableProperty]
+    private bool _highlightChanges = true;
+
+    public bool IsMigrationSelected => SelectedSnapshot != CurrentModel;
+
+    public bool HasMigrations => _migrations().Count > 0;
+
+    /// <summary>
+    /// The diff legend, or null when nothing is being compared. Says so explicitly when a migration
+    /// turns out to change nothing in the model — a data-only migration, or one that only touches
+    /// indexes — because an empty legend would read as a failure to look.
+    /// </summary>
+    public string? DiffSummary
+    {
+        get
+        {
+            if (_comparison is null || _saved.MigrationId is null)
+            {
+                return null;
+            }
+
+            var name = NameOf(_saved.MigrationId);
+            return _comparison.Diff.Summary is { Length: > 0 } summary
+                ? $"{name}: {summary}"
+                : $"{name} makes no change to the model.";
+        }
+    }
+
+    public bool ShowsDiff => DiffSummary is not null;
 
     // ---- View selection ----
 
@@ -301,12 +370,43 @@ public partial class DiagramsViewModel : ObservableObject
     /// </summary>
     public Task OnActivatedAsync()
     {
+        RefreshSnapshotOptions();
+
         if (Scene is null)
         {
             LoadSaved();
         }
 
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Rebuilds the snapshot picker from the migrations list, keeping the current selection when it
+    /// is still there. Called on activation and whenever the context changes, the same way the Script
+    /// tab refreshes its range pickers.
+    /// </summary>
+    public void RefreshSnapshotOptions()
+    {
+        var selected = SelectedSnapshot;
+
+        SnapshotOptions.Clear();
+        SnapshotOptions.Add(CurrentModel);
+        foreach (var migration in _migrations())
+        {
+            SnapshotOptions.Add(migration.Name);
+        }
+
+        // A saved diagram of a migration the list does not have — because it has not been loaded yet,
+        // or because the migration has since been removed — keeps its entry rather than silently
+        // becoming a diagram of something else.
+        if (selected != CurrentModel && !SnapshotOptions.Contains(selected))
+        {
+            SnapshotOptions.Add(selected);
+        }
+
+        SetWithoutRegenerating(() => SelectedSnapshot = selected);
+
+        OnPropertyChanged(nameof(HasMigrations));
     }
 
     /// <summary>Called when a workspace opens, so saved diagrams can be found.</summary>
@@ -319,6 +419,8 @@ public partial class DiagramsViewModel : ObservableObject
             _workspacePath = workspacePath;
 
             Kind = saved.DiagramView ?? _display.DefaultDiagramKind;
+            SelectedSnapshot = CurrentModel;
+            HighlightChanges = true;
             IsUnlocked = !saved.DiagramLocked;
             _lastSaveAsFolder = saved.DiagramSaveFolder;
             ApplyOptions(saved.DiagramOptions ?? new DiagramViewOptions());
@@ -362,6 +464,7 @@ public partial class DiagramsViewModel : ObservableObject
     public void NotifyContextChanged()
     {
         ClearDiagram();
+        RefreshSnapshotOptions();
         LoadSaved();
         NotifyTargetChanged();
     }
@@ -380,40 +483,64 @@ public partial class DiagramsViewModel : ObservableObject
         var context = _contextName();
         var project = target.Project;
 
-        var model = await _session.RunLocalAsync("Generating diagram", async token =>
+        var migrationId = MigrationIdFor(SelectedSnapshot);
+        var previousId = migrationId is null || !HighlightChanges
+            ? null
+            : PreviousMigrationId(migrationId);
+
+        var extracted = await _session.RunLocalAsync("Generating diagram", async token =>
         {
             // Off the UI thread: a large snapshot is still only milliseconds, but the read is I/O and
             // there is no reason to do it where it can stutter the window.
             return await Task.Run(() =>
             {
-                var path = ModelSnapshotLocator.Find(project, context, token);
+                var path = migrationId is null
+                    ? ModelSnapshotLocator.Find(project, context, token)
+                    : ModelSnapshotLocator.FindForMigration(project, migrationId);
+
                 if (path is null)
                 {
                     return null;
                 }
 
                 token.ThrowIfCancellationRequested();
-                return ModelSnapshotParser.Parse(File.ReadAllText(path), path, context, token);
+                var model = ModelSnapshotParser.Parse(
+                    File.ReadAllText(path), path, context, token);
+
+                // The earlier migration's snapshot, for the diff. A missing one is not a failure:
+                // the first migration has no predecessor, and Compare treats null as "everything
+                // here is new", which for the first migration is the truth.
+                DiagramModel? previous = null;
+                if (previousId is not null
+                    && ModelSnapshotLocator.FindForMigration(project, previousId) is { } earlier)
+                {
+                    token.ThrowIfCancellationRequested();
+                    previous = ModelSnapshotParser.Parse(
+                        File.ReadAllText(earlier), earlier, context, token);
+                }
+
+                return new Extracted(model, previous);
             }, token);
         });
 
-        if (model is null)
+        if (extracted is null)
         {
             // Cancelled, already running, or no snapshot. Only the last of those needs explaining,
             // and only when nothing else has already put a message up.
-            if (!_session.IsRunning && ModelSnapshotLocator.Find(project, context) is null)
+            if (!_session.IsRunning)
             {
-                EmptyReason =
-                    $"{context ?? "This context"} has no migrations, so there is no model snapshot "
-                    + "to draw. Add a migration on the Migrations tab first.";
-                _session.StatusMessage = "No model snapshot found for this context.";
+                ReportMissingSnapshot(project, context, migrationId);
             }
 
             return;
         }
 
-        _saved.Model = model;
+        _saved.Model = extracted.Model;
+        _saved.Previous = extracted.Previous;
+        _saved.MigrationId = migrationId;
+        _saved.HighlightChanges = HighlightChanges;
         _saved.Kind = Kind;
+        ApplyComparison();
         IsStale = false;
         EmptyReason = null;
 
@@ -428,9 +555,112 @@ public partial class DiagramsViewModel : ObservableObject
 
         _session.StatusMessage = SourceSummary is null
             ? "The snapshot contains no entities."
-            : $"Diagram generated: {SourceSummary}.";
+            : $"Diagram generated: {SourceSummary}."
+              + (DiffSummary is null ? "" : $" {DiffSummary}.");
 
         OnPropertyChanged(nameof(SourceSummary));
+    }
+
+    /// <summary>The model read out of one snapshot, with the earlier one to compare it against.</summary>
+    private sealed record Extracted(DiagramModel Model, DiagramModel? Previous);
+
+    /// <summary>
+    /// Why there was nothing to read. Worded per case: a context with no migrations has no snapshot
+    /// at all, while a migration with no <c>.Designer.cs</c> is a specific file that is missing.
+    /// </summary>
+    private void ReportMissingSnapshot(string project, string? context, string? migrationId)
+    {
+        if (migrationId is not null)
+        {
+            if (ModelSnapshotLocator.FindForMigration(project, migrationId) is not null)
+            {
+                return;
+            }
+
+            EmptyReason =
+                $"{NameOf(migrationId)} has no .Designer.cs file beside it, so there is no model "
+                + "snapshot for that migration. Choose the current model instead.";
+            _session.StatusMessage = $"No model snapshot found for {NameOf(migrationId)}.";
+            return;
+        }
+
+        if (ModelSnapshotLocator.Find(project, context) is not null)
+        {
+            return;
+        }
+
+        EmptyReason =
+            $"{context ?? "This context"} has no migrations, so there is no model snapshot "
+            + "to draw. Add a migration on the Migrations tab first.";
+        _session.StatusMessage = "No model snapshot found for this context.";
+    }
+
+    /// <summary>The id of the migration a picker entry names, or null for the current model.</summary>
+    private string? MigrationIdFor(string selected) => selected == CurrentModel
+        ? null
+        : _migrations().FirstOrDefault(m => m.Name == selected)?.Id;
+
+    /// <summary>
+    /// The migration applied immediately before this one, or null when it is the first. Position in
+    /// the list, not the timestamp in the id: the list is already in the order EF applies them.
+    /// </summary>
+    private string? PreviousMigrationId(string migrationId)
+    {
+        var migrations = _migrations();
+        var index = -1;
+        for (var i = 0; i < migrations.Count; i++)
+        {
+            if (migrations[i].Id == migrationId)
+            {
+                index = i;
+                break;
+            }
+        }
+
+        return index > 0 ? migrations[index - 1].Id : null;
+    }
+
+    /// <summary>
+    /// A migration's name from its id. EF ids are <c>&lt;timestamp&gt;_&lt;name&gt;</c>, so this is
+    /// what lets a restored diagram label itself without the migrations list having been loaded.
+    /// </summary>
+    private static string NameOf(string migrationId)
+    {
+        var underscore = migrationId.IndexOf('_');
+        return underscore < 0 ? migrationId : migrationId[(underscore + 1)..];
+    }
+
+    /// <summary>
+    /// Recomputes the comparison from what is saved. Pure — no file access — so toggling the
+    /// highlight off and on again costs nothing.
+    /// </summary>
+    private void ApplyComparison()
+    {
+        _comparison = _saved.Model is not null && _saved.MigrationId is not null
+            && _saved.HighlightChanges
+            ? DiagramDiff.Compare(_saved.Previous, _saved.Model)
+            : null;
+
+        OnPropertyChanged(nameof(DiffSummary));
+        OnPropertyChanged(nameof(ShowsDiff));
+    }
+
+    /// <summary>
+    /// Sets a picker property without the change handler treating it as the user choosing something,
+    /// which would generate a diagram nobody asked for.
+    /// </summary>
+    private void SetWithoutRegenerating(Action set)
+    {
+        var wasRestoring = _restoring;
+        _restoring = true;
+        try
+        {
+            set();
+        }
+        finally
+        {
+            _restoring = wasRestoring;
+        }
     }
 
     [RelayCommand]
@@ -716,12 +946,21 @@ public partial class DiagramsViewModel : ObservableObject
         {
             Kind = loaded.Kind;
             IsUnlocked = !loaded.Locked;
+            HighlightChanges = loaded.HighlightChanges;
+            SelectedSnapshot = loaded.MigrationId is null
+                ? CurrentModel
+                : NameOf(loaded.MigrationId);
+
             ApplyOptions(loaded.Options ?? new DiagramViewOptions());
         }
         finally
         {
             _restoring = false;
         }
+
+        // After the selection is restored, so a migration missing from the list keeps its entry.
+        RefreshSnapshotOptions();
+        ApplyComparison();
 
         IsStale = DiagramStore.IsStale(loaded.Model);
         EmptyReason = null;
@@ -739,6 +978,7 @@ public partial class DiagramsViewModel : ObservableObject
 
         _saved.Kind = Kind;
         _saved.Locked = !IsUnlocked;
+        _saved.HighlightChanges = HighlightChanges;
         _saved.Options = CurrentOptions();
 
         DiagramStore.Save(_settingsRoot, _workspacePath, _contextName(), _saved);
@@ -752,14 +992,14 @@ public partial class DiagramsViewModel : ObservableObject
             return;
         }
 
-        if (_saved.Model is null)
+        if (Rendered is not { } model)
         {
             Scene = null;
             return;
         }
 
         var options = CurrentOptions();
-        _content = DiagramNodeContent.Build(_saved.Model, options);
+        _content = DiagramNodeContent.Build(model, options, _comparison?.Diff);
 
         var layoutOptions = MeasureText is null
             ? LayoutOptions.Default
@@ -794,6 +1034,8 @@ public partial class DiagramsViewModel : ObservableObject
     private void ClearDiagram()
     {
         _saved = new SavedDiagram();
+        _comparison = null;
+        SetWithoutRegenerating(() => SelectedSnapshot = CurrentModel);
         _content = new DiagramNodeContent.Content([], []);
         _layout = DiagramLayout.Empty;
         Scene = null;
@@ -803,6 +1045,8 @@ public partial class DiagramsViewModel : ObservableObject
         EmptyReason = null;
         _matches.Clear();
         OnPropertyChanged(nameof(SourceSummary));
+        OnPropertyChanged(nameof(DiffSummary));
+        OnPropertyChanged(nameof(ShowsDiff));
     }
 
     private DiagramViewOptions CurrentOptions() => new()
@@ -845,11 +1089,11 @@ public partial class DiagramsViewModel : ObservableObject
         _matches.Clear();
         var term = Search.Trim();
 
-        if (term.Length > 0 && _saved.Model is not null)
+        if (term.Length > 0 && Rendered is { } searchable)
         {
             foreach (var node in _content.Nodes)
             {
-                var entity = _saved.Model.Entity(node.EntityName);
+                var entity = searchable.Entity(node.EntityName);
                 if (Matches(node, entity, term))
                 {
                     _matches.Add(node.EntityName);
@@ -899,7 +1143,7 @@ public partial class DiagramsViewModel : ObservableObject
     {
         Detail.Clear();
 
-        var model = _saved.Model;
+        var model = Rendered;
         var entity = SelectedEntity is null ? null : model?.Entity(SelectedEntity);
         if (model is null || entity is null)
         {
@@ -936,6 +1180,13 @@ public partial class DiagramsViewModel : ObservableObject
         {
             about.Add(new DetailRow(
                 "Kind", "Join table", "Generated by EF for a many-to-many relationship"));
+        }
+
+        if (_comparison?.Diff.ForEntity(entity.Name) is { } change
+            && change != DiagramChange.None)
+        {
+            about.Add(new DetailRow(
+                "Change", change.ToString(), "against the previous migration"));
         }
 
         Detail.Add(new DetailGroup("Entity", about));
@@ -1126,6 +1377,41 @@ public partial class DiagramsViewModel : ObservableObject
     }
 
     partial void OnSearchChanged(string value) => Rebuild();
+
+    partial void OnSelectedSnapshotChanged(string value)
+    {
+        OnPropertyChanged(nameof(IsMigrationSelected));
+
+        // Generated rather than offered: switching migration costs one file read, and flicking
+        // through the history to watch the model grow is the whole point of the picker. The
+        // Generate button stays for the case where nothing has been drawn yet.
+        if (!_restoring && IsReady)
+        {
+            GenerateCommand.Execute(null);
+        }
+    }
+
+    partial void OnHighlightChangesChanged(bool value)
+    {
+        if (_restoring)
+        {
+            return;
+        }
+
+        _saved.HighlightChanges = value;
+
+        // Turning it on for a diagram generated without it means the earlier snapshot was never
+        // read, so there is nothing to compare against yet and the files have to be read again.
+        if (value && _saved.MigrationId is not null && _saved.Previous is null && IsReady)
+        {
+            GenerateCommand.Execute(null);
+            return;
+        }
+
+        ApplyComparison();
+        Rebuild();
+        Persist();
+    }
 
     partial void OnOptionsExpandedChanged(bool value)
     {

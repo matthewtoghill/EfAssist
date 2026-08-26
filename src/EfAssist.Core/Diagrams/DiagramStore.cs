@@ -15,6 +15,23 @@ public sealed class SavedDiagram
     public DiagramModel? Model { get; set; }
 
     /// <summary>
+    /// The migration whose <c>.Designer.cs</c> <see cref="Model"/> came from, or null when it came
+    /// from the context's current model snapshot.
+    /// </summary>
+    public string? MigrationId { get; set; }
+
+    /// <summary>
+    /// The model as of the migration before <see cref="MigrationId"/>, when there is one. Persisted
+    /// rather than re-read, so restoring a diff does not depend on the earlier migration's file still
+    /// being there — and so the comparison is against what was actually compared, not what that file
+    /// says today.
+    /// </summary>
+    public DiagramModel? Previous { get; set; }
+
+    /// <summary>Whether the additions and removals are marked up. Ignored without a migration.</summary>
+    public bool HighlightChanges { get; set; } = true;
+
+    /// <summary>
     /// Hand-dragged node positions, keyed by <see cref="DiagramKind"/> name and then by entity name.
     /// </summary>
     /// <remarks>
