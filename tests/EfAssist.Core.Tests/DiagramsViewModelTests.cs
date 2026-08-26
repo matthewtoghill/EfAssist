@@ -211,6 +211,22 @@ public class DiagramsViewModelTests : IDisposable
     }
 
     [Fact]
+    public void KeepsNoBlankEntryWhenTheComboBoxClearsItsSelection()
+    {
+        var harness = Build(migrations: [Initial, AddPosts]);
+
+        // What Avalonia writes back when the options it was bound to are cleared.
+        harness.ViewModel.SelectedSnapshot = string.Empty;
+        harness.ViewModel.RefreshSnapshotOptions();
+
+        Assert.Equal(
+            [DiagramsViewModel.CurrentModel, "2. AddPosts", "1. InitialCreate"],
+            harness.ViewModel.SnapshotOptions);
+
+        Assert.Equal(DiagramsViewModel.CurrentModel, harness.ViewModel.SelectedSnapshot);
+    }
+
+    [Fact]
     public async Task MarksWhatTheSelectedMigrationAddedAgainstTheOneBeforeIt()
     {
         WriteMigration(InitialId, BlogEntity);

@@ -399,7 +399,7 @@ public partial class DiagramsViewModel : ObservableObject
     /// </summary>
     public void RefreshSnapshotOptions()
     {
-        var selected = SelectedSnapshot;
+        var selected = string.IsNullOrWhiteSpace(SelectedSnapshot) ? CurrentModel : SelectedSnapshot;
 
         var migrations = _migrations();
 
