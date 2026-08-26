@@ -1318,6 +1318,54 @@ bug. Mermaid asserts structure rather than matching a golden file, for the same 
 
 ---
 
+## EF Core version of the selected project (roadmap-adjacent, closes a Phase 2 gap)
+
+The toolbar and landing versions line said `dotnet-ef 10.0.10 · SDK 10.0.400`. It now also says which
+EF Core the selected project resolved to, and flags the one direction that fails:
+
+```
+dotnet-ef 9.0.0 · EF Core 10.0.10 (newer than the tool) · SDK 10.0.400
+```
+
+Phase 2 left "tool-vs-package version mismatch" undone, and `Preflight` carried a comment explaining
+why: the options looked like an unreliable `PackageReference` scan or another slow restore. There is a
+third option it missed — `obj/project.assets.json`, which NuGet has already written. The versions in
+it are *resolved*, so central package management, floating versions and a transitive-only reference
+all read correctly, and nothing is spawned to get them.
+
+| File | Change |
+| --- | --- |
+| `Preflight.cs` | `ProjectEfCoreVersion(projectPath)` reads the resolved `Microsoft.EntityFrameworkCore/<version>` key out of the project's restore output; `ToolIsOlderThanProject` compares release numbers |
+| `MainWindowViewModel.cs` | `RefreshEnvironmentSummary` splits the versions line out of `CheckToolingAsync`, and `_toolStatus` keeps the last probe so the line can be rebuilt without re-probing |
+
+### Decisions
+
+- **The migrations project is asked first, the startup project second.** `dotnet ef` loads the model
+  from the migrations project, so its resolved version is the one that has to match the tool. The
+  fallback covers the layout where migrations live in a library that has not been restored alone.
+- **Exact package name, not a prefix.** `Abstractions`, `Relational` and the providers share the core
+  package's version today, but only until someone pins one of them.
+- **Only "tool older than project" is called out.** Newer tools run older runtimes fine, so flagging
+  that direction would be noise. The wording is *(newer than the tool)* rather than *mismatch*,
+  because the project's version is the one being reported.
+- **Nothing is shown when the project has never been restored** — no `unknown`, no placeholder. The
+  line is rebuilt after `dbcontext list`, which restores, so the version appears on its own once
+  there is one to show. It is also rebuilt when either project selection changes.
+- **The parenthetical is the whole warning.** No new banner and no styling hook: the versions line
+  already appears in the toolbar, the landing screen and Settings, and EF still blocks the command
+  itself with its own message when the mismatch actually bites.
+
+### Verified
+
+`dotnet test EfAssist.slnx` → **601 passed, 0 failed**. 10 new: 5 in `PreflightTests` (version read
+from the restore output, related-packages-only reports nothing, never-restored reports nothing,
+unreadable JSON reports nothing rather than throwing, and a 7-case theory over the comparison) and 5
+in `MainWindowViewModelTests` (the version reaches the line, a newer project is called out, the
+startup project is the fallback, an unrestored workspace shows only what it has, and switching the
+migrations project moves the version with it).
+
+---
+
 ## Deliberate shortcuts
 
 Tracked so they do not rot into "later means never". Each is marked with a `ponytail:` comment at the site.
@@ -1352,4 +1400,5 @@ Tracked so they do not rot into "later means never". Each is marked with a `pony
 | `DiagramSurface` pan and zoom | Hand-rolled matrix maths rather than a pan-and-zoom library | Never, most likely — the obvious library is deprecated and Avalonia-11-only |
 | `DiagramsViewModel.RefreshMatches` | Substring match over every node and entity on each keystroke | Typing in the search box gets visibly laggy on a real model |
 | `DiagramStore` | Saved diagrams are never pruned, so a renamed context leaves its file behind | Someone notices the folder. The files are small and only ever read after being written |
+| `Preflight.ToolIsOlderThanProject` | Compares release numbers only, so 10.0.0 and 10.0.0-rc.1 count as equal | Someone running previews needs the two told apart. Ordering prerelease labels properly needs NuGet's version rules, and guessing them would mean a false warning on a preview SDK |
 | `LayoutOptions.Default.MeasureText` | Character count times font size times 0.55 | Never — it is the deliberate fallback. The app injects a `FormattedText` measurement; this exists so Core and the tests need no font |

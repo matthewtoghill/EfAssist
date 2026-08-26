@@ -165,6 +165,88 @@ public class PreflightTests
         }
     }
 
+    [Fact]
+    public void The_projects_ef_core_version_comes_from_the_restore_output()
+    {
+        var dir = CreateTempDir();
+        try
+        {
+            WriteAssets(dir, """
+                {"libraries":{
+                    "Microsoft.EntityFrameworkCore/10.0.10": {"type":"package"},
+                    "Microsoft.EntityFrameworkCore.Relational/10.0.10": {"type":"package"}
+                }}
+                """);
+
+            Assert.Equal("10.0.10", Preflight.ProjectEfCoreVersion(Path.Combine(dir, "App.csproj")));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void A_project_that_resolved_only_related_ef_packages_reports_no_version()
+    {
+        // Only the exact package counts: Relational and the providers can be pinned separately.
+        var dir = CreateTempDir();
+        try
+        {
+            WriteAssets(dir, """
+                {"libraries":{"Microsoft.EntityFrameworkCore.Abstractions/9.0.0": {"type":"package"}}}
+                """);
+
+            Assert.Null(Preflight.ProjectEfCoreVersion(Path.Combine(dir, "App.csproj")));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void A_project_that_has_never_been_restored_reports_no_version()
+    {
+        var dir = CreateTempDir();
+        try
+        {
+            Assert.Null(Preflight.ProjectEfCoreVersion(Path.Combine(dir, "App.csproj")));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Unreadable_restore_output_reports_no_version_rather_than_throwing()
+    {
+        var dir = CreateTempDir();
+        try
+        {
+            WriteAssets(dir, "not json");
+
+            Assert.Null(Preflight.ProjectEfCoreVersion(Path.Combine(dir, "App.csproj")));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("9.0.0", "10.0.10", true)]
+    [InlineData("10.0.10", "10.0.10", false)]
+    [InlineData("10.0.11", "10.0.10", false)]
+    [InlineData("10.0.0-rc.1.25451.107", "10.0.0", false)]
+    [InlineData("9.0.0", null, false)]
+    [InlineData(null, "10.0.10", false)]
+    [InlineData("not a version", "10.0.10", false)]
+    public void Only_a_tool_older_than_the_project_counts_as_a_mismatch(
+        string? tool, string? project, bool expected) =>
+        Assert.Equal(expected, Preflight.ToolIsOlderThanProject(tool, project));
+
     private static string CreateTempDir()
     {
         var dir = Path.Combine(Path.GetTempPath(), "EfAssistTests_" + Guid.NewGuid());
@@ -176,5 +258,11 @@ public class PreflightTests
     {
         var configDir = Directory.CreateDirectory(Path.Combine(dir, ".config")).FullName;
         File.WriteAllText(Path.Combine(configDir, "dotnet-tools.json"), json);
+    }
+
+    private static void WriteAssets(string projectDir, string json)
+    {
+        var objDir = Directory.CreateDirectory(Path.Combine(projectDir, "obj")).FullName;
+        File.WriteAllText(Path.Combine(objDir, "project.assets.json"), json);
     }
 }

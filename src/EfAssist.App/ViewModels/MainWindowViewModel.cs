@@ -76,6 +76,12 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     private string? _savedContextName;
 
+    /// <summary>
+    /// The last tooling probe, kept so the versions line can be rebuilt when the project selection
+    /// changes without re-running the probe. Null until <see cref="InitialiseAsync"/> has run.
+    /// </summary>
+    private ToolStatus? _toolStatus;
+
     public MainWindowViewModel() : this(new EfRunner(), SettingsStore.Load())
     {
     }
@@ -751,6 +757,10 @@ public partial class MainWindowViewModel : ObservableObject
             }
         }
 
+        // Whatever it reported, that command restored the project — so an EF Core version that was
+        // not readable before this point may be now.
+        RefreshEnvironmentSummary();
+
         if (!result.Success)
         {
             ContextsStale = true;
@@ -825,11 +835,49 @@ public partial class MainWindowViewModel : ObservableObject
     {
         var status = await Preflight.CheckAsync(_runner, workingDirectory);
 
+        _toolStatus = status;
         PreflightProblem = status.Problem;
         EfToolAvailable = status.EfToolAvailable;
-        EnvironmentSummary = status.EfToolAvailable
-            ? $"dotnet-ef {status.EfToolVersion} · SDK {status.SdkVersion}"
-            : $"SDK {status.SdkVersion ?? "unknown"}";
+        RefreshEnvironmentSummary();
+    }
+
+    /// <summary>
+    /// Rebuilds the versions line. Separate from <see cref="CheckToolingAsync"/> because the
+    /// project's EF Core version is part of it: that changes with the project selection, and appears
+    /// the first time a restore has run, neither of which involves probing the tool again.
+    /// </summary>
+    private void RefreshEnvironmentSummary()
+    {
+        if (_toolStatus is not { } status)
+        {
+            EnvironmentSummary = null;
+            return;
+        }
+
+        // The migrations project is the one dotnet ef loads the model from, so its resolved version
+        // is the one that has to match the tool. The startup project is a fallback for the layout
+        // where migrations live in a library that has not been restored on its own.
+        var projectVersion =
+            (MigrationsProject is null ? null : Preflight.ProjectEfCoreVersion(MigrationsProject.Path))
+            ?? (StartupProject is null ? null : Preflight.ProjectEfCoreVersion(StartupProject.Path));
+
+        var parts = new List<string>(3);
+
+        if (status.EfToolAvailable)
+        {
+            parts.Add($"dotnet-ef {status.EfToolVersion}");
+        }
+
+        if (projectVersion is not null)
+        {
+            parts.Add(Preflight.ToolIsOlderThanProject(status.EfToolVersion, projectVersion)
+                ? $"EF Core {projectVersion} (newer than the tool)"
+                : $"EF Core {projectVersion}");
+        }
+
+        parts.Add($"SDK {status.SdkVersion ?? "unknown"}");
+
+        EnvironmentSummary = string.Join(" · ", parts);
     }
 
     private string BuildDiagnosticsHeader() => string.Join(
@@ -903,11 +951,16 @@ public partial class MainWindowViewModel : ObservableObject
 
     partial void OnContextsStaleChanged(bool value) => OnPropertyChanged(nameof(ShowsStaleContexts));
 
-    partial void OnStartupProjectChanged(ProjectRef? value) => Persist();
+    partial void OnStartupProjectChanged(ProjectRef? value)
+    {
+        RefreshEnvironmentSummary();
+        Persist();
+    }
 
     partial void OnMigrationsProjectChanged(ProjectRef? value)
     {
         RefreshContextsCommand.NotifyCanExecuteChanged();
+        RefreshEnvironmentSummary();
         NotifyTargetChanged();
         Persist();
     }

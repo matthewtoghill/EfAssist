@@ -16,10 +16,11 @@ public sealed record ToolStatus(
 }
 
 /// <summary>
-/// Startup checks. Deliberately only checks that <c>dotnet ef</c> runs — no attempt to compare the
-/// tool version against the project's EF Core version. EF already reports that mismatch itself with
-/// a clear message ("The Entity Framework tools version ... is older than that of the runtime ..."),
-/// and reproducing the check would mean either an unreliable file scan or another slow restore.
+/// Startup checks: that <c>dotnet ef</c> runs, and what EF Core version the selected project
+/// resolved to. The version comparison is informational only — EF itself still reports a genuine
+/// blocking mismatch when a command runs ("The Entity Framework tools version ... is older than
+/// that of the runtime ..."), and this is here so the two numbers can be seen side by side before
+/// that happens.
 /// </summary>
 public static class Preflight
 {
@@ -55,6 +56,89 @@ public static class Preflight
     private static string? LastMeaningfulLine(EfResult result) => result.Lines
         .Select(l => l.Text.Trim())
         .LastOrDefault(t => t.Length > 0);
+
+    private const string EfCorePackage = "Microsoft.EntityFrameworkCore";
+
+    /// <summary>
+    /// The EF Core version a project actually resolved to, read from the restore output NuGet
+    /// already wrote (<c>obj/project.assets.json</c>). Nothing is spawned and nothing is restored,
+    /// and because the versions there are resolved rather than declared, this is also right for
+    /// central package management, floating versions, and a transitive-only reference.
+    /// </summary>
+    /// <returns>
+    /// Null when the project has never been restored, or resolved no EF Core at all. A caller
+    /// should show nothing in that case rather than guessing.
+    /// </returns>
+    public static string? ProjectEfCoreVersion(string projectPath)
+    {
+        var directory = Path.GetDirectoryName(projectPath);
+        if (directory is null)
+        {
+            return null;
+        }
+
+        var assetsPath = Path.Combine(directory, "obj", "project.assets.json");
+        if (!File.Exists(assetsPath))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var stream = File.OpenRead(assetsPath);
+            using var assets = JsonDocument.Parse(stream);
+
+            if (!assets.RootElement.TryGetProperty("libraries", out var libraries))
+            {
+                return null;
+            }
+
+            // Keys are "<package>/<resolved version>". Matching the exact package name rather than a
+            // prefix keeps Abstractions, Relational and the providers out of it — they share their
+            // version with the core package anyway, but only until someone pins one of them.
+            return libraries.EnumerateObject()
+                .Select(library => library.Name)
+                .Where(name => name.StartsWith(EfCorePackage + "/", StringComparison.OrdinalIgnoreCase))
+                .Select(name => name[(EfCorePackage.Length + 1)..])
+                .FirstOrDefault(version => version.Length > 0);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Whether <c>dotnet ef</c> is older than the EF Core the project resolved to — the direction
+    /// that actually fails. Newer tools run older runtimes fine, so that case is not flagged.
+    /// </summary>
+    /// <remarks>
+    /// ponytail: compares release numbers only — the prerelease label is dropped, so 10.0.0 and
+    /// 10.0.0-rc.1 count as equal. Ordering prerelease labels properly needs NuGet's version rules,
+    /// and getting it wrong here would mean a false warning on a preview SDK. Upgrade if someone
+    /// running previews needs the two told apart.
+    /// </remarks>
+    public static bool ToolIsOlderThanProject(string? toolVersion, string? projectVersion) =>
+        Release(toolVersion) is { } tool && Release(projectVersion) is { } project && tool < project;
+
+    private static Version? Release(string? version)
+    {
+        if (version is null)
+        {
+            return null;
+        }
+
+        var release = version.Split('-', '+')[0].Trim();
+        return Version.TryParse(release, out var parsed) ? parsed : null;
+    }
 
     /// <summary>
     /// Walks up from <paramref name="workingDirectory"/> looking for the nearest

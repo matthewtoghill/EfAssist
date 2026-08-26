@@ -49,7 +49,7 @@ public partial class MigrationDetailViewModel : ObservableObject
     /// </summary>
     // ponytail: invalidated by a list refresh, not by watching the files. Add a watcher if editing a
     // migration and re-reading its SQL without refreshing proves confusing.
-    private readonly Dictionary<(string Id, bool Idempotent), (string Sql, string Path)> _sqlCache = new();
+    private readonly Dictionary<(string Id, bool Idempotent), (string Sql, string Path)> _sqlCache = [];
 
     public MigrationDetailViewModel(
         CommandSession session,

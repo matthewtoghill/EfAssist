@@ -130,6 +130,11 @@ public class MainWindowViewModelTests : IDisposable
         return Path.Combine(_root, "Thing.slnx");
     }
 
+    /// <summary>The restore output NuGet writes, trimmed to the one entry the versions line reads.</summary>
+    private void WriteAssets(string projectDirectory, string efCoreVersion) => Write(
+        Path.Combine(projectDirectory, "obj", "project.assets.json"),
+        "{\"libraries\":{\"Microsoft.EntityFrameworkCore/" + efCoreVersion + "\": {\"type\":\"package\"}}}");
+
     private void Write(string relativePath, string contents)
     {
         var full = Path.Combine(_root, relativePath);
@@ -507,6 +512,69 @@ public class MainWindowViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task The_versions_line_carries_the_migrations_projects_resolved_ef_core_version()
+    {
+        var solution = CreateSolution();
+        WriteAssets(@"src\Data", "10.0.10");
+        var viewModel = NewViewModel(new RoutingRunner());
+
+        await OpenAsync(viewModel, solution);
+
+        Assert.Equal("dotnet-ef 10.0.10 · EF Core 10.0.10 · SDK 10.0.400", viewModel.EnvironmentSummary);
+    }
+
+    [Fact]
+    public async Task A_project_on_a_newer_ef_core_than_the_tool_is_called_out_in_the_versions_line()
+    {
+        var solution = CreateSolution();
+        WriteAssets(@"src\Data", "11.0.0");
+        var viewModel = NewViewModel(new RoutingRunner());
+
+        await OpenAsync(viewModel, solution);
+
+        Assert.Contains("EF Core 11.0.0 (newer than the tool)", viewModel.EnvironmentSummary);
+    }
+
+    [Fact]
+    public async Task The_startup_project_supplies_the_version_when_the_migrations_project_has_none()
+    {
+        var solution = CreateSolution();
+        WriteAssets(@"src\Api", "10.0.10");
+        var viewModel = NewViewModel(new RoutingRunner());
+
+        await OpenAsync(viewModel, solution);
+
+        Assert.Contains("EF Core 10.0.10", viewModel.EnvironmentSummary);
+    }
+
+    [Fact]
+    public async Task An_unrestored_workspace_shows_the_versions_it_has_rather_than_a_placeholder()
+    {
+        var solution = CreateSolution();
+        var viewModel = NewViewModel(new RoutingRunner());
+
+        await OpenAsync(viewModel, solution);
+
+        Assert.Equal("dotnet-ef 10.0.10 · SDK 10.0.400", viewModel.EnvironmentSummary);
+    }
+
+    [Fact]
+    public async Task Switching_the_migrations_project_moves_the_version_with_it()
+    {
+        var solution = CreateSolution();
+        WriteAssets(@"src\Api", "9.0.11");
+        WriteAssets(@"src\Data", "10.0.10");
+        var viewModel = NewViewModel(new RoutingRunner());
+
+        await OpenAsync(viewModel, solution);
+        Assert.Contains("EF Core 10.0.10", viewModel.EnvironmentSummary);
+
+        viewModel.MigrationsProject = viewModel.Projects.Single(p => p.Name == "Api");
+
+        Assert.Contains("EF Core 9.0.11", viewModel.EnvironmentSummary);
+    }
+
+    [Fact]
     public async Task The_command_is_echoed_to_the_output_console_verbatim()
     {
         var solution = CreateSolution();
@@ -582,6 +650,10 @@ public class MainWindowViewModelTests : IDisposable
         Assert.Equal(
             ["BlogContext", "AuditContext"],
             viewModel.Contexts.Select(c => c.Name).Order(StringComparer.Ordinal).Reverse());
+
+        // The one place the assets-file shape is checked against a real restore rather than
+        // hand-written JSON. The command above built the sample, so there is one to read.
+        Assert.Contains("EF Core ", viewModel.EnvironmentSummary);
     }
 
     private static string RepositoryRoot()
