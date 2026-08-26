@@ -365,7 +365,7 @@
                                         Content="{Binding Migrations.SortGlyph}"
                                         ToolTip.Tip="{Binding Migrations.SortTooltip}"
                                         FontSize="{DynamicResource AppFontSizeLarge}" Padding="10,0" MinWidth="36"
-                                        VerticalAlignment="Stretch"
+                                        VerticalAlignment="Stretch" VerticalContentAlignment="Center"
                                         HorizontalContentAlignment="Center" />
                                 <TextBlock Text="{Binding Migrations.Summary}" VerticalAlignment="Center" Opacity="0.8" />
                                 <Border IsVisible="{Binding Migrations.ShowsStaleWarning}"
