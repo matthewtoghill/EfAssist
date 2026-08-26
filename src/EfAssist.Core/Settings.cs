@@ -85,6 +85,12 @@ public sealed class WorkspaceSettings
     public DiagramKind? DiagramView { get; set; }
 
     /// <summary>
+    /// Which way the diagram's ranks run. One setting for the tab rather than one per view: dragged
+    /// positions are kept per view and orientation regardless, so nothing overlaps either way.
+    /// </summary>
+    public DiagramFlow DiagramLayoutFlow { get; set; }
+
+    /// <summary>
     /// The diagram's display toggles. Per workspace rather than app-wide: how much of a model is
     /// worth showing at once depends on the model.
     /// </summary>

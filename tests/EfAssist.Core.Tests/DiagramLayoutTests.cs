@@ -1,4 +1,4 @@
-using EfAssist.Core.Diagrams;
+﻿using EfAssist.Core.Diagrams;
 
 namespace EfAssist.Core.Tests;
 
@@ -11,13 +11,17 @@ public class DiagramLayoutTests
     private static readonly LayoutOptions Options =
         LayoutOptions.Default with { MeasureText = (text, size) => text.Length * size * 0.6 };
 
+    private static readonly LayoutOptions Vertical =
+        Options with { Flow = DiagramFlow.TopToBottom };
+
     private static DiagramLayout Layout(
         DiagramViewOptions? view = null,
-        IReadOnlyDictionary<string, DiagramPoint>? positions = null)
+        IReadOnlyDictionary<string, DiagramPoint>? positions = null,
+        LayoutOptions? options = null)
     {
         var model = ModelSnapshotParser.Parse(Fixture.Text("snapshot-rich"));
         var content = DiagramNodeContent.Build(model, view ?? new DiagramViewOptions());
-        return DiagramLayoutEngine.Compute(content, Options, positions);
+        return DiagramLayoutEngine.Compute(content, options ?? Options, positions);
     }
 
     private static DiagramNodeContent.Content Content(params string[] statements)
@@ -90,10 +94,10 @@ public class DiagramLayoutTests
                     $"{nodes[i].Node.EntityName} overlaps {nodes[j].Node.EntityName}");
             }
         }
-
-        static bool Overlaps(DiagramRect a, DiagramRect b) =>
-            a.Left < b.Right && b.Left < a.Right && a.Top < b.Bottom && b.Top < a.Bottom;
     }
+
+    private static bool Overlaps(DiagramRect a, DiagramRect b) =>
+        a.Left < b.Right && b.Left < a.Right && a.Top < b.Bottom && b.Top < a.Bottom;
 
     [Fact]
     public void EveryNodeIsInsideTheReportedSize()
@@ -137,6 +141,133 @@ public class DiagramLayoutTests
         Assert.Equal(0, blog.Rank);
         Assert.Equal(1, post.Rank);
         Assert.True(blog.Bounds.Right < post.Bounds.Left);
+    }
+
+    // ---- Rank direction ----
+
+    [Fact]
+    public void PutsThePrincipalAboveItsDependentRunningTopToBottom()
+    {
+        var layout = DiagramLayoutEngine.Compute(Content(Pair("Blog", "Post")), Vertical);
+
+        var blog = layout.Node("Ns.Blog")!;
+        var post = layout.Node("Ns.Post")!;
+
+        // Same ranking, different axis: the ranks are rows now, so rank 0 is above rank 1.
+        Assert.Equal(0, blog.Rank);
+        Assert.Equal(1, post.Rank);
+        Assert.True(blog.Bounds.Bottom < post.Bounds.Top);
+    }
+
+    [Fact]
+    public void RunsTopToBottomWiderAndShorterThanLeftToRight()
+    {
+        // The point of the toggle. A shallow model — two ranks, four entities in each — comes out tall
+        // and narrow with the ranks as columns, and the same model turned through ninety degrees fits
+        // a landscape window.
+        var shallow = Content(
+            Pair("Blog", "Post"),
+            Pair("Shop", "Order"),
+            Pair("Team", "Player"),
+            Pair("Album", "Track"));
+
+        var wide = DiagramLayoutEngine.Compute(shallow, Vertical).Size;
+        var tall = DiagramLayoutEngine.Compute(shallow, Options).Size;
+
+        Assert.True(wide.Height < tall.Height);
+        Assert.True(wide.Width > tall.Width);
+    }
+
+    [Fact]
+    public void NoTwoNodesOverlapRunningTopToBottom()
+    {
+        var nodes = Layout(options: Vertical).Nodes;
+
+        for (var i = 0; i < nodes.Count; i++)
+        {
+            for (var j = i + 1; j < nodes.Count; j++)
+            {
+                Assert.False(
+                    Overlaps(nodes[i].Bounds, nodes[j].Bounds),
+                    $"{nodes[i].Node.EntityName} overlaps {nodes[j].Node.EntityName}");
+            }
+        }
+    }
+
+    [Fact]
+    public void EveryNodeAndRouteIsInsideTheReportedSizeRunningTopToBottom()
+    {
+        var layout = Layout(options: Vertical);
+
+        Assert.All(layout.Nodes, n =>
+        {
+            Assert.True(n.Bounds.Right <= layout.Size.Width);
+            Assert.True(n.Bounds.Bottom <= layout.Size.Height);
+            Assert.True(n.Bounds.Left >= 0);
+            Assert.True(n.Bounds.Top >= 0);
+        });
+
+        Assert.All(layout.Edges.SelectMany(e => e.Points), p =>
+        {
+            Assert.True(p.X <= layout.Size.Width);
+            Assert.True(p.Y <= layout.Size.Height);
+        });
+    }
+
+    [Fact]
+    public void RoutesOutOfTheBottomIntoTheTopRunningTopToBottom()
+    {
+        var layout = DiagramLayoutEngine.Compute(Content(Pair("Blog", "Post")), Vertical);
+        var edge = layout.Edges.Single();
+
+        var post = layout.Node("Ns.Post")!.Bounds;
+        var blog = layout.Node("Ns.Blog")!.Bounds;
+
+        // Out of the dependent's top edge, into the principal's bottom edge.
+        Assert.Equal(post.Top, edge.Points[0].Y, precision: 6);
+        Assert.Equal(blog.Bottom, edge.Points[^1].Y, precision: 6);
+
+        // And attached across the width, not down the side, or every route would leave one corner.
+        Assert.InRange(edge.Points[0].X, post.Left, post.Right);
+        Assert.InRange(edge.Points[^1].X, blog.Left, blog.Right);
+    }
+
+    [Fact]
+    public void RoutesASelfReferenceBelowItsOwnNodeRunningTopToBottom()
+    {
+        var layout = Layout(options: Vertical);
+        var loop = layout.Edges.Single(e => e.Edge.From == e.Edge.To);
+        var node = layout.Node(loop.Edge.From)!.Bounds;
+
+        Assert.Contains(loop.Points, p => p.Y > node.Bottom);
+        Assert.All(loop.Points, p => Assert.InRange(p.X, node.Left, node.Right));
+    }
+
+    [Fact]
+    public void SeparatesParallelEdgesIntoTheSameNodeRunningTopToBottom()
+    {
+        var layout = Layout(options: Vertical);
+        var intoPerson = layout.Edges
+            .Where(e => e.Edge.To == "SampleRichModel.Person")
+            .Select(e => e.Points[^1].X)
+            .ToList();
+
+        Assert.True(intoPerson.Count > 1);
+        Assert.Equal(intoPerson.Count, intoPerson.Distinct().Count());
+    }
+
+    [Fact]
+    public void HonoursPositionsRestoredFromDiskRunningTopToBottom()
+    {
+        // Each direction keeps its own arrangement, so the pinning has to work on both axes.
+        var pinned = new Dictionary<string, DiagramPoint>(StringComparer.Ordinal)
+        {
+            ["SampleRichModel.Blog"] = new DiagramPoint(700, 900),
+        };
+
+        var layout = Layout(positions: pinned, options: Vertical);
+
+        Assert.Equal(new DiagramPoint(700, 900), layout.Node("SampleRichModel.Blog")!.Bounds.TopLeft);
     }
 
     [Fact]

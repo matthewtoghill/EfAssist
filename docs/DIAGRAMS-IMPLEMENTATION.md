@@ -203,10 +203,12 @@ The ER/class differences are the table in `DIAGRAMS-PLAN.md` §4 and they live o
 3. Order within a rank by barycentre of connected nodes in the previous rank, two passes. Good enough
    is genuinely good enough — manual dragging is a shipped feature, so auto-layout only has to be a
    sane starting point.
-4. Position ranks in columns with a configurable gutter; centre each rank vertically.
-5. Route edges orthogonally: exit the dependent's right edge, one vertical segment in the gutter,
-   enter the principal's left edge. Stagger the vertical segment per edge so parallel edges do not
-   overlap.
+4. Position ranks with a configurable gutter, each rank centred against the longest — as columns
+   running left to right, or as rows running top to bottom, per `LayoutOptions.Flow`.
+5. Route edges orthogonally: exit the dependent's facing edge, one segment across the gutter, enter
+   the principal's facing edge. Stagger the crossing segment per edge so parallel edges do not
+   overlap. `SceneBuilder.EndMarker` reads its direction off the route's own last segment, so it
+   needs no separate say in which way the layout runs.
 6. Deterministic: same input, same output, no `Random`, no dictionary-order dependence. Order
    entities by name before ranking so the layout does not shuffle between runs.
 

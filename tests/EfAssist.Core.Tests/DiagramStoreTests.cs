@@ -1,4 +1,4 @@
-using EfAssist.Core.Diagrams;
+﻿using EfAssist.Core.Diagrams;
 
 namespace EfAssist.Core.Tests;
 
@@ -33,10 +33,13 @@ public class DiagramStoreTests : IDisposable
             Options = new DiagramViewOptions { ShowIndexes = true, ShowTypes = false },
         };
 
-        diagram.SetPositions(DiagramKind.EntityRelationship, new Dictionary<string, DiagramPoint>
-        {
-            ["SampleRichModel.Blog"] = new DiagramPoint(10, 20),
-        });
+        diagram.SetPositions(
+            DiagramKind.EntityRelationship,
+            DiagramFlow.LeftToRight,
+            new Dictionary<string, DiagramPoint>
+            {
+                ["SampleRichModel.Blog"] = new DiagramPoint(10, 20),
+            });
 
         return diagram;
     }
@@ -124,10 +127,13 @@ public class DiagramStoreTests : IDisposable
         // The two views put different rows in a node, so the same entity is a different height in
         // each. One shared position set means an arrangement made in one view overlaps in the other.
         var saved = Sample();
-        saved.SetPositions(DiagramKind.Class, new Dictionary<string, DiagramPoint>
-        {
-            ["SampleRichModel.Blog"] = new DiagramPoint(999, 888),
-        });
+        saved.SetPositions(
+            DiagramKind.Class,
+            DiagramFlow.LeftToRight,
+            new Dictionary<string, DiagramPoint>
+            {
+                ["SampleRichModel.Blog"] = new DiagramPoint(999, 888),
+            });
 
         DiagramStore.Save(_root, _workspace, "RichContext", saved);
         var loaded = DiagramStore.Load(_root, _workspace, "RichContext")!;
