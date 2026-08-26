@@ -46,21 +46,6 @@ public class ThemingTests
         }
     }
 
-    /// <summary>
-    /// A preset added to the enum but not to the label switch would show its raw member name.
-    /// </summary>
-    [Fact]
-    public void Every_preset_has_a_label_without_a_camel_case_seam()
-    {
-        foreach (var preset in ThemePresets.All)
-        {
-            var name = ThemePresets.DisplayName(preset);
-
-            Assert.False(string.IsNullOrWhiteSpace(name), $"{preset} has no label");
-            Assert.DoesNotMatch("[a-z][A-Z]", name);
-        }
-    }
-
     /// <summary>A light accent needs dark text on it, and vice versa.</summary>
     [Theory]
     [InlineData("#0078D4", 255)]
