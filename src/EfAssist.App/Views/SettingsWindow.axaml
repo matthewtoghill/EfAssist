@@ -82,10 +82,10 @@
                                 <ComboBox ItemsSource="{Binding Appearance.Presets}"
                                           SelectedItem="{Binding Appearance.Preset}"
                                           HorizontalAlignment="Stretch">
-                                    <!-- Member names, spaced: "HighContrast" is not a label. -->
+                                    <!-- Product names, so the preset supplies its own label. -->
                                     <ComboBox.ItemTemplate>
                                         <DataTemplate x:DataType="core:ThemePreset">
-                                            <TextBlock Text="{Binding Converter={x:Static app:OutputConverters.SpacedName}}" />
+                                            <TextBlock Text="{Binding Converter={x:Static app:OutputConverters.PresetName}}" />
                                         </DataTemplate>
                                     </ComboBox.ItemTemplate>
                                 </ComboBox>

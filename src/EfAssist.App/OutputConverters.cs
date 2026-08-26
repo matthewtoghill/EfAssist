@@ -42,6 +42,13 @@ public static class OutputConverters
     }
 
     /// <summary>
+    /// A theme preset's label. Not <see cref="SpacedName"/>: these are product names, which neither
+    /// camel-case splitting nor sentence case gets right.
+    /// </summary>
+    public static readonly FuncValueConverter<ThemePreset, string> PresetName =
+        new(ThemePresets.DisplayName);
+
+    /// <summary>
     /// A colour as a brush, for the settings screen's theme preview. This is the one place a
     /// brush-producing converter is right rather than wrong: the tile has to show the palette being
     /// edited, not the theme the window is painted with, and it re-runs whenever that palette changes.

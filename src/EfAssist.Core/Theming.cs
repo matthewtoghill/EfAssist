@@ -11,12 +11,14 @@ public enum ThemePreset
 {
     /// <summary>Default, and first so that <c>default(ThemePreset)</c> matches it: stock Fluent.</summary>
     Default,
-
     HighContrast,
-
     Solarized,
-
     Nord,
+    Dracula,
+    OneDarkPro,
+    NightOwl,
+    GitHub,
+    MonokaiPro,
 }
 
 /// <summary>
@@ -63,7 +65,6 @@ public static class ThemePresets
 {
     /// <summary>Smallest and largest font size the settings screen will accept, in points.</summary>
     public const double MinFontSize = 9;
-
     public const double MaxFontSize = 28;
 
     /// <summary>Fluent's own <c>ControlContentThemeFontSize</c>, so the default changes nothing.</summary>
@@ -74,7 +75,32 @@ public static class ThemePresets
 
     /// <summary>In the order the settings screen offers them.</summary>
     public static IReadOnlyList<ThemePreset> All { get; } =
-        [ThemePreset.Default, ThemePreset.HighContrast, ThemePreset.Solarized, ThemePreset.Nord];
+        [
+            ThemePreset.Default,
+            ThemePreset.HighContrast,
+            ThemePreset.Solarized,
+            ThemePreset.Nord,
+            ThemePreset.Dracula,
+            ThemePreset.OneDarkPro,
+            ThemePreset.NightOwl,
+            ThemePreset.GitHub,
+            ThemePreset.MonokaiPro,
+        ];
+
+    /// <summary>
+    /// What the settings screen shows. Member names alone do not survive a general spacing rule:
+    /// "GitHub" is one word and "OneDarkPro" is a product name, neither of which sentence case gets
+    /// right.
+    /// </summary>
+    public static string DisplayName(ThemePreset preset) => preset switch
+    {
+        ThemePreset.HighContrast => "High contrast",
+        ThemePreset.OneDarkPro => "One Dark Pro",
+        ThemePreset.NightOwl => "Night Owl",
+        ThemePreset.GitHub => "GitHub",
+        ThemePreset.MonokaiPro => "Monokai Pro",
+        _ => preset.ToString(),
+    };
 
     /// <summary>The preset's own values for one variant, before any user override.</summary>
     public static ThemePalette Defaults(ThemePreset preset, bool dark) => (preset, dark) switch
@@ -92,6 +118,26 @@ public static class ThemePresets
 
         (ThemePreset.Nord, false) => new ThemePalette("#ECEFF4", "#5E81AC", "#2E3440"),
         (ThemePreset.Nord, true) => new ThemePalette("#2E3440", "#88C0D0", "#D8DEE9"),
+
+        // Dracula's light half is its own Alucard variant, not an inversion.
+        (ThemePreset.Dracula, false) => new ThemePalette("#F8F8F2", "#7B39C4", "#1F1F1F"),
+        (ThemePreset.Dracula, true) => new ThemePalette("#282A36", "#BD93F9", "#F8F8F2"),
+
+        // One Dark Pro, paired with Atom's One Light that the theme descends from.
+        (ThemePreset.OneDarkPro, false) => new ThemePalette("#FAFAFA", "#3E7EE6", "#383A42"),
+        (ThemePreset.OneDarkPro, true) => new ThemePalette("#282C34", "#61AFEF", "#ABB2BF"),
+
+        // Night Owl, with its companion Light Owl.
+        (ThemePreset.NightOwl, false) => new ThemePalette("#FBFBFB", "#2AA298", "#403F53"),
+        (ThemePreset.NightOwl, true) => new ThemePalette("#011627", "#7FDBCA", "#D6DEEB"),
+
+        // GitHub's own light and dark.
+        (ThemePreset.GitHub, false) => new ThemePalette("#FFFFFF", "#0969DA", "#1F2328"),
+        (ThemePreset.GitHub, true) => new ThemePalette("#0D1117", "#4493F8", "#E6EDF3"),
+
+        // Monokai Pro, and its Light filter. The accent is the theme's pink rather than its yellow
+        (ThemePreset.MonokaiPro, false) => new ThemePalette("#FAF4F2", "#C03E7A", "#29242A"),
+        (ThemePreset.MonokaiPro, true) => new ThemePalette("#2D2A2E", "#FF6188", "#FCFCFA"),
 
         _ => new ThemePalette("#FFFFFF", "#0078D4", "#1A1A1A"),
     };
