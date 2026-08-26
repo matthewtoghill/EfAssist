@@ -22,6 +22,7 @@
 
     <Window.KeyBindings>
         <KeyBinding Gesture="Ctrl+OemComma" Command="{Binding OpenSettingsCommand}" />
+        <KeyBinding Gesture="Ctrl+B" Command="{Binding ToggleLeftPanelCommand}" />
     </Window.KeyBindings>
 
     <Window.Styles>
@@ -82,6 +83,27 @@
         <Style Selector="GridSplitter.paneV:pointerover /template/ Border#Grip">
             <Setter Property="Background" Value="{DynamicResource SplitterGripHoverBrush}" />
             <Setter Property="Width" Value="5" />
+        </Style>
+
+        <!-- The left panel's collapse chevron. Chromeless until hovered, so it reads as part of the
+             panel edge rather than as another action button. -->
+        <Style Selector="Button.paneToggle">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="Opacity" Value="0.7" />
+        </Style>
+        <Style Selector="Button.paneToggle:pointerover">
+            <Setter Property="Opacity" Value="1" />
+        </Style>
+        <!-- Fluent gives the ContentPresenter its own per-state background, so the button's own
+             Transparent is not enough to keep the resting bar invisible. -->
+        <Style Selector="Button.paneToggle /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.paneToggle:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource PanelBackgroundBrush}" />
         </Style>
 
         <!-- Detail pane rows. A relationship row navigates to the other end of the relationship; a
@@ -288,68 +310,91 @@
         </Border>
 
         <!-- Workspace -->
-        <Grid Grid.Row="2" IsVisible="{Binding HasWorkspace}" ColumnDefinitions="320,*">
+        <!-- The settings column collapses to a rail rather than to nothing, so there is always
+             something to aim at to get it back. Auto sizes column 0 to whichever of the two is
+             showing. -->
+        <Grid Grid.Row="2" IsVisible="{Binding HasWorkspace}" ColumnDefinitions="Auto,*">
 
-            <ScrollViewer Grid.Column="0" Padding="12">
-                <StackPanel>
-                    <TextBlock Text="Startup project" Classes="label" />
-                    <ComboBox ItemsSource="{Binding Projects}"
-                              SelectedItem="{Binding StartupProject}"
-                              DisplayMemberBinding="{Binding Name}"
-                              HorizontalAlignment="Stretch" />
-                    <TextBlock Classes="hint"
-                               Text="Built and loaded by EF. Must reference Microsoft.EntityFrameworkCore.Design." />
+            <!-- Collapsed: rail. -->
+            <Border Grid.Column="0" Width="28" IsVisible="{Binding !LeftPanelExpanded}"
+                    BorderThickness="0,0,1,0" BorderBrush="{DynamicResource SubtleBorderBrush}">
+                <Button Classes="paneToggle" Content="&#xBB;" VerticalAlignment="Top" Margin="0,10,0,0"
+                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                        Command="{Binding ToggleLeftPanelCommand}"
+                        ToolTip.Tip="Show the settings panel (Ctrl+B)" />
+            </Border>
 
-                    <TextBlock Text="Migrations project" Classes="label" />
-                    <ComboBox ItemsSource="{Binding Projects}"
-                              SelectedItem="{Binding MigrationsProject}"
-                              DisplayMemberBinding="{Binding Name}"
-                              HorizontalAlignment="Stretch" />
-                    <TextBlock Classes="hint" Text="Where migration files live." />
+            <Grid Grid.Column="0" RowDefinitions="Auto,*" IsVisible="{Binding LeftPanelExpanded}" Width="320">
 
-                    <TextBlock Text="DbContext" Classes="label" />
-                    <ComboBox ItemsSource="{Binding Contexts}"
-                              SelectedItem="{Binding SelectedContext}"
-                              DisplayMemberBinding="{Binding Name}"
-                              HorizontalAlignment="Stretch" />
-                    <TextBlock Classes="hint caution" Margin="0,4,0,0"
-                               IsVisible="{Binding ShowsStaleContexts}"
-                               Text="This list could not be refreshed and may be out of date." />
+                <!-- Full-width hit area, glyph still on the right: the whole strip above the panel
+                     is the target, not a 20px chevron. -->
+                <Button Grid.Row="0" Classes="paneToggle" Content="&#xAB;"
+                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Right"
+                        Padding="6,4,10,4" Margin="0,8,0,0"
+                        Command="{Binding ToggleLeftPanelCommand}"
+                        ToolTip.Tip="Hide the settings panel (Ctrl+B)" />
 
-                    <TextBlock Text="Context discovery" Classes="label" />
-                    <ComboBox ItemsSource="{Binding DiscoveryModes}"
-                              SelectedItem="{Binding DiscoveryMode}"
-                              HorizontalAlignment="Stretch" />
-                    <TextBlock Classes="hint"
-                               Text="When to list DbContexts on open. Listing builds the startup project, so large solutions may prefer Manual." />
+                <ScrollViewer Grid.Row="1" Padding="12,0,12,12">
+                    <StackPanel>
+                        <TextBlock Text="Startup project" Classes="label" />
+                        <ComboBox ItemsSource="{Binding Projects}"
+                                  SelectedItem="{Binding StartupProject}"
+                                  DisplayMemberBinding="{Binding Name}"
+                                  HorizontalAlignment="Stretch" />
+                        <TextBlock Classes="hint"
+                                   Text="Built and loaded by EF. Must reference Microsoft.EntityFrameworkCore.Design." />
 
-                    <TextBlock Text="Migration list" Classes="label" />
-                    <ComboBox ItemsSource="{Binding Migrations.RefreshModes}"
-                              SelectedItem="{Binding Migrations.RefreshMode}"
-                              HorizontalAlignment="Stretch" />
-                    <TextBlock Classes="hint"
-                               Text="When to load migrations. Remembered rows always read as Unknown until refreshed — applied state is never cached." />
+                        <TextBlock Text="Migrations project" Classes="label" />
+                        <ComboBox ItemsSource="{Binding Projects}"
+                                  SelectedItem="{Binding MigrationsProject}"
+                                  DisplayMemberBinding="{Binding Name}"
+                                  HorizontalAlignment="Stretch" />
+                        <TextBlock Classes="hint" Text="Where migration files live." />
 
-                    <CheckBox Content="Skip build (--no-build)" IsChecked="{Binding NoBuild}" Margin="0,12,0,0" />
-                    <TextBlock Classes="hint"
-                               Text="Faster, but uses whatever was last compiled. Results can be wrong if the model has changed since." />
+                        <TextBlock Text="DbContext" Classes="label" />
+                        <ComboBox ItemsSource="{Binding Contexts}"
+                                  SelectedItem="{Binding SelectedContext}"
+                                  DisplayMemberBinding="{Binding Name}"
+                                  HorizontalAlignment="Stretch" />
+                        <TextBlock Classes="hint caution" Margin="0,4,0,0"
+                                   IsVisible="{Binding ShowsStaleContexts}"
+                                   Text="This list could not be refreshed and may be out of date." />
 
-                    <CheckBox Content="Offline (--no-connect)" IsChecked="{Binding Migrations.Offline}" Margin="0,8,0,0" />
-                    <TextBlock Classes="hint"
-                               Text="List migration names without reaching the database. Applied state shows as Unknown." />
+                        <TextBlock Text="Context discovery" Classes="label" />
+                        <ComboBox ItemsSource="{Binding DiscoveryModes}"
+                                  SelectedItem="{Binding DiscoveryMode}"
+                                  HorizontalAlignment="Stretch" />
+                        <TextBlock Classes="hint"
+                                   Text="When to list DbContexts on open. Listing builds the startup project, so large solutions may prefer Manual." />
 
-                    <!-- Shared by the Script tab and a migration's SQL preview in the detail pane —
-                         one option, not two that could disagree. Disabled once the provider is known
-                         not to support it (SQLite); until then it defaults to enabled, since it is
-                         better to attempt it and surface EF's own error than to grey out something
-                         that would have worked. -->
-                    <CheckBox Content="Idempotent scripts (--idempotent)" IsChecked="{Binding Idempotent}"
-                              IsEnabled="{Binding Script.CanUseIdempotent}"
-                              ToolTip.Tip="{Binding Script.IdempotentTooltip}" Margin="0,8,0,0" />
-                    <TextBlock Classes="hint" Margin="0,0,0,8"
-                               Text="Generated SQL checks the migrations history table first, so it is safe to run more than once." />
-                </StackPanel>
-            </ScrollViewer>
+                        <TextBlock Text="Migration list" Classes="label" />
+                        <ComboBox ItemsSource="{Binding Migrations.RefreshModes}"
+                                  SelectedItem="{Binding Migrations.RefreshMode}"
+                                  HorizontalAlignment="Stretch" />
+                        <TextBlock Classes="hint"
+                                   Text="When to load migrations. Remembered rows always read as Unknown until refreshed — applied state is never cached." />
+
+                        <CheckBox Content="Skip build (--no-build)" IsChecked="{Binding NoBuild}" Margin="0,12,0,0" />
+                        <TextBlock Classes="hint"
+                                   Text="Faster, but uses whatever was last compiled. Results can be wrong if the model has changed since." />
+
+                        <CheckBox Content="Offline (--no-connect)" IsChecked="{Binding Migrations.Offline}" Margin="0,8,0,0" />
+                        <TextBlock Classes="hint"
+                                   Text="List migration names without reaching the database. Applied state shows as Unknown." />
+
+                        <!-- Shared by the Script tab and a migration's SQL preview in the detail pane —
+                             one option, not two that could disagree. Disabled once the provider is known
+                             not to support it (SQLite); until then it defaults to enabled, since it is
+                             better to attempt it and surface EF's own error than to grey out something
+                             that would have worked. -->
+                        <CheckBox Content="Idempotent scripts (--idempotent)" IsChecked="{Binding Idempotent}"
+                                  IsEnabled="{Binding Script.CanUseIdempotent}"
+                                  ToolTip.Tip="{Binding Script.IdempotentTooltip}" Margin="0,8,0,0" />
+                        <TextBlock Classes="hint" Margin="0,0,0,8"
+                                   Text="Generated SQL checks the migrations history table first, so it is safe to run more than once." />
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
 
             <!-- Tabs above, console below, draggable divider between. -->
             <Grid Name="MainPane" Grid.Column="1" RowDefinitions="*,Auto,200" Margin="0,12,12,0">

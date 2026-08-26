@@ -102,6 +102,7 @@ public partial class MainWindowViewModel : ObservableObject
         _showLineNumbers = settings.Display.ShowLineNumbers;
         _migrationActionsExpanded = settings.Display.MigrationActionsExpanded;
         _outputExpanded = settings.Display.OutputExpanded;
+        _leftPanelExpanded = settings.Display.LeftPanelExpanded;
         _defaultDiagramKind = settings.Display.DefaultDiagramKind;
         _openMaximised = settings.Display.Window.Maximised;
         Appearance = new SettingsViewModel(
@@ -331,6 +332,14 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     private bool _showLineNumbers;
+
+    /// <summary>
+    /// Whether the workspace settings panel down the left is open. App-wide and persisted, on the
+    /// same footing as <see cref="OutputExpanded"/>: the panel is shared by every tab, so folding it
+    /// away to a rail is a single choice rather than one per screen.
+    /// </summary>
+    [ObservableProperty]
+    private bool _leftPanelExpanded;
 
     /// <summary>
     /// Whether the output console is open. App-wide and persisted, on the same footing as
@@ -1040,6 +1049,16 @@ public partial class MainWindowViewModel : ObservableObject
         _settings.Display.MigrationActionsExpanded = value;
         SettingsStore.Save(_settings, _settingsPath);
     }
+
+    partial void OnLeftPanelExpandedChanged(bool value)
+    {
+        // App-wide, same as WrapOutput.
+        _settings.Display.LeftPanelExpanded = value;
+        SettingsStore.Save(_settings, _settingsPath);
+    }
+
+    [RelayCommand]
+    private void ToggleLeftPanel() => LeftPanelExpanded = !LeftPanelExpanded;
 
     partial void OnOutputExpandedChanged(bool value)
     {

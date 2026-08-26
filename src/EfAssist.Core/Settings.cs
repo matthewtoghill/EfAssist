@@ -181,6 +181,12 @@ public sealed class DisplaySettings
     public bool MigrationActionsExpanded { get; set; } = true;
 
     /// <summary>
+    /// Show the workspace settings panel down the left expanded. On by default; collapsing it folds
+    /// the panel down to a rail and gives the width back to whichever tab is open.
+    /// </summary>
+    public bool LeftPanelExpanded { get; set; } = true;
+
+    /// <summary>
     /// Show the output console expanded. On by default; collapsing it folds the console down to its
     /// header bar and gives the height back to whichever tab is open.
     /// </summary>
