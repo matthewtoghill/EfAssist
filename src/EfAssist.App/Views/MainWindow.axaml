@@ -135,10 +135,10 @@
         <!-- Recent-workspace row: the remove button only shows while the row is hovered. Both
              states are style setters, not one style setter fighting a local value, so hover can
              actually override the default. -->
-        <Style Selector="Button.recentItem Button#RemoveRecentButton">
+        <Style Selector="Button.recentItem Button.rowAction">
             <Setter Property="IsVisible" Value="False" />
         </Style>
-        <Style Selector="Button.recentItem:pointerover Button#RemoveRecentButton">
+        <Style Selector="Button.recentItem:pointerover Button.rowAction">
             <Setter Property="IsVisible" Value="True" />
         </Style>
 
@@ -233,12 +233,23 @@
         <!-- Toolbar -->
         <Border Grid.Row="1" IsVisible="{Binding HasWorkspace}"
                 Padding="12,8" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource SubtleBorderBrush}">
-            <Grid ColumnDefinitions="*,Auto">
+            <!-- Two equal star columns either side of an Auto one, so the workspace name sits in the
+                 middle of the toolbar rather than merely between its neighbours. -->
+            <Grid ColumnDefinitions="*,Auto,*">
                 <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding WorkspacePath}" TextTrimming="CharacterEllipsis" />
-                    <TextBlock Text="{Binding EnvironmentSummary}" Classes="label" Margin="0,2,0,0" />
+                    <TextBlock Text="{Binding EnvironmentSummary}" Classes="label" Margin="0,0,8,0"
+                               TextTrimming="CharacterEllipsis" />
                 </StackPanel>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+
+                <TextBlock Grid.Column="1" Text="{Binding WorkspaceName}" FontWeight="SemiBold"
+                           FontSize="{DynamicResource AppFontSizeLarge}" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" Margin="8,0"
+                           ToolTip.Tip="{Binding WorkspacePath}" />
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8"
+                            HorizontalAlignment="Right">
+                    <Button Content="Open folder" Command="{Binding ShowWorkspaceFolderCommand}"
+                            ToolTip.Tip="{Binding WorkspacePath, StringFormat='Open {0} in the file browser'}" />
                     <Button Content="&#x2699;" Command="{Binding OpenSettingsCommand}"
                             FontSize="{DynamicResource AppFontSizeLarge}" Padding="10,3" MinWidth="36"
                             ToolTip.Tip="Settings (Ctrl+,): theme, colours, font size, dotnet-ef and app updates." />
@@ -282,12 +293,19 @@
                                     <!-- Removes only the recent-list entry; the workspace settings file
                                          beside it is left alone. Hidden until the row is hovered, so
                                          the list does not read as a list of delete buttons. -->
-                                    <Button Grid.Column="1" Name="RemoveRecentButton"
-                                            Content="&#x2715;" FontSize="{DynamicResource AppFontSizeTiny}" Padding="6,2"
-                                            VerticalAlignment="Center"
-                                            CommandParameter="{Binding Path}"
-                                            Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).RemoveRecentCommand}"
-                                            ToolTip.Tip="Remove from recent" />
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4"
+                                                VerticalAlignment="Center">
+                                        <Button Classes="rowAction" Content="&#x1F4C1;"
+                                                FontSize="{DynamicResource AppFontSizeTiny}" Padding="6,2"
+                                                CommandParameter="{Binding Path}"
+                                                Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).ShowRecentFolderCommand}"
+                                                ToolTip.Tip="Open folder in the file browser" />
+                                        <Button Classes="rowAction"
+                                                Content="&#x2715;" FontSize="{DynamicResource AppFontSizeTiny}" Padding="6,2"
+                                                CommandParameter="{Binding Path}"
+                                                Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).RemoveRecentCommand}"
+                                                ToolTip.Tip="Remove from recent" />
+                                    </StackPanel>
                                 </Grid>
                             </Button>
                         </DataTemplate>

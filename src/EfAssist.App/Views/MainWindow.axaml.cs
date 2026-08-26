@@ -71,6 +71,7 @@ public partial class MainWindow : Window
             viewModel.RestartRequested = Restart;
             viewModel.Script.PickSaveFileAsync = PickSaveFileAsync;
             viewModel.Script.PickFolderAsync = PickFolderAsync;
+            viewModel.ShowFolderAsync = path => OpenWithShellAsync(path, reveal: false);
             viewModel.Script.OpenFileAsync = path => OpenWithShellAsync(path, reveal: false);
             viewModel.Script.RevealFileAsync = path => OpenWithShellAsync(path, reveal: true);
             viewModel.Migrations.Detail.OpenFileAsync = path => OpenWithShellAsync(path, reveal: false);

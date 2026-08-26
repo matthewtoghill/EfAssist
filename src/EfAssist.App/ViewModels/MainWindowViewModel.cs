@@ -393,9 +393,64 @@ public partial class MainWindowViewModel : ObservableObject
         SettingsStore.Save(_settings, _settingsPath);
     }
 
+    /// <summary>
+    /// The open workspace's own name — the solution file or folder, without its path. Empty when
+    /// nothing is open, which is also when the toolbar showing it is hidden.
+    /// </summary>
+    public string WorkspaceName
+    {
+        get
+        {
+            if (WorkspacePath is null)
+            {
+                return string.Empty;
+            }
+
+            var trimmed = WorkspacePath.TrimEnd(Path.DirectorySeparatorChar);
+
+            // A folder keeps its whole name — a directory called "Acme.Api" has no extension to
+            // drop — while a solution file loses the .sln/.slnx that adds nothing on screen.
+            return Directory.Exists(trimmed)
+                ? Path.GetFileName(trimmed)
+                : Path.GetFileNameWithoutExtension(trimmed);
+        }
+    }
+
     public string WindowTitle => WorkspacePath is null
         ? "EfAssist"
-        : $"EfAssist — {Path.GetFileName(WorkspacePath.TrimEnd(Path.DirectorySeparatorChar))}";
+        : $"EfAssist — {WorkspaceName}";
+
+    /// <summary>
+    /// Shows a folder in the OS file browser. Supplied by the view, which owns the shell. Named
+    /// apart from <c>OpenFolderCommand</c>, which picks a workspace rather than revealing one.
+    /// </summary>
+    public Func<string, Task>? ShowFolderAsync { get; set; }
+
+    /// <summary>Reveals a recent workspace's folder without opening the workspace itself.</summary>
+    [RelayCommand]
+    private async Task ShowRecentFolderAsync(string? path)
+    {
+        if (ShowFolderAsync is null || string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        // A recent entry is a solution file or a folder; either way the folder is what to show.
+        var folder = Directory.Exists(path) ? path : Path.GetDirectoryName(path);
+        if (folder is not null)
+        {
+            await ShowFolderAsync(folder);
+        }
+    }
+
+    [RelayCommand]
+    private async Task ShowWorkspaceFolderAsync()
+    {
+        if (ShowFolderAsync is not null && WorkspacePath is not null)
+        {
+            await ShowFolderAsync(WorkingDirectory);
+        }
+    }
 
     /// <summary>
     /// Where commands are launched from. <c>dotnet ef</c> anchors itself to the target project
@@ -930,7 +985,11 @@ public partial class MainWindowViewModel : ObservableObject
         Diagrams.NotifyTargetChanged();
     }
 
-    partial void OnWorkspacePathChanged(string? value) => OnPropertyChanged(nameof(WindowTitle));
+    partial void OnWorkspacePathChanged(string? value)
+    {
+        OnPropertyChanged(nameof(WindowTitle));
+        OnPropertyChanged(nameof(WorkspaceName));
+    }
 
     partial void OnSelectedTabIndexChanged(int value)
     {
