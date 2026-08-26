@@ -1,4 +1,4 @@
-namespace EfAssist.Core.Diagrams;
+﻿namespace EfAssist.Core.Diagrams;
 
 /// <summary>
 /// What a shape <em>is</em>, not what colour it is.
@@ -324,11 +324,16 @@ public static class SceneBuilder
                 options.RowFontSize - 1);
         }
 
+        // Cardinalities sit beside the end they belong to. Running horizontally an end is on a node's
+        // side, so the label goes above the line; running vertically it is on the top or bottom edge,
+        // where above the line would be inside the node, so it goes below the exit instead.
         if (edge.Edge.FromLabel is { Length: > 0 } from)
         {
             yield return new TextShape(
                 from,
-                edge.Points[0].Offset(-14, -options.RowFontSize - 1),
+                options.IsVertical
+                    ? edge.Points[0].Offset(4, options.RowFontSize + 1)
+                    : edge.Points[0].Offset(-14, -options.RowFontSize - 1),
                 role,
                 options.RowFontSize - 1);
         }
@@ -337,7 +342,9 @@ public static class SceneBuilder
         {
             yield return new TextShape(
                 to,
-                edge.Points[^1].Offset(4, -options.RowFontSize - 1),
+                options.IsVertical
+                    ? edge.Points[^1].Offset(4, -3)
+                    : edge.Points[^1].Offset(4, -options.RowFontSize - 1),
                 role,
                 options.RowFontSize - 1);
         }
@@ -348,26 +355,44 @@ public static class SceneBuilder
     /// ownership, a crow's foot otherwise — all drawn as polylines, so nothing downstream needs to
     /// know how to draw a marker.
     /// </summary>
+    /// <remarks>
+    /// Built from the route's own last segment rather than from the layout's orientation: the segment
+    /// already says which way the line arrives, which covers both orientations and a route reversed by
+    /// a dragged node with one rule instead of three.
+    /// </remarks>
     private static IEnumerable<DiagramShape> EndMarker(LaidOutEdge edge, DiagramRole role)
     {
         var tip = edge.Points[^1];
         var previous = edge.Points[^2];
 
-        // Which way the route arrives, so a marker on a reversed route is not drawn inside the node.
-        var direction = tip.X >= previous.X ? 1 : -1;
+        var dx = tip.X - previous.X;
+        var dy = tip.Y - previous.Y;
+
+        // Routes are orthogonal, so the last segment lies on one axis or the other. A zero-length
+        // final segment — two nodes lining up exactly — reads as horizontal, which is what the rest of
+        // the route looks like.
+        var horizontal = Math.Abs(dx) >= Math.Abs(dy);
+
+        // Back along the segment, and across it. The marker geometry is written in those two, so it
+        // does not care which axis the route arrived on.
+        var (backX, backY) = horizontal
+            ? (dx >= 0 ? -1.0 : 1.0, 0.0)
+            : (0.0, dy >= 0 ? -1.0 : 1.0);
+
+        var (acrossX, acrossY) = horizontal ? (0.0, 1.0) : (1.0, 0.0);
+
         const double length = 9;
         const double half = 5;
+
+        DiagramPoint At(double back, double across) => new(
+            tip.X + (backX * back) + (acrossX * across),
+            tip.Y + (backY * back) + (acrossY * across));
 
         switch (edge.Edge.Kind)
         {
             case EdgeKind.Inheritance:
                 yield return new PolylineShape(
-                    [
-                        new DiagramPoint(tip.X - (direction * length), tip.Y - half),
-                        tip,
-                        new DiagramPoint(tip.X - (direction * length), tip.Y + half),
-                        new DiagramPoint(tip.X - (direction * length), tip.Y - half),
-                    ],
+                    [At(length, -half), tip, At(length, half), At(length, -half)],
                     role);
                 break;
 
@@ -375,9 +400,9 @@ public static class SceneBuilder
                 yield return new PolylineShape(
                     [
                         tip,
-                        new DiagramPoint(tip.X - (direction * length / 2), tip.Y - half / 1.6),
-                        new DiagramPoint(tip.X - (direction * length), tip.Y),
-                        new DiagramPoint(tip.X - (direction * length / 2), tip.Y + half / 1.6),
+                        At(length / 2, -half / 1.6),
+                        At(length, 0),
+                        At(length / 2, half / 1.6),
                         tip,
                     ],
                     role);
@@ -385,12 +410,9 @@ public static class SceneBuilder
 
             default:
                 // Crow's foot: three lines fanning back from the tip.
-                yield return new PolylineShape(
-                    [new DiagramPoint(tip.X - (direction * length), tip.Y - half), tip], role);
-                yield return new PolylineShape(
-                    [new DiagramPoint(tip.X - (direction * length), tip.Y), tip], role);
-                yield return new PolylineShape(
-                    [new DiagramPoint(tip.X - (direction * length), tip.Y + half), tip], role);
+                yield return new PolylineShape([At(length, -half), tip], role);
+                yield return new PolylineShape([At(length, 0), tip], role);
+                yield return new PolylineShape([At(length, half), tip], role);
                 break;
         }
     }

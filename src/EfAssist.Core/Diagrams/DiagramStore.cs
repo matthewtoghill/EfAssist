@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 
 namespace EfAssist.Core.Diagrams;
 
@@ -32,12 +32,13 @@ public sealed class SavedDiagram
     public bool HighlightChanges { get; set; } = true;
 
     /// <summary>
-    /// Hand-dragged node positions, keyed by <see cref="DiagramKind"/> name and then by entity name.
+    /// Hand-dragged node positions, keyed by <see cref="PositionKey"/> and then by entity name.
     /// </summary>
     /// <remarks>
-    /// Per view, not shared. The two views put different rows in a node, so the same entity is a
-    /// different height in each; one arrangement replayed in the other view overlaps its neighbours,
-    /// and with the diagram locked there is no way to pull them apart again.
+    /// Per view and per orientation, not shared. The two views put different rows in a node, so the
+    /// same entity is a different height in each, and the two orientations arrange the same nodes on
+    /// different axes; one arrangement replayed elsewhere overlaps its neighbours, and with the
+    /// diagram locked there is no way to pull them apart again.
     /// </remarks>
     public Dictionary<string, Dictionary<string, DiagramPoint>> Positions { get; set; } = [];
 
@@ -46,14 +47,30 @@ public sealed class SavedDiagram
 
     public DiagramKind Kind { get; set; }
 
+    /// <summary>Which way the ranks were last run.</summary>
+    public DiagramFlow Flow { get; set; }
+
     public DiagramViewOptions? Options { get; set; }
 
-    /// <summary>The positions for one view, or an empty map when that view has never been arranged.</summary>
-    public Dictionary<string, DiagramPoint> PositionsFor(DiagramKind kind) =>
-        Positions.TryGetValue(kind.ToString(), out var positions) ? positions : [];
+    /// <summary>
+    /// The key one view's arrangement is stored under. Left-to-right keeps the bare view name it has
+    /// always had, so a diagram arranged before there was a second orientation still loads.
+    /// </summary>
+    public static string PositionKey(DiagramKind kind, DiagramFlow flow) =>
+        flow == DiagramFlow.LeftToRight ? kind.ToString() : $"{kind}.{flow}";
 
-    public void SetPositions(DiagramKind kind, IReadOnlyDictionary<string, DiagramPoint> positions) =>
-        Positions[kind.ToString()] = new Dictionary<string, DiagramPoint>(
+    /// <summary>
+    /// The positions for one view and orientation, or an empty map when it has never been arranged.
+    /// </summary>
+    public Dictionary<string, DiagramPoint> PositionsFor(
+        DiagramKind kind, DiagramFlow flow = DiagramFlow.LeftToRight) =>
+        Positions.TryGetValue(PositionKey(kind, flow), out var positions) ? positions : [];
+
+    public void SetPositions(
+        DiagramKind kind,
+        DiagramFlow flow,
+        IReadOnlyDictionary<string, DiagramPoint> positions) =>
+        Positions[PositionKey(kind, flow)] = new Dictionary<string, DiagramPoint>(
             positions, StringComparer.Ordinal);
 }
 

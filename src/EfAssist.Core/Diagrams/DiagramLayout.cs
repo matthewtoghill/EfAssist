@@ -1,4 +1,20 @@
-namespace EfAssist.Core.Diagrams;
+﻿namespace EfAssist.Core.Diagrams;
+
+/// <summary>Which way the ranks of a layered layout run.</summary>
+public enum DiagramFlow
+{
+    /// <summary>
+    /// Ranks as columns, principals on the left. Default, and first so <c>default(DiagramFlow)</c>
+    /// matches it.
+    /// </summary>
+    LeftToRight,
+
+    /// <summary>
+    /// Ranks as rows, principals at the top. What a shallow model wants: few ranks and many entities
+    /// per rank comes out wide and short here, rather than tall and narrow.
+    /// </summary>
+    TopToBottom,
+}
 
 /// <summary>
 /// Sizes and spacings, plus the one thing Core cannot work out for itself: how wide a piece of text
@@ -47,12 +63,20 @@ public sealed record LayoutOptions(Func<string, double, double> MeasureText)
     /// </summary>
     public double MaxNodeWidth { get; init; } = 340;
 
-    /// <summary>Horizontal space between ranks, which is also where edges are routed.</summary>
+    /// <summary>Space between ranks, which is also where edges are routed.</summary>
     public double RankGap { get; init; } = 90;
 
     public double NodeGap { get; init; } = 28;
 
     public double Margin { get; init; } = 24;
+
+    /// <summary>
+    /// Which way the ranks run. Layout and edge routing both read it; the scene works the
+    /// orientation of a marker out from the route itself, so it needs no separate say.
+    /// </summary>
+    public DiagramFlow Flow { get; init; } = DiagramFlow.LeftToRight;
+
+    internal bool IsVertical => Flow == DiagramFlow.TopToBottom;
 }
 
 /// <param name="RowOffsets">
@@ -208,7 +232,8 @@ public static class DiagramLayoutEngine
     // ---- Ranking ----
 
     /// <summary>
-    /// Rank by dependency depth, principals to the left of their dependents. Cycles — which a real
+    /// Rank by dependency depth, principals in an earlier rank than their dependents. Cycles — which
+    /// a real
     /// model has, through an optional relationship in both directions — are broken by ignoring the
     /// edge that closes them, which is what makes this terminate.
     /// </summary>
@@ -220,8 +245,8 @@ public static class DiagramLayoutEngine
     private static Dictionary<string, int> Rank(
         List<DiagramNode> nodes, List<DiagramEdge> edges)
     {
-        // Dependent to the principals it must sit right of. Self-references are excluded: a node
-        // cannot be to the right of itself.
+        // Dependent to the principals it must sit after. Self-references are excluded: a node
+        // cannot be in a later rank than itself.
         var principals = nodes.ToDictionary(
             n => n.EntityName, _ => new List<string>(), StringComparer.Ordinal);
 
@@ -341,30 +366,43 @@ public static class DiagramLayoutEngine
         LayoutOptions options,
         IReadOnlyDictionary<string, DiagramPoint>? fixedPositions)
     {
-        var columnWidths = byRank
-            .Select(rank => rank.Count == 0 ? 0 : rank.Max(n => measured[n.EntityName].Size.Width))
+        var vertical = options.IsVertical;
+
+        // "Across" steps from one rank to the next, "along" steps between the nodes of one rank. The
+        // two orientations differ only in which axis is which, so everything below is written in
+        // those terms rather than in x and y.
+        double Across(DiagramSize size) => vertical ? size.Height : size.Width;
+        double Along(DiagramSize size) => vertical ? size.Width : size.Height;
+
+        var rankThickness = byRank
+            .Select(rank => rank.Count == 0
+                ? 0
+                : rank.Max(n => Across(measured[n.EntityName].Size)))
             .ToList();
 
-        var columnHeights = byRank
-            .Select(rank => rank.Sum(n => measured[n.EntityName].Size.Height)
+        var rankLengths = byRank
+            .Select(rank => rank.Sum(n => Along(measured[n.EntityName].Size))
                 + (Math.Max(0, rank.Count - 1) * options.NodeGap))
             .ToList();
 
-        var tallest = columnHeights.Count == 0 ? 0 : columnHeights.Max();
+        var longest = rankLengths.Count == 0 ? 0 : rankLengths.Max();
 
         var placed = new List<LaidOutNode>();
-        var x = options.Margin;
+        var across = options.Margin;
 
         for (var rank = 0; rank < byRank.Count; rank++)
         {
-            // Each rank centred against the tallest, so a two-node column does not sit at the top of
+            // Each rank centred against the longest, so a two-node rank does not sit at the start of
             // a twelve-node one.
-            var y = options.Margin + ((tallest - columnHeights[rank]) / 2);
+            var along = options.Margin + ((longest - rankLengths[rank]) / 2);
 
             foreach (var node in byRank[rank])
             {
                 var (size, offsets) = measured[node.EntityName];
-                var bounds = new DiagramRect(x, y, size.Width, size.Height);
+
+                var bounds = vertical
+                    ? new DiagramRect(along, across, size.Width, size.Height)
+                    : new DiagramRect(across, along, size.Width, size.Height);
 
                 if (fixedPositions is not null
                     && fixedPositions.TryGetValue(node.EntityName, out var pinned))
@@ -373,13 +411,13 @@ public static class DiagramLayoutEngine
                 }
                 else
                 {
-                    y += size.Height + options.NodeGap;
+                    along += Along(size) + options.NodeGap;
                 }
 
                 placed.Add(new LaidOutNode(node, bounds, ranks[node.EntityName], offsets));
             }
 
-            x += columnWidths[rank] + options.RankGap;
+            across += rankThickness[rank] + options.RankGap;
         }
 
         return placed;
@@ -388,8 +426,8 @@ public static class DiagramLayoutEngine
     // ---- Edge routing ----
 
     /// <summary>
-    /// Orthogonal routes: out of the dependent's left edge, across the gap, into the principal's
-    /// right edge. A self-reference loops out of the right-hand side instead.
+    /// Orthogonal routes: out of the dependent's side facing the principal, across the rank gap, into
+    /// the principal's facing side. A self-reference loops out of the trailing side instead.
     /// </summary>
     /// <remarks>
     /// Attachment points are allocated by counting every edge touching a node first, then spreading
@@ -427,34 +465,57 @@ public static class DiagramLayoutEngine
                 continue;
             }
 
-            var fromY = Attach(from.Bounds, edge.From);
-            var toY = Attach(to.Bounds, edge.To);
+            var fromSlot = Attach(from.Bounds, edge.From);
+            var toSlot = Attach(to.Bounds, edge.To);
 
-            routed.Add(new LaidOutEdge(edge, Orthogonal(from.Bounds, to.Bounds, fromY, toY)));
+            routed.Add(new LaidOutEdge(
+                edge, Orthogonal(from.Bounds, to.Bounds, fromSlot, toSlot, options)));
         }
 
         return routed;
 
+        // Where along the node's facing side this edge attaches, spread evenly so two routes into one
+        // node never land on top of each other and read as one relationship.
         double Attach(DiagramRect bounds, string entity)
         {
             var slot = used.GetValueOrDefault(entity);
             used[entity] = slot + 1;
 
-            // Spread over the body rather than the whole node, so a route never arrives across the
-            // node's own title.
-            var top = bounds.Top + options.HeaderHeight;
-            var height = Math.Max(1, bounds.Bottom - top);
+            // Running vertically, edges leave the top and bottom, so the whole width is fair game.
+            // Running horizontally they leave the sides, and starting below the header keeps a route
+            // from arriving across the node's own title.
+            var start = options.IsVertical ? bounds.Left : bounds.Top + options.HeaderHeight;
+            var end = options.IsVertical ? bounds.Right : bounds.Bottom;
+            var span = Math.Max(1, end - start);
 
-            return top + (height * (slot + 1) / (total[entity] + 1.0));
+            return start + (span * (slot + 1) / (total[entity] + 1.0));
         }
     }
 
     private static List<DiagramPoint> Orthogonal(
-        DiagramRect from, DiagramRect to, double fromY, double toY)
+        DiagramRect from, DiagramRect to, double fromSlot, double toSlot, LayoutOptions options)
     {
-        // The principal is normally to the left. When it is not — a back-edge from a broken cycle, or
-        // a node the user has dragged — leaving the same-side exits alone would draw a line straight
-        // through both nodes, so the route reverses with it.
+        // The principal is normally the earlier rank — left of, or above, the dependent. When it is
+        // not — a back-edge from a broken cycle, or a node the user has dragged — leaving the
+        // same-side exits alone would draw a line straight through both nodes, so the route reverses
+        // with it.
+        if (options.IsVertical)
+        {
+            var goingUp = to.CentreY <= from.CentreY;
+
+            var startY = goingUp ? from.Top : from.Bottom;
+            var endY = goingUp ? to.Bottom : to.Top;
+            var midY = (startY + endY) / 2;
+
+            return
+            [
+                new DiagramPoint(fromSlot, startY),
+                new DiagramPoint(fromSlot, midY),
+                new DiagramPoint(toSlot, midY),
+                new DiagramPoint(toSlot, endY),
+            ];
+        }
+
         var goingLeft = to.CentreX <= from.CentreX;
 
         var startX = goingLeft ? from.Left : from.Right;
@@ -463,15 +524,30 @@ public static class DiagramLayoutEngine
 
         return
         [
-            new DiagramPoint(startX, fromY),
-            new DiagramPoint(midX, fromY),
-            new DiagramPoint(midX, toY),
-            new DiagramPoint(endX, toY),
+            new DiagramPoint(startX, fromSlot),
+            new DiagramPoint(midX, fromSlot),
+            new DiagramPoint(midX, toSlot),
+            new DiagramPoint(endX, toSlot),
         ];
     }
 
     private static List<DiagramPoint> SelfLoop(DiagramRect bounds, LayoutOptions options)
     {
+        if (options.IsVertical)
+        {
+            var below = bounds.Bottom + (options.RankGap / 3);
+            var left = bounds.Left + (bounds.Width / 3);
+            var right = bounds.Right - (bounds.Width / 3);
+
+            return
+            [
+                new DiagramPoint(left, bounds.Bottom),
+                new DiagramPoint(left, below),
+                new DiagramPoint(right, below),
+                new DiagramPoint(right, bounds.Bottom),
+            ];
+        }
+
         var out_ = bounds.Right + (options.RankGap / 3);
         var top = bounds.Top + (bounds.Height / 3);
         var bottom = bounds.Bottom - (bounds.Height / 3);

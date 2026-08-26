@@ -1,4 +1,4 @@
-using EfAssist.Core.Diagrams;
+﻿using EfAssist.Core.Diagrams;
 
 namespace EfAssist.Core.Tests;
 
@@ -271,6 +271,44 @@ public class DiagramSceneTests
 
         // Arriving from the left, so the marker's tail sits to the left of the tip.
         Assert.All(marker.Points, p => Assert.True(p.X <= tip.X));
+    }
+
+    [Fact]
+    public void FansAMarkerAcrossTheRouteWhenTheLayoutRunsTopToBottom()
+    {
+        // The marker reads its direction off the route's last segment rather than off the layout, so a
+        // vertical route gets a marker fanning sideways above the tip instead of one drawn along x
+        // and therefore inside the node.
+        var vertical = Options with { Flow = DiagramFlow.TopToBottom };
+
+        var layout = DiagramLayoutEngine.Compute(
+            DiagramNodeContent.Build(
+                ModelSnapshotParser.Parse(Fixture.Text("snapshot-rich")),
+                new DiagramViewOptions()),
+            vertical);
+
+        var scene = SceneBuilder.Build(layout, vertical);
+
+        // An edge whose final segment runs upwards, which is the normal case here: the route leaves
+        // the dependent and arrives at the principal's bottom edge, a rank above it.
+        var edge = layout.Edges.First(e =>
+            e.Edge.From != e.Edge.To
+            && e.Edge.Kind == EdgeKind.ForeignKey
+            && e.Points[^1].Y < e.Points[^2].Y);
+
+        var tip = edge.Points[^1];
+
+        // Excluding the route itself, which is four points and also ends at the tip.
+        var marker = scene.Shapes
+            .OfType<PolylineShape>()
+            .First(p => p.Points.Count <= 5
+                && p.Points.Contains(tip)
+                && !p.Points.SequenceEqual(edge.Points));
+
+        // Arriving upwards, so the tail sits below the tip — in the rank gap, not inside the node —
+        // and spreads either side of it.
+        Assert.All(marker.Points, p => Assert.True(p.Y >= tip.Y));
+        Assert.Contains(marker.Points, p => p.X != tip.X);
     }
 
     // ---- Empty ----

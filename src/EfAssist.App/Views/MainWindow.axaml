@@ -645,6 +645,9 @@
                                     <Button Content="{Binding Diagrams.SwitchViewLabel}"
                                             Command="{Binding Diagrams.SwitchViewCommand}"
                                             ToolTip.Tip="Switch between the table view and the class view. Each keeps its own arrangement." />
+                                    <Button Content="{Binding Diagrams.FlowLabel}"
+                                            Command="{Binding Diagrams.SwitchFlowCommand}"
+                                            ToolTip.Tip="Run the ranks the other way: left to right, or top to bottom. A shallow model reads better top to bottom. Each direction keeps its own arrangement." />
                                     <Button Content="{Binding Diagrams.LockLabel}"
                                             Command="{Binding Diagrams.ToggleLockCommand}"
                                             ToolTip.Tip="{Binding Diagrams.LockTooltip}" />
@@ -686,7 +689,7 @@
                                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6"
                                             VerticalAlignment="Center">
                                     <TextBox Text="{Binding Diagrams.Search}" MinWidth="170"
-                                             PlaceholderText="Search entities, columns, indexes" />
+                                             PlaceholderText="Search.." />
                                     <TextBlock Text="{Binding Diagrams.SearchSummary}" Classes="hint"
                                                VerticalAlignment="Center" MinWidth="58" />
                                     <Button Content="Next" Command="{Binding Diagrams.NextMatchCommand}" />

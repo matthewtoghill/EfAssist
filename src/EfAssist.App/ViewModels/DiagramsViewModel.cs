@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -223,6 +223,16 @@ public partial class DiagramsViewModel : ObservableObject
         ? "Show classes"
         : "Show tables";
 
+    // ---- Rank direction ----
+
+    [ObservableProperty]
+    private DiagramFlow _flow;
+
+    /// <summary>What pressing the button does, in the same voice as the view and lock buttons.</summary>
+    public string FlowLabel => Flow == DiagramFlow.LeftToRight
+        ? "Top to bottom"
+        : "Left to right";
+
     // ---- View options ----
 
     [ObservableProperty]
@@ -419,6 +429,7 @@ public partial class DiagramsViewModel : ObservableObject
             _workspacePath = workspacePath;
 
             Kind = saved.DiagramView ?? _display.DefaultDiagramKind;
+            Flow = saved.DiagramLayoutFlow;
             SelectedSnapshot = CurrentModel;
             HighlightChanges = true;
             IsUnlocked = !saved.DiagramLocked;
@@ -438,6 +449,7 @@ public partial class DiagramsViewModel : ObservableObject
     public void Store(WorkspaceSettings saved)
     {
         saved.DiagramView = Kind;
+        saved.DiagramLayoutFlow = Flow;
         saved.DiagramLocked = !IsUnlocked;
         saved.DiagramOptions = CurrentOptions();
         saved.DiagramSaveFolder = _lastSaveAsFolder;
@@ -540,6 +552,7 @@ public partial class DiagramsViewModel : ObservableObject
         _saved.MigrationId = migrationId;
         _saved.HighlightChanges = HighlightChanges;
         _saved.Kind = Kind;
+        _saved.Flow = Flow;
         ApplyComparison();
         IsStale = false;
         EmptyReason = null;
@@ -669,6 +682,16 @@ public partial class DiagramsViewModel : ObservableObject
             ? DiagramKind.Class
             : DiagramKind.EntityRelationship;
 
+    /// <summary>
+    /// Turns the layout through ninety degrees. Not confirmed and not destructive: each orientation
+    /// keeps its own dragged positions, so switching back finds the arrangement it left behind.
+    /// </summary>
+    [RelayCommand]
+    private void SwitchFlow() =>
+        Flow = Flow == DiagramFlow.LeftToRight
+            ? DiagramFlow.TopToBottom
+            : DiagramFlow.LeftToRight;
+
     [RelayCommand]
     private void ToggleLock() => IsUnlocked = !IsUnlocked;
 
@@ -679,19 +702,19 @@ public partial class DiagramsViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(HasDiagram))]
     private async Task ReLayoutAsync()
     {
-        if (_saved.PositionsFor(Kind).Count > 0
+        if (_saved.PositionsFor(Kind, Flow).Count > 0
             && ConfirmAsync is not null
             && !await ConfirmAsync(new ConfirmRequest(
                 "Re-layout diagram",
                 $"Arrange the {KindLabel.ToLowerInvariant()} diagram automatically?",
                 "Re-layout",
                 "Nodes you have moved by hand in this view go back to their computed positions. The "
-                + "other view is not affected.")))
+                + "other view, and the other rank direction, are not affected.")))
         {
             return;
         }
 
-        _saved.Positions.Remove(Kind.ToString());
+        _saved.Positions.Remove(SavedDiagram.PositionKey(Kind, Flow));
         Rebuild();
         SaveDiagram();
         FitToWindow?.Invoke();
@@ -903,7 +926,7 @@ public partial class DiagramsViewModel : ObservableObject
         }
 
         var positions = new Dictionary<string, DiagramPoint>(
-            _saved.PositionsFor(Kind), StringComparer.Ordinal);
+            _saved.PositionsFor(Kind, Flow), StringComparer.Ordinal);
 
         // Every node's current position is captured, not just the moved one. Without that, the first
         // drag pins one node and lets the layout re-flow the rest around it.
@@ -913,7 +936,7 @@ public partial class DiagramsViewModel : ObservableObject
         }
 
         positions[entityName] = position;
-        _saved.SetPositions(Kind, positions);
+        _saved.SetPositions(Kind, Flow, positions);
 
         Rebuild();
     }
@@ -945,6 +968,7 @@ public partial class DiagramsViewModel : ObservableObject
         try
         {
             Kind = loaded.Kind;
+            Flow = loaded.Flow;
             IsUnlocked = !loaded.Locked;
             HighlightChanges = loaded.HighlightChanges;
             SelectedSnapshot = loaded.MigrationId is null
@@ -977,6 +1001,7 @@ public partial class DiagramsViewModel : ObservableObject
         }
 
         _saved.Kind = Kind;
+        _saved.Flow = Flow;
         _saved.Locked = !IsUnlocked;
         _saved.HighlightChanges = HighlightChanges;
         _saved.Options = CurrentOptions();
@@ -1001,12 +1026,10 @@ public partial class DiagramsViewModel : ObservableObject
         var options = CurrentOptions();
         _content = DiagramNodeContent.Build(model, options, _comparison?.Diff);
 
-        var layoutOptions = MeasureText is null
-            ? LayoutOptions.Default
-            : LayoutOptions.Default with { MeasureText = MeasureText };
+        var layoutOptions = CurrentLayoutOptions();
 
         _layout = DiagramLayoutEngine.Compute(
-            _content, layoutOptions, _saved.PositionsFor(Kind));
+            _content, layoutOptions, _saved.PositionsFor(Kind, Flow));
 
         RefreshMatches();
 
@@ -1047,6 +1070,17 @@ public partial class DiagramsViewModel : ObservableObject
         OnPropertyChanged(nameof(SourceSummary));
         OnPropertyChanged(nameof(DiffSummary));
         OnPropertyChanged(nameof(ShowsDiff));
+    }
+
+    /// <summary>
+    /// The measurement and spacing the layout and the scene both have to agree on. One place, because
+    /// a scene built with a different rank direction from the layout draws its markers and its edge
+    /// labels the wrong way round.
+    /// </summary>
+    private LayoutOptions CurrentLayoutOptions()
+    {
+        var options = LayoutOptions.Default with { Flow = Flow };
+        return MeasureText is null ? options : options with { MeasureText = MeasureText };
     }
 
     private DiagramViewOptions CurrentOptions() => new()
@@ -1344,6 +1378,20 @@ public partial class DiagramsViewModel : ObservableObject
         Persist();
     }
 
+    partial void OnFlowChanged(DiagramFlow value)
+    {
+        OnPropertyChanged(nameof(FlowLabel));
+        Rebuild();
+        Persist();
+
+        // The diagram's extent changes shape entirely, so whatever zoom and offset suited the old
+        // orientation frames the new one badly. Same reasoning as a fresh load.
+        if (!_restoring)
+        {
+            FitToWindow?.Invoke();
+        }
+    }
+
     partial void OnIsUnlockedChanged(bool value)
     {
         OnPropertyChanged(nameof(LockLabel));
@@ -1368,9 +1416,7 @@ public partial class DiagramsViewModel : ObservableObject
         {
             Scene = SceneBuilder.Build(
                 _layout,
-                MeasureText is null
-                    ? LayoutOptions.Default
-                    : LayoutOptions.Default with { MeasureText = MeasureText },
+                CurrentLayoutOptions(),
                 new SceneState(value, _matches.ToHashSet(StringComparer.Ordinal), IsSearching),
                 CurrentOptions());
         }
