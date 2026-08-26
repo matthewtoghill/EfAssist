@@ -166,8 +166,10 @@ public partial class DiagramsViewModel : ObservableObject
     public const string CurrentModel = "Current model";
 
     /// <summary>
-    /// <see cref="CurrentModel"/> followed by every migration, in the order they are applied. Names
-    /// rather than ids, because the id is a timestamp and the name is what the user chose.
+    /// <see cref="CurrentModel"/> followed by every migration, newest first. Labelled
+    /// <c>&lt;position&gt;. &lt;name&gt;</c> rather than by id, because the id is a timestamp and the
+    /// name is what the user chose, and the position is the same 1-based chronological number the
+    /// Migrations list shows.
     /// </summary>
     public ObservableCollection<string> SnapshotOptions { get; } = [CurrentModel];
 
@@ -399,19 +401,21 @@ public partial class DiagramsViewModel : ObservableObject
     {
         var selected = SelectedSnapshot;
 
+        var migrations = _migrations();
+
         SnapshotOptions.Clear();
         SnapshotOptions.Add(CurrentModel);
-        foreach (var migration in _migrations())
+        for (var i = migrations.Count - 1; i >= 0; i--)
         {
-            SnapshotOptions.Add(migration.Name);
+            SnapshotOptions.Add(LabelFor(migrations[i].Name, i + 1));
         }
 
         // A saved diagram of a migration the list does not have — because it has not been loaded yet,
         // or because the migration has since been removed — keeps its entry rather than silently
-        // becoming a diagram of something else.
+        // becoming a diagram of something else. Unnumbered: there is no known position for it.
         if (selected != CurrentModel && !SnapshotOptions.Contains(selected))
         {
-            SnapshotOptions.Add(selected);
+            SnapshotOptions.Insert(1, selected);
         }
 
         SetWithoutRegenerating(() => SelectedSnapshot = selected);
@@ -608,10 +612,50 @@ public partial class DiagramsViewModel : ObservableObject
         _session.StatusMessage = "No model snapshot found for this context.";
     }
 
-    /// <summary>The id of the migration a picker entry names, or null for the current model.</summary>
-    private string? MigrationIdFor(string selected) => selected == CurrentModel
-        ? null
-        : _migrations().FirstOrDefault(m => m.Name == selected)?.Id;
+    /// <summary>How a migration is shown in the picker: its chronological position, then its name.</summary>
+    private static string LabelFor(string name, int position) => $"{position}. {name}";
+
+    /// <summary>
+    /// The id of the migration a picker entry names, or null for the current model. Accepts the
+    /// unnumbered name too, so an entry kept from a saved diagram still resolves once the migrations
+    /// list catches up.
+    /// </summary>
+    private string? MigrationIdFor(string selected)
+    {
+        if (selected == CurrentModel)
+        {
+            return null;
+        }
+
+        var migrations = _migrations();
+        for (var i = 0; i < migrations.Count; i++)
+        {
+            if (selected == LabelFor(migrations[i].Name, i + 1) || selected == migrations[i].Name)
+            {
+                return migrations[i].Id;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The picker entry for a migration id: numbered when the migrations list has it, the bare name
+    /// when it does not.
+    /// </summary>
+    private string SnapshotOptionFor(string migrationId)
+    {
+        var migrations = _migrations();
+        for (var i = 0; i < migrations.Count; i++)
+        {
+            if (migrations[i].Id == migrationId)
+            {
+                return LabelFor(migrations[i].Name, i + 1);
+            }
+        }
+
+        return NameOf(migrationId);
+    }
 
     /// <summary>
     /// The migration applied immediately before this one, or null when it is the first. Position in
@@ -973,7 +1017,7 @@ public partial class DiagramsViewModel : ObservableObject
             HighlightChanges = loaded.HighlightChanges;
             SelectedSnapshot = loaded.MigrationId is null
                 ? CurrentModel
-                : NameOf(loaded.MigrationId);
+                : SnapshotOptionFor(loaded.MigrationId);
 
             ApplyOptions(loaded.Options ?? new DiagramViewOptions());
         }

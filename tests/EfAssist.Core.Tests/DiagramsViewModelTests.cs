@@ -1,4 +1,4 @@
-using EfAssist.App.ViewModels;
+﻿using EfAssist.App.ViewModels;
 using EfAssist.Core.Diagrams;
 
 namespace EfAssist.Core.Tests;
@@ -195,14 +195,15 @@ public class DiagramsViewModelTests : IDisposable
     }
 
     [Fact]
-    public void OffersTheCurrentModelFirstAndThenEveryMigration()
+    public void OffersTheCurrentModelFirstAndThenEveryMigrationNewestFirstAndNumbered()
     {
         var harness = Build(migrations: [Initial, AddPosts]);
 
         harness.ViewModel.RefreshSnapshotOptions();
 
+        // Numbered by chronological position, listed newest first, so the number counts down.
         Assert.Equal(
-            [DiagramsViewModel.CurrentModel, "InitialCreate", "AddPosts"],
+            [DiagramsViewModel.CurrentModel, "2. AddPosts", "1. InitialCreate"],
             harness.ViewModel.SnapshotOptions);
 
         Assert.Equal(DiagramsViewModel.CurrentModel, harness.ViewModel.SelectedSnapshot);
@@ -217,7 +218,7 @@ public class DiagramsViewModelTests : IDisposable
         var harness = Build(migrations: [Initial, AddPosts]);
 
         harness.ViewModel.RefreshSnapshotOptions();
-        harness.ViewModel.SelectedSnapshot = "AddPosts";
+        harness.ViewModel.SelectedSnapshot = "2. AddPosts";
         await harness.ViewModel.GenerateCommand.ExecutionTask!;
 
         Assert.True(harness.ViewModel.HasDiagram);
@@ -298,7 +299,7 @@ public class DiagramsViewModelTests : IDisposable
         var second = Build(migrations: [Initial, AddPosts]);
         second.ViewModel.RefreshSnapshotOptions();
 
-        Assert.Equal("AddPosts", second.ViewModel.SelectedSnapshot);
+        Assert.Equal("2. AddPosts", second.ViewModel.SelectedSnapshot);
         Assert.True(second.ViewModel.HasDiagram);
         Assert.Equal("AddPosts: +1 table, +2 columns", second.ViewModel.DiffSummary);
         Assert.Empty(second.Runner.Calls);
