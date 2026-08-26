@@ -1060,6 +1060,20 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private void ToggleLeftPanel() => LeftPanelExpanded = !LeftPanelExpanded;
 
+    /// <summary>
+    /// Selects a tab by index, for the Alt+1..4 accelerators. The parameter arrives as a string
+    /// because that is what a KeyBinding's CommandParameter is; anything unparseable is ignored
+    /// rather than throwing at a keystroke.
+    /// </summary>
+    [RelayCommand]
+    private void SelectTab(string? index)
+    {
+        if (int.TryParse(index, out var value) && value >= 0 && value <= (int)SelectedTab.Tools)
+        {
+            SelectedTabIndex = value;
+        }
+    }
+
     partial void OnOutputExpandedChanged(bool value)
     {
         // App-wide, same as WrapOutput.

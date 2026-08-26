@@ -23,6 +23,10 @@
     <Window.KeyBindings>
         <KeyBinding Gesture="Ctrl+OemComma" Command="{Binding OpenSettingsCommand}" />
         <KeyBinding Gesture="Ctrl+B" Command="{Binding ToggleLeftPanelCommand}" />
+        <KeyBinding Gesture="Alt+D1" Command="{Binding SelectTabCommand}" CommandParameter="0" />
+        <KeyBinding Gesture="Alt+D2" Command="{Binding SelectTabCommand}" CommandParameter="1" />
+        <KeyBinding Gesture="Alt+D3" Command="{Binding SelectTabCommand}" CommandParameter="2" />
+        <KeyBinding Gesture="Alt+D4" Command="{Binding SelectTabCommand}" CommandParameter="3" />
     </Window.KeyBindings>
 
     <Window.Styles>
@@ -400,7 +404,7 @@
             <Grid Name="MainPane" Grid.Column="1" RowDefinitions="*,Auto,200" Margin="0,12,12,0">
 
                 <TabControl Grid.Row="0" SelectedIndex="{Binding SelectedTabIndex}">
-                    <TabItem Header="Migrations">
+                    <TabItem Header="Migrations" ToolTip.Tip="Alt+1">
                         <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="0,8,0,0">
 
                             <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
@@ -577,7 +581,7 @@
                             </Expander>
                         </Grid>
                     </TabItem>
-                    <TabItem Header="Script">
+                    <TabItem Header="Script" ToolTip.Tip="Alt+2">
                         <Grid RowDefinitions="Auto,Auto,Auto,*" Margin="0,8,0,0">
 
                             <!-- Range -->
@@ -670,7 +674,7 @@
                             </Border>
                         </Grid>
                     </TabItem>
-                    <TabItem Header="Diagrams">
+                    <TabItem Header="Diagrams" ToolTip.Tip="Alt+3">
                         <Grid RowDefinitions="Auto,Auto,Auto,*" Margin="0,8,0,0">
 
                             <!-- Toolbar -->
@@ -931,7 +935,7 @@
                             </Grid>
                         </Grid>
                     </TabItem>
-                    <TabItem Header="Tools">
+                    <TabItem Header="Tools" ToolTip.Tip="Alt+4">
                         <StackPanel Margin="0,12,0,0" Spacing="16" MaxWidth="520">
                             <StackPanel Spacing="6">
                                 <TextBlock Text="Pending model changes" Classes="group" />
