@@ -248,11 +248,18 @@
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8"
                             HorizontalAlignment="Right">
-                    <Button Content="Open folder" Command="{Binding ShowWorkspaceFolderCommand}"
-                            ToolTip.Tip="{Binding WorkspacePath, StringFormat='Open {0} in the file browser'}" />
-                    <Button Content="&#x2699;" Command="{Binding OpenSettingsCommand}"
-                            FontSize="{DynamicResource AppFontSizeLarge}" Padding="10,3" MinWidth="36"
-                            ToolTip.Tip="Settings (Ctrl+,): theme, colours, font size, dotnet-ef and app updates." />
+					<!-- Open Workspace Folder -->
+					<Button Command="{Binding ShowWorkspaceFolderCommand}"
+		                    Padding="10,6" MinWidth="36"
+		                    ToolTip.Tip="{Binding WorkspacePath, StringFormat='Open {0} in the file browser'}">
+						<PathIcon Data="{StaticResource folder_regular}" Width="16" Height="16" />
+					</Button>
+					<!-- Open Settings -->
+                    <Button Command="{Binding OpenSettingsCommand}"
+                            Padding="10,6" MinWidth="36"
+                            ToolTip.Tip="Settings (Ctrl+,): theme, colours, font size, dotnet-ef and app updates.">
+                        <PathIcon Data="{StaticResource settings_regular}" Width="16" Height="16" />
+                    </Button>
                     <Button Content="Refresh contexts" Command="{Binding RefreshContextsCommand}" />
                     <Button Content="Cancel" Command="{Binding Session.CancelCommand}" />
                     <Button Content="Close workspace" Command="{Binding CloseWorkspaceCommand}" />
@@ -269,9 +276,11 @@
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <Button Content="Open solution…" Command="{Binding OpenSolutionCommand}" />
                     <Button Content="Open folder…" Command="{Binding OpenFolderCommand}" />
-                    <Button Content="&#x2699;" Command="{Binding OpenSettingsCommand}"
-                            FontSize="{DynamicResource AppFontSizeLarge}" Padding="10,3" MinWidth="36"
-                            ToolTip.Tip="Settings (Ctrl+,): theme, colours, font size, dotnet-ef and app updates." />
+                    <Button Command="{Binding OpenSettingsCommand}"
+                            Padding="10,6" MinWidth="36"
+                            ToolTip.Tip="Settings (Ctrl+,): theme, colours, font size, dotnet-ef and app updates.">
+                        <PathIcon Data="{StaticResource settings_regular}" Width="16" Height="16" />
+                    </Button>
                 </StackPanel>
 
                 <TextBlock Text="Recent" Classes="label" IsVisible="{Binding HasRecentWorkspaces}" />
@@ -295,13 +304,14 @@
                                          the list does not read as a list of delete buttons. -->
                                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4"
                                                 VerticalAlignment="Center">
-                                        <Button Classes="rowAction" Content="&#x1F4C1;"
-                                                FontSize="{DynamicResource AppFontSizeTiny}" Padding="6,2"
+                                        <Button Classes="rowAction" Padding="6,4,6,5"
                                                 CommandParameter="{Binding Path}"
                                                 Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).ShowRecentFolderCommand}"
-                                                ToolTip.Tip="Open folder in the file browser" />
+                                                ToolTip.Tip="Open folder in the file browser">
+                                            <PathIcon Data="{StaticResource folder_regular}" Width="12" Height="12" />
+                                        </Button>
                                         <Button Classes="rowAction"
-                                                Content="&#x2715;" FontSize="{DynamicResource AppFontSizeTiny}" Padding="6,2"
+                                                Content="&#x2715;" FontSize="{DynamicResource AppFontSizeTiny}" Padding="6,3"
                                                 CommandParameter="{Binding Path}"
                                                 Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).RemoveRecentCommand}"
                                                 ToolTip.Tip="Remove from recent" />
