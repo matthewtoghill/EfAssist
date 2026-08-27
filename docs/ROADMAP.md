@@ -32,8 +32,8 @@ v1 publishes `win-x64` only.
 ### Installer packaging — Windows done, the rest still parked, signing outstanding
 Windows installer and in-app auto-update: **done** in Phase 6.
 
-- **Current state:** `build/release.ps1` runs a self-contained publish and hands the directory to Velopack (`vpk pack`), which produces `EfAssist-win-Setup.exe`, a portable zip, and a delta package against the previous release. `vpk upload github` publishes them to GitHub Releases, which is the feed the app reads. In the app, `IAppUpdater`/`VelopackUpdater` back an `UpdateViewModel`: a silent check shortly after launch, a manual "Check for updates" button in the settings modal, a dismissible app-wide banner offering "Update and restart", and an "Update now" button on the home page once that banner has been dismissed. See `PROGRESS.md`.
-- **Not done:** code signing. Nothing produced is signed, so SmartScreen warns on first run until download reputation builds. `vpk pack --signParams` (or `--azureTrustedSignFile`) is the hook; the work is buying and handling a certificate, not the wiring. MSIX, DMG/pkg and AppImage/deb/rpm remain parked with the platforms themselves.
+- **Current state:** `build/release.ps1` runs a self-contained publish and hands the directory to Velopack (`vpk pack --msi`), which produces `EfAssist-win-Setup.exe`, `EfAssist-win.msi`, a portable zip, and a delta package against the previous release. `vpk upload github` publishes them to GitHub Releases, which is the feed the app reads. The `.msi` is a machine-wide bootstrap for Group Policy / Intune deployment: it installs the same per-user application for every user, and updates still come from the in-app updater rather than from a new `.msi`. In the app, `IAppUpdater`/`VelopackUpdater` back an `UpdateViewModel`: a silent check shortly after launch, a manual "Check for updates" button in the settings modal, a dismissible app-wide banner offering "Update and restart", and an "Update now" button on the home page once that banner has been dismissed. See `PROGRESS.md`.
+- **Not done:** code signing. Nothing produced is signed, so SmartScreen warns on first run until download reputation builds. `vpk pack --signParams` (or `--azureTrustedSignFile`) is the hook; the work is buying and handling a certificate, not the wiring. MSIX, DMG/pkg and AppImage/deb/rpm remain parked — MSIX because the `.msi` already covers managed deployment, the rest with the platforms themselves.
 - **Revisit when:** the SmartScreen warning becomes a real obstacle to someone installing it, or macOS/Linux ship.
 - **Cost:** signing is a certificate purchase plus an afternoon. Notarisation on macOS is its own day.
 
@@ -79,13 +79,13 @@ Highlighting, line numbers, Ctrl+F and a wrap toggle: **done**. Code folding: st
 - **Revisit when:** someone is scrolling past collapsed blocks they do not care about. Ctrl+F covers the "find the bit I want" case that folding would otherwise serve.
 - **Cost:** a day for a folding strategy that handles nested `BEGIN`/`END` without being fooled by strings and comments.
 
-### Dedicated Settings dialog
-A Settings window with app-wide and per-workspace sections, rather than options living inline next to what they affect.
+### Dedicated Settings dialog — done, per-workspace sections still parked
+A Settings window, rather than every option living inline next to what it affects. **Done** as a modal.
 
-- **Current state:** app-wide preferences exist in the core settings file (`AppSettings.Display`) and per-workspace ones in a file each under `workspaces/`. Both are edited through inline controls — the Wrap checkbox on the output toolbar, the Wrap checkbox on the Script tab, the theme dropdown on the main toolbar, the discovery and skip-build controls in the workspace panel.
-- **Why parked:** there are about five options. Moving them into a dialog puts them further from where they are used and buys nothing yet.
-- **Revisit when:** the option count outgrows the toolbars, or an option appears that has no natural inline home.
-- **Cost:** a few hours; the settings model already separates app-wide from per-workspace.
+- **Current state:** `SettingsWindow` is modal, reachable from a gear button in the workspace toolbar, from the home page's action row, and from `Ctrl+,`. Three tabs — Appearance (variant, palette preset, the three colours per variant, the two font sizes, the preview tile), Tools (`Update dotnet-ef`) and Updates (version and `Check for updates`). Its `DataContext` is the shell's `MainWindowViewModel`, so those tabs drive the same commands the rest of the app does rather than a second copy. There is no OK button: every change saves as it is made and `Close` is the only action. See `PROGRESS.md`.
+- **Not done:** per-workspace sections. Options that belong to one workspace — discovery mode, migration refresh, skip-build, idempotent, the script output folder — are still inline in the workspace panel, and app-wide display toggles that sit where they are used (the two Wrap checkboxes, line numbers, sort order) stayed there too. The dialog took the options that had no natural inline home; it did not become the only place options live.
+- **Revisit when:** an inline control is genuinely hard to find, or a per-workspace option appears that has nowhere to sit. Moving a checkbox from beside the thing it affects into a dialog is a downgrade unless the toolbar is out of room.
+- **Cost:** hours per section; the settings model already separates app-wide from per-workspace.
 
 ### View a migration's Up/Down changes — done, SQL diffing still parked
 From the migrations list, select a migration and read what it does. **Done.**
@@ -116,11 +116,28 @@ Let the app opt in to GitHub pre-releases, so a beta can be tried without publis
 - **Revisit when:** there is someone to beta-test for.
 - **Cost:** hours for the flag, most of the work is the downgrade path.
 
-### UI/UX and layout pass
-General review of layout, spacing, information density and visual polish across both screens, beyond one-off fixes made in passing.
+### UI/UX and layout pass — partly done, the full pass still parked
+General review of layout, spacing, information density and visual polish across both screens. A run of
+density and navigation changes has landed; the open-ended polish pass has not.
 
-- **Why parked:** no single screen is broken; this is a cross-cutting polish pass, not a bug, and needs a concrete list of what to change rather than an open-ended "make it nicer."
-- **Revisit when:** there's a specific list of layout/UX complaints to work through, or a design pass is scheduled.
+- **Current state (done):** the left workspace panel collapses to a 28px rail with a reopen button, and
+  the state persists (`DisplaySettings.LeftPanelExpanded`, `Ctrl+B`). The output panel and the migration
+  actions group collapse the same way, each with its own persisted flag. Tab navigation has `Alt+1`–`Alt+4`
+  accelerators, advertised as a tooltip on each tab header, driven by `SelectTabCommand` — which ignores an
+  unparseable parameter rather than throwing at a keystroke. "Open folder" buttons reveal the open
+  workspace's folder and any recent entry's folder in the OS file browser without opening the workspace
+  (`ShowWorkspaceFolderCommand` / `ShowRecentFolderCommand`). The main toolbar was re-laid-out around the
+  workspace name (`WorkspaceName`, which keeps a folder's whole name and drops a solution file's
+  extension), and the button set moved to icons. Earlier passes added row numbers on the migrations list
+  and a visible grab handle on the output splitter.
+- **Not done:** the cross-cutting pass itself — a deliberate review of spacing, alignment and information
+  density across both screens, rather than the individual complaints fixed as they were noticed. Window
+  size and position persist, but the Migrations tab splitter position does not (see `PROGRESS.md`
+  § Deliberate shortcuts). There is no keyboard-shortcut reference anywhere in the app; `Ctrl+,`,
+  `Ctrl+B` and `Alt+1`–`4` are discoverable only from a tooltip or the source.
+- **Revisit when:** there's a specific list of layout/UX complaints to work through, or a design pass is
+  scheduled. The one-off route has worked so far, which is an argument for continuing it rather than
+  scheduling the big pass.
 - **Cost:** unknown until scoped — likely several small changes rather than one big one.
 
 ### App icon — done
