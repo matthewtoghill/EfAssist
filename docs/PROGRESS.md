@@ -1627,8 +1627,12 @@ suggest lived somewhere else.
 - **Environment** now labels `dotnet-ef`, `EF Core`, `SDK`, `Provider` and `EfAssist` separately.
   The three versions come from the same `ToolStatus` that builds `EnvironmentSummary`, split into
   `EfToolVersionText` / `EfCoreVersionText` / `SdkVersionText` so the one-line form used on the home
-  page and in the diagnostics header keeps working unchanged. The provider is probed lazily, so it
-  reads "not known yet" rather than pretending to be missing.
+  page and in the diagnostics header keeps working unchanged.
+- The provider is probed by `dotnet ef dbcontext info`, which builds the startup project, so nothing
+  probes it on arrival — refreshing contexts or the migrations list does not either. The card says
+  "not known yet" with a **Check** button beside it, sharing `ScriptViewModel`'s probe and cache, so
+  opening the Script screen or previewing a migration's SQL fills it in too. Visiting a screen
+  should not start a build nobody asked for; the same rule the spurious-diagram fix came from.
 - Its actions are the ones the card's own facts imply: **Update dotnet-ef**, **Copy install
   command**, and a single update slot that shows **Check for updates** until a check finds one and
   then becomes **Update EfAssist and restart**. The Settings button is gone — the rail has a

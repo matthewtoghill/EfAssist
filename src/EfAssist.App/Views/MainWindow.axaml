@@ -1477,9 +1477,19 @@
                                                      known yet rather than missing. -->
                                                 <TextBlock Grid.Row="3" Grid.Column="0" Text="Provider" Classes="lbl" Width="90" Margin="0,4,0,0" />
                                                 <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,4,0,0"
-                                                           Text="{Binding Script.ProviderDetails.ProviderName, FallbackValue='not known yet', TargetNullValue='not known yet'}"
+                                                           IsVisible="{Binding Script.ProviderDetails, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                                           Text="{Binding Script.ProviderDetails.ProviderName}"
                                                            TextTrimming="CharacterEllipsis"
                                                            FontSize="{DynamicResource AppFontSizeSmall}" />
+                                                <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal"
+                                                            Spacing="8" Margin="0,4,0,0"
+                                                            IsVisible="{Binding Script.ProviderDetails, Converter={x:Static ObjectConverters.IsNull}}">
+                                                    <TextBlock Text="not known yet" Classes="hint"
+                                                               VerticalAlignment="Center" />
+                                                    <Button Content="Check"
+                                                            Command="{Binding CheckProviderCommand}"
+                                                            ToolTip.Tip="Asks EF which provider this context uses. Builds the startup project." />
+                                                </StackPanel>
 
                                                 <TextBlock Grid.Row="4" Grid.Column="0" Text="EfAssist" Classes="lbl" Width="90" Margin="0,4,0,0" />
                                                 <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal"

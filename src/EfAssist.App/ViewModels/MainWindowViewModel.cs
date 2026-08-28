@@ -616,6 +616,14 @@ public partial class MainWindowViewModel : ObservableObject
 
 
 
+    /// <summary>
+    /// Reads the provider for the Tools card. Shares <see cref="ScriptViewModel"/>'s probe and cache,
+    /// and is a button rather than something the screen does on arrival because the probe builds the
+    /// startup project — visiting a screen should not start a build nobody asked for.
+    /// </summary>
+    [RelayCommand]
+    private Task CheckProviderAsync() => Script.EnsureProviderKnownAsync();
+
     [RelayCommand]
     private async Task CopyInstallCommandAsync()
     {
