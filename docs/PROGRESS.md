@@ -1366,6 +1366,73 @@ migrations project moves the version with it).
 
 ---
 
+## SQL preview on the database-update confirmation
+
+Every route to `database update` was already confirmed, but the confirmation described the change in
+prose — "2 migration(s) will be applied: AddBlogs, AddPosts" — and prose is not what runs. The
+confirmation now offers to show the SQL itself, generated from the same range the update would use.
+
+- **A button, not a setting.** The dialog grew a `Preview SQL` button rather than an
+  always-show option, and there is deliberately no preference behind it. Generating costs a
+  `dotnet ef migrations script` run, which builds; making that the price of every apply would be a
+  tax on the common case, and a setting to avoid the tax is a setting to explain. The button is the
+  opt-in, and it is available on the one apply that turns out to be worth checking rather than only
+  on the ones planned for.
+- **One rule covers all three routes.** `PreviewRange` scripts from the last migration known to be
+  applied — `"0"`, EF's name for the empty database, when none is — to wherever the update would
+  land. `migrations script` reverses itself when the range runs backwards, so a rollback's preview is
+  its Down SQL without a second code path. Forward, rollback and revert-all share the one method, and
+  `UpdateDatabaseAsync` attaches it in one line with a `with` expression, which is also why dropping a
+  database does not get a button: it runs no migration SQL, and its own `ConfirmRequest` is untouched.
+- **Never cached, unlike the detail pane's preview.** A migration's own file does not change under
+  the cache that `MigrationDetailViewModel` keeps. This script describes what is about to happen to a
+  *database*, and showing one generated before the last apply would be worse than showing none. Every
+  press regenerates, and the press is the user asking for exactly that.
+- **Never `--idempotent`, whatever the shared option says.** `database update` does not run idempotent
+  SQL. Honouring the tick box here would show SQL the run will not execute, which defeats the only
+  job the preview has. The flag is not part of `MigrationFiles.UpdatePreviewPath` for the same reason
+  — there is no second variant to keep in its own file.
+- **Its own window, not a panel in the dialog.** `SqlPreviewWindow` is modal over the confirmation,
+  resizable, and reuses the Script tab's editor arrangement: `AvaloniaEdit`, the per-variant SQL
+  definition reloaded on `ActualThemeVariantChanged`, `SearchPanel.Install` for Ctrl+F, and the
+  app-wide `WrapSql` and `ShowLineNumbers` preferences carried in on the request. A confirmation is a
+  fixed-size question; SQL needs room, scrolling and a search box before it is worth reading at all.
+  Copy and Open file are there because a second pair of eyes usually lives in another window.
+- **Confirm is disabled while it generates; Cancel is not.** Answering a question whose evidence is
+  still being fetched is what the button exists to prevent. Cancel stays live because the dialog is
+  modal and the output panel's own Cancel is behind it — a build that hangs must not trap the user.
+- **A preview that arrives after the question has gone is not shown.** Cancelling mid-generation
+  leaves the in-flight script to finish; `MainWindow.ShowSqlPreviewAsync` checks that the confirmation
+  is still on screen and does nothing if it is not, rather than opening a window attached to a
+  decision already made. `MainWindow` tracks the live `ConfirmWindow` in a field for this, which is
+  also what the preview is owned by so it stacks above rather than behind.
+- **The starting point is stated when it is a guess.** A list loaded with `--no-connect` reports every
+  migration as Unknown, so nothing is *known* to be applied and the script starts from an empty
+  database. That is scripted and shown, with a caveat line saying why and that the real run may do
+  less — the same principle the confirmation text already follows of warning rather than guessing in
+  the risky direction.
+- **A failed generation is not an answer.** If the script command fails, the failure goes to the
+  status line and the confirmation stays up; the user still decides, having seen no SQL.
+
+Verified: `dotnet test EfAssist.slnx` → **614 passed, 0 failed** (was 602). 12 new: nine in
+`MigrationsViewModelTests` (forward scripts from the last applied migration to the latest, a rollback
+scripts the range backwards, revert-all scripts back to `0`, an offline list scripts from `0` and says
+the start is assumed, the preview is never idempotent even when the shared option is on, previewing
+runs no `database update` and declining afterwards still applies nothing, dropping a database offers no
+preview, no preview hook means no button, and a failed generation leaves the confirmation standing) and
+three in `MigrationFilesTests` (the path names its range and shares the preview folder, an absent end
+of the range is spelled out rather than left blank, and an update preview can neither collide with a
+single migration's file nor escape the folder on a stray separator). The test fake now writes to
+`--output`, as the real CLI does, because a preview that reads the file back has nothing to read
+otherwise.
+
+Not verified on screen: the dialog and the preview window have not been exercised against a real
+workspace. The app starts clean and the XAML compiles, and the bindings are checked by `x:DataType`,
+but there is no headless Avalonia harness in the test project, so "the button appears, generates, and
+the window shows highlighted SQL over the confirmation" is an outstanding manual check.
+
+---
+
 ## Deliberate shortcuts
 
 Tracked so they do not rot into "later means never". Each is marked with a `ponytail:` comment at the site.
@@ -1386,6 +1453,8 @@ Tracked so they do not rot into "later means never". Each is marked with a `pony
 | `MainWindow.axaml.cs` SQL document | Rebuilt from scratch on every `Sql` change rather than diffed into the existing document | Scripts get large enough that reallocating the document is visible; a few thousand lines is not |
 | `MigrationFiles.FindSource` | Walks the migrations project for `<id>.cs` on every selection, with no cache | A project is big enough that the walk is noticeable; it is a directory scan against a warm OS cache |
 | `MigrationDetailViewModel` | Cached SQL is invalidated by a list refresh, not by watching the migration files | Editing a migration and re-reading its SQL without refreshing proves confusing |
+| `MigrationsViewModel.PreviewUpdateAsync` | No cache at all, so every press of Preview SQL rebuilds and regenerates | Never, most likely — a stale preview of a pending database change is worse than waiting for a fresh one |
+| `MainWindow._confirm` | A field holding the live `ConfirmWindow`, rather than passing the owner through the view model | A second dialog needs to own a child window; one does not make a pattern |
 | Migrations tab splitter | Column widths are proportional and not persisted | Someone resizes it every session |
 | `VelopackUpdater` | A failure constructing the `UpdateManager` is swallowed, so "no updater here" and "broken updater" look the same to the UI | A user reports the update button doing nothing on an installed build |
 | `UpdateViewModel` | `CanUpdate` is read once and never raises a change notification | It could change while the app is running, which an install cannot |

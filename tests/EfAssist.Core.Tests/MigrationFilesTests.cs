@@ -1,4 +1,4 @@
-using EfAssist.Core;
+﻿using EfAssist.Core;
 
 namespace EfAssist.Core.Tests;
 
@@ -150,5 +150,47 @@ public class MigrationFilesTests : IDisposable
 
         Assert.NotEqual(blog, audit);
         Assert.NotEqual(blog, otherProject);
+    }
+
+    // ---- Update preview path ----
+
+    [Fact]
+    public void An_update_preview_path_names_its_range_and_shares_the_preview_folder()
+    {
+        var path = MigrationFiles.UpdatePreviewPath(ProjectPath, "BlogContext", "Init", "AddUrl");
+
+        Assert.Equal("update_Init_to_AddUrl.sql", Path.GetFileName(path));
+        Assert.Equal(
+            Path.GetDirectoryName(MigrationFiles.ScriptCachePath(ProjectPath, "BlogContext", "Init")),
+            Path.GetDirectoryName(path));
+    }
+
+    [Fact]
+    public void An_update_preview_path_spells_out_an_absent_end_of_the_range()
+    {
+        // Null means "from the empty database" and "to the latest". Writing both of those to the same
+        // file name as some other range would mean reading one range's SQL as another's.
+        Assert.Equal(
+            "update_0_to_latest.sql",
+            Path.GetFileName(MigrationFiles.UpdatePreviewPath(ProjectPath, "BlogContext", null, null)));
+
+        Assert.NotEqual(
+            MigrationFiles.UpdatePreviewPath(ProjectPath, "BlogContext", "A", null),
+            MigrationFiles.UpdatePreviewPath(ProjectPath, "BlogContext", null, "A"));
+    }
+
+    [Fact]
+    public void An_update_preview_cannot_collide_with_a_single_migration_and_survives_a_stray_separator()
+    {
+        Assert.NotEqual(
+            MigrationFiles.ScriptCachePath(ProjectPath, "BlogContext", "Init"),
+            MigrationFiles.UpdatePreviewPath(ProjectPath, "BlogContext", "Init", null));
+
+        // Migration names are C# identifiers, so this should never happen — but these values reach a
+        // path, and a path is not the place to discover that an assumption was wrong.
+        var path = MigrationFiles.UpdatePreviewPath(ProjectPath, "BlogContext", @"..\evil", "x");
+        Assert.Equal(
+            Path.GetDirectoryName(MigrationFiles.ScriptCachePath(ProjectPath, "BlogContext", "Init")),
+            Path.GetDirectoryName(path));
     }
 }

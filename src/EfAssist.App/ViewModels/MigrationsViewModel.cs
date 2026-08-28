@@ -1,6 +1,7 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -64,6 +65,13 @@ public partial class MigrationsViewModel : ObservableObject
 
     /// <summary>Supplied by the view: shows a modal confirmation and reports what the user chose.</summary>
     public Func<ConfirmRequest, Task<bool>>? ConfirmAsync { get; set; }
+
+    /// <summary>
+    /// Supplied by the view: shows generated SQL read-only in its own window, over the confirmation
+    /// that asked for it. Null means no preview is on offer, which is what the dialog reads to decide
+    /// whether to show the button at all.
+    /// </summary>
+    public Func<SqlPreviewRequest, Task>? ShowSqlPreviewAsync { get; set; }
 
     /// <summary>The list as displayed, which may be newest-first. Row numbers stay chronological.</summary>
     public ObservableCollection<MigrationRow> Migrations { get; } = [];
@@ -400,7 +408,17 @@ public partial class MigrationsViewModel : ObservableObject
         // Every route to `database update` is confirmed, including applying forward. A misclick on
         // "Update to latest" would otherwise run migrations against whatever database the startup
         // project is currently pointed at, with no way back.
-        if (!await ConfirmedAsync(BuildUpdateConfirmation(targetMigration)))
+        //
+        // The preview is attached here rather than inside BuildUpdateConfirmation so all three routes
+        // — forward, rollback and revert-all — get it from one line, and dropping a database, which
+        // has no migration SQL to show, keeps its own request untouched.
+        var confirmation = BuildUpdateConfirmation(targetMigration);
+        if (ShowSqlPreviewAsync is not null)
+        {
+            confirmation = confirmation with { PreviewAsync = () => PreviewUpdateAsync(targetMigration) };
+        }
+
+        if (!await ConfirmedAsync(confirmation))
         {
             return;
         }
@@ -433,6 +451,112 @@ public partial class MigrationsViewModel : ObservableObject
         };
 
         await LoadAsync(noBuildFirst: false);
+    }
+
+    /// <summary>
+    /// Generates the SQL a pending <c>database update</c> would run and hands it to the view to show.
+    /// Called from the confirmation dialog's Preview button, so it runs while that dialog is open.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Never cached. The other SQL preview — a single migration's, in the detail pane — is safe to
+    /// cache because a migration's file does not change under it. This one describes what is about to
+    /// happen to a database, and showing a script generated before the last apply would be worse than
+    /// showing none. Each press regenerates, and the press is the user asking for exactly that.
+    /// </para>
+    /// <para>
+    /// Never <c>--idempotent</c> either, whatever the shared option says: <c>database update</c> does
+    /// not run idempotent SQL, and a preview has one job, which is to be what the run will execute.
+    /// </para>
+    /// </remarks>
+    private async Task PreviewUpdateAsync(string? targetMigration)
+    {
+        var target = _target();
+        if (target is null || ShowSqlPreviewAsync is null)
+        {
+            return;
+        }
+
+        var (from, to, uncertain) = PreviewRange(targetMigration);
+        var path = MigrationFiles.UpdatePreviewPath(target.Project, target.Context, from, to);
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _session.StatusMessage = $"Could not use the temp folder for the preview: {ex.Message}";
+            return;
+        }
+
+        var result = await _session.RunAsync(
+            EfArgs.MigrationsScript(target, path, from, to),
+            "Generating the SQL for this update");
+
+        // Null means another command was already running, or this one was cancelled. Either way there
+        // is nothing to show, and the confirmation stays up so the user can decide without it.
+        if (result is null)
+        {
+            return;
+        }
+
+        if (!result.Success)
+        {
+            _session.ReportFailure(result, "Could not generate the SQL for this update.");
+            return;
+        }
+
+        string sql;
+        try
+        {
+            sql = File.ReadAllText(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _session.StatusMessage = $"The SQL was written to {path} but could not be read: {ex.Message}";
+            return;
+        }
+
+        var start = from == "0" ? "an empty database" : $"'{from}'";
+        await ShowSqlPreviewAsync(new SqlPreviewRequest(
+            Title: targetMigration switch
+            {
+                null => "SQL preview — apply all outstanding migrations",
+                "0" => "SQL preview — revert all migrations",
+                var name => $"SQL preview — update to '{name}'",
+            },
+            Sql: sql,
+            Path: path,
+            Caveat: uncertain
+                ? $"Scripted from {start}, because the applied state is unknown — the list was loaded "
+                  + "without a database connection. The real update starts from wherever the database "
+                  + "actually is, so it may run less than this."
+                : null,
+            Wrap: _display.WrapSql,
+            ShowLineNumbers: _display.ShowLineNumbers));
+    }
+
+    /// <summary>
+    /// The range to script for a preview of <paramref name="targetMigration"/>: from where the
+    /// database is now, to where the update would take it.
+    /// </summary>
+    /// <remarks>
+    /// One rule covers all three routes, because <c>migrations script</c> reverses itself when the
+    /// range runs backwards — a <c>from</c> later than <c>to</c> produces the Down SQL, which is
+    /// exactly what a rollback runs. So the start is always the last migration known to be applied,
+    /// and "0" — EF's name for the empty database — when none is.
+    /// </remarks>
+    /// <returns>
+    /// <c>Uncertain</c> is set when any migration's applied state is unknown, which makes the start a
+    /// best guess rather than a fact. The caller says so on the preview rather than hiding it.
+    /// </returns>
+    private (string From, string? To, bool Uncertain) PreviewRange(string? targetMigration)
+    {
+        var lastApplied = _ordered.LastOrDefault(m => m.State == MigrationState.Applied)?.Name;
+        var uncertain = _ordered.Any(m => m.State == MigrationState.Unknown);
+
+        return (lastApplied ?? "0", targetMigration, uncertain);
     }
 
     /// <summary>

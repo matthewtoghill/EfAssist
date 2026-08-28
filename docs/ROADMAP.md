@@ -1,8 +1,8 @@
 ﻿# EfAssist — Roadmap
 
-Ideas deliberately cut from v1. Nothing here is rejected — it's parked with a reason, so the decision doesn't have to be re-argued from scratch.
+Ideas not being worked on now. Nothing here is rejected — it's parked with a reason, so the decision doesn't have to be re-argued from scratch. Two sections: things cut from the v1 plan, and things noticed in the shipped app since. Items that have since been built keep their entry, marked done, because the reasoning is worth as much afterwards as before.
 
-See `PLAN.md` for the v1 scope and the decisions that put these items here.
+See `PLAN.md` for the v1 scope and the decisions that put the first group here, and `PROGRESS.md` for what is actually built.
 
 ---
 
@@ -173,6 +173,97 @@ Three follow-ups came out of it, parked with reasons of their own:
 - **MSAGL layout.** The shipped layout is hand-rolled: rank by dependency depth, two barycentre passes, orthogonal routing. Good enough as a starting point, and manual dragging plus Re-layout is the escape hatch. *Revisit when* the automatic arrangement disappoints on a real model of 50+ entities. *Cost:* a package reference and a rewrite of `DiagramLayoutEngine.Compute` and nothing else — the scene, the renderer and every export are downstream of it.
 - **Cross-context diagrams.** One diagram spanning two `DbContext`s. *Why parked:* two contexts are usually two databases, and drawing them as one schema implies a join that cannot exist. *Revisit when* someone has a genuine multi-context single-database model.
 - **Diagram editing.** Editing an entity on the diagram and generating a migration from it. *Why parked:* that is a modelling tool, not a migrations tool, and it inverts the direction this app works in — code is the source of truth and the snapshot is downstream of it.
+
+---
+
+## Found since v1, parked with a reason
+
+Gaps noticed in the shipped app rather than cut from the v1 plan. Same rules: nothing here is
+rejected, and each carries the reason it is not being done now.
+
+### `dotnet ef migrations bundle`
+Produce a self-contained migration bundle — an executable that applies migrations on a machine with
+no SDK and no source.
+
+- **Why parked:** nothing more than that it has not been asked for yet. It is the one significant EF
+  verb the app does not cover: `EfArgs` has list, add, remove, script, `database update`,
+  `database drop`, `migrations has-pending-model-changes`, `dbcontext list` and `dbcontext info`.
+- **Revisit when:** migrations need to reach a server that has no SDK on it. That is the case a
+  bundle exists for, and the generated script — which the app does produce — is the alternative most
+  people reach for first.
+- **Cost:** small. One `Build` call in `EfArgs`, a save dialog, and the `--self-contained` /
+  `--target-runtime` options if a bundle for another OS is ever wanted. The confirmation and output
+  plumbing already exist.
+
+### `dotnet ef dbcontext optimize`
+Generate a compiled model, which cuts EF's startup cost on a large model.
+
+- **Why parked:** it writes generated source into the user's project, which is a different kind of
+  action from everything else the app does — every other command either reads, or changes a database,
+  or writes a migration the user asked for by name. Generated model files also go stale silently when
+  the model changes, and the app would be the thing that put them there.
+- **Revisit when:** someone has a model big enough for startup time to matter, and wants the app to
+  own regenerating it after every migration rather than doing it by hand.
+- **Cost:** hours for the verb itself. The staleness story is the part that needs thought.
+
+### Filter box on the migrations list
+Type to narrow the list to matching migration names.
+
+- **Why parked:** the list is short on most projects, and it is sorted, so scrolling finds things. The
+  detail pane already has Ctrl+F for searching *inside* a migration, which is the harder need.
+- **Revisit when:** a project has enough migrations that finding one by eye is tedious. Several
+  hundred is where this stops being a preference.
+- **Cost:** small — the Diagrams tab already does exactly this in `DiagramsViewModel.RefreshMatches`,
+  and `Migrations` is a view over `_ordered` already, so filtering it changes no other behaviour.
+  Whatever ships should inherit that method's known limit: a substring scan on every keystroke.
+
+### Keyboard shortcut reference
+Somewhere in the app that lists the shortcuts.
+
+- **Current state:** `Ctrl+,` opens settings, `Ctrl+B` collapses the left panel, `Alt+1`–`Alt+4`
+  select a tab, and Ctrl+F searches inside an editor. Only the `Alt` ones advertise themselves, as a
+  tooltip on each tab header; the rest are discoverable from the source and nowhere else.
+- **Why parked:** there are four to learn, and the app is usable without knowing any of them.
+- **Revisit when:** the list grows past what a tooltip can carry, or someone asks what the shortcuts
+  are — which is the actual signal that they are undiscoverable.
+- **Cost:** an hour for a section in the settings modal. A `?` overlay is a day and buys little more.
+
+### A one-click copy of the command line
+A button that copies just the `dotnet ef …` that ran.
+
+- **Current state:** the command is not hidden. Every run echoes itself into the output panel as
+  `> dotnet ef …` before anything else, and `Copy diagnostics` puts a `Command:` line at the top of
+  the block it copies, alongside the working directory, the exit code and every output line.
+- **Why parked:** the need is already met twice over; this is only about saving a trim of the
+  clipboard. It went on the list as "make the app teach the CLI", and it turns out the app already
+  does.
+- **Revisit when:** someone is regularly pasting a command into a terminal and editing out the rest of
+  the diagnostics block first.
+- **Cost:** under an hour — `EfResult.CommandLine` already exists and is what both surfaces read.
+
+### Persist the Migrations tab splitter
+See `PROGRESS.md` § Deliberate shortcuts: the column widths are proportional and not remembered, while
+the window size, the panel collapse states and the output height all are. Two fields on
+`DisplaySettings` and the same wiring those use. Revisit when someone resizes it every session.
+
+### Code signing
+Already recorded under **Installer packaging** above, as the outstanding half of that item. Repeated
+here only so it is not read as an oversight: nothing produced is signed, SmartScreen warns on first
+run, and the work is buying and handling a certificate rather than wiring `vpk pack --signParams`.
+
+### Exercise the update path against real releases
+Not a feature — a verification that has never been done.
+
+- **Current state:** `PROGRESS.md` § Phase 6 records that the download-and-restart path has never run
+  for real. The check, the banner and the failure handling are covered by unit tests against a fake;
+  Velopack's own download and apply are not. At the time there was no published release to update
+  from or to.
+- **Why it matters now:** there are releases, so the thing that could not be tested can be. An
+  auto-updater that has never updated anything is a feature on trust.
+- **Revisit when:** now, ahead of most of this list — installing an older version, publishing a newer
+  one and watching a real install take it is an afternoon, and it either confirms the feature or finds
+  the bug before a user does.
+- **Cost:** an afternoon, and it costs a throwaway release to update from.
 
 ---
 
