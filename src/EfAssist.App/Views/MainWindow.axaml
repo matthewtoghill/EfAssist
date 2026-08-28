@@ -742,7 +742,7 @@
                                     <Button Command="{Binding Migrations.ToggleSortOrderCommand}"
                                             Content="{Binding Migrations.SortGlyph}"
                                             ToolTip.Tip="{Binding Migrations.SortTooltip}"
-                                            FontSize="{DynamicResource AppFontSizeLarge}" Padding="10,0" MinWidth="36"
+                                            FontSize="{DynamicResource AppFontSizeLarge}" Padding="10,4,10,5" MinWidth="36"
                                             VerticalContentAlignment="Center"
                                             HorizontalContentAlignment="Center" />
 
