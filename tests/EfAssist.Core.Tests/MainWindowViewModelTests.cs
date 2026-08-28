@@ -886,6 +886,9 @@ public class MainWindowViewModelTests : IDisposable
         var viewModel = NewViewModel(new RoutingRunner());
         viewModel.SelectedTabIndex = (int)SelectedTab.Script;
 
+        var changes = new List<string?>();
+        viewModel.PropertyChanged += (_, e) => changes.Add(e.PropertyName);
+
         // A ListBox starts at -1 and a two-way binding can write that back before it reads this
         // side, which left the content area empty.
         viewModel.RailIndex = -1;
@@ -893,7 +896,29 @@ public class MainWindowViewModelTests : IDisposable
         Assert.Equal(SelectedTab.Script, viewModel.CurrentTab);
         Assert.Equal((int)SelectedTab.Script, viewModel.RailIndex);
 
+        // And the rail has to be told to read this side again, or it sits at -1 with nothing
+        // highlighted even though a screen is showing.
+        Assert.Contains(nameof(MainWindowViewModel.RailIndex), changes);
+
         viewModel.RailIndex = (int)SelectedTab.Tools;
         Assert.Equal(SelectedTab.Tools, viewModel.CurrentTab);
+    }
+
+    [Fact]
+    public void Exactly_one_screen_is_ever_showing()
+    {
+        var viewModel = NewViewModel(new RoutingRunner());
+
+        // The rail replaced the tab strip, so which screen is visible is a property of this class
+        // rather than a control's selection — that is what stopped the content area coming up blank.
+        Assert.Equal(
+            [true, false, false, false],
+            new[] { viewModel.ShowMigrations, viewModel.ShowScript, viewModel.ShowDiagrams, viewModel.ShowTools });
+
+        viewModel.SelectedTabIndex = (int)SelectedTab.Diagrams;
+
+        Assert.Equal(
+            [false, false, true, false],
+            new[] { viewModel.ShowMigrations, viewModel.ShowScript, viewModel.ShowDiagrams, viewModel.ShowTools });
     }
 }

@@ -17,7 +17,7 @@ Last updated: 2026-08-28.
 | D3–D4 — Model diagrams: the tab, interaction, persistence | **Done** |
 | D5–D6 — Model diagrams: export, settings, docs | **Done** |
 
-Current state: `dotnet test EfAssist.slnx` → **632 passed, 0 failed**, about 70 seconds. The app launches, opens a real solution or folder, lists migrations with their applied state, can add, apply, roll back, remove and drop, generates SQL scripts into a syntax-highlighted viewer, draws the model as an interactive entity-relationship or class diagram that survives a restart and exports to JSON, SVG, PNG, PDF and Mermaid, and explains the common EF failures in plain language without hiding the raw output.
+Current state: `dotnet test EfAssist.slnx` → **633 passed, 0 failed**, about 70 seconds. The app launches, opens a real solution or folder, lists migrations with their applied state, can add, apply, roll back, remove and drop, generates SQL scripts into a syntax-highlighted viewer, draws the model as an interactive entity-relationship or class diagram that survives a restart and exports to JSON, SVG, PNG, PDF and Mermaid, and explains the common EF failures in plain language without hiding the raw output.
 
 The diagrams work is complete through D6, plus per-migration diagrams and diffing: the snapshot picker draws the model as of any migration from its `.Designer.cs`, and marks what that migration added, removed and changed against the one before it. The three remaining follow-ups — MSAGL layout, cross-context diagrams and diagram editing — are parked in `ROADMAP.md` with reasons.
 
@@ -1581,10 +1581,21 @@ workspace. Home is `CloseWorkspaceCommand` — the start screen is where the rec
 Both reported as "sometimes opens onto a blank page, and Activity says it generated a diagram". Two
 unrelated causes, both fixed at the root:
 
-- **The blank page was the rail.** A `ListBox` starts with `SelectedIndex` at -1, and a two-way
-  binding can write that back before it has read the view model, leaving the `TabControl` with
-  nothing selected and an empty content area. The rail now binds to `RailIndex`, which ignores a
-  negative index — "nothing selected" is not a state this app has.
+- **The blank page was the hidden `TabItem`s, and the rail on top of that.** The first attempt
+  guessed the rail alone: a `ListBox` starts with `SelectedIndex` at -1 and a two-way binding can
+  write that back, so `RailIndex` now ignores a negative index and raises its own change so the rail
+  is told to read the view model again rather than sitting at -1 with nothing highlighted. That was
+  real but not sufficient. The `TabControl` was also being asked to select a container that had been
+  hidden to get rid of the header strip, which it is entitled to refuse — leaving `SelectedContent`
+  null and the content area empty. There is no `TabControl` now: the four screens sit in one cell,
+  each visible on its own view-model flag, so which screen is showing cannot depend on a control's
+  selection logic.
+
+  Diagnosed with a throwaway headless probe rather than by reasoning: it opened the real window,
+  set a workspace open, and printed which screen headings the visual tree reported as visible. On
+  the previous commit that printed nothing visible with the rail at -1; it now prints exactly one
+  screen visible at every step. The probe was not kept — the two view-model tests it justified
+  were.
 - **The diagram generation was the snapshot picker.** `RefreshSnapshotOptions` runs as soon as a
   workspace's migrations have loaded, and clearing the list under a ComboBox bound to `SelectedItem`
   makes it write null back. That arrived as an ordinary snapshot change, and switching snapshot
@@ -1600,7 +1611,7 @@ generation had been started. Checked by removing the guard and watching it fail.
 
 ### Verified
 
-- 632 passed, 0 failed. New tests: a failure arrives expanded while a success stays collapsed and
+- 633 passed, 0 failed. New tests: a failure arrives expanded while a success stays collapsed and
   expanding one card leaves the other alone; `ShowRawOutput` mirrors `ShowActivity` both ways and
   `ShowInRawOutput` moves both plus scrolls to the recorded line; the strip's fold command.
 - The app launches cleanly. As before, nothing has been looked at on screen — the segmented

@@ -204,6 +204,20 @@ public partial class MainWindowViewModel : ObservableObject
     public SelectedTab CurrentTab => (SelectedTab)SelectedTabIndex;
 
     /// <summary>
+    /// Which screen is showing. Four flags rather than a <c>TabControl</c>'s selection: the rail
+    /// replaced the tab strip, and the trick that hid the strip — invisible <c>TabItem</c>s — meant
+    /// asking a control to select a container it is entitled to refuse, which is what left the
+    /// content area blank when a workspace opened.
+    /// </summary>
+    public bool ShowMigrations => CurrentTab == SelectedTab.Migrations;
+
+    public bool ShowScript => CurrentTab == SelectedTab.Script;
+
+    public bool ShowDiagrams => CurrentTab == SelectedTab.Diagrams;
+
+    public bool ShowTools => CurrentTab == SelectedTab.Tools;
+
+    /// <summary>
     /// What the navigation rail binds to. A <c>ListBox</c> starts with <c>SelectedIndex</c> at -1 and
     /// a two-way binding can write that back before it has read this side, which left no screen
     /// selected and an empty content area. "Nothing selected" is not a state this app has, so it is
@@ -217,7 +231,12 @@ public partial class MainWindowViewModel : ObservableObject
             if (value >= 0)
             {
                 SelectedTabIndex = value;
+                return;
             }
+
+            // Ignoring it is not enough: the rail is left sitting at -1 with nothing highlighted, so
+            // it has to be told to read this side again.
+            OnPropertyChanged();
         }
     }
 
@@ -1026,6 +1045,10 @@ public partial class MainWindowViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(CurrentTab));
         OnPropertyChanged(nameof(RailIndex));
+        OnPropertyChanged(nameof(ShowMigrations));
+        OnPropertyChanged(nameof(ShowScript));
+        OnPropertyChanged(nameof(ShowDiagrams));
+        OnPropertyChanged(nameof(ShowTools));
 
         switch ((SelectedTab)value)
         {

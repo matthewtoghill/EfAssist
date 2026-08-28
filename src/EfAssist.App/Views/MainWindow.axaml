@@ -197,14 +197,6 @@
             <Setter Property="IsVisible" Value="True" />
         </Style>
 
-        <!-- The tab host keeps every TabItem, its content switching and the Alt+1..4 accelerators;
-             the rail replaces only the header strip. In Avalonia a TabItem *is* its header — the
-             selected item's content is rendered by the TabControl's own presenter — so hiding the
-             items hides the strip and nothing else. -->
-        <Style Selector="TabControl.railed > TabItem">
-            <Setter Property="IsVisible" Value="False" />
-        </Style>
-
         <!-- Breadcrumb pickers in the top bar. The caption says which choice the picker is, and it
              is the first thing to go when the window is too narrow to carry all three. -->
         <Style Selector="TextBlock.pillLabel">
@@ -711,9 +703,14 @@
             <!-- Tabs above, console below, draggable divider between. -->
             <Grid Name="MainPane" Grid.Column="1" RowDefinitions="*,Auto,200" Margin="0,12,12,0">
 
-                <TabControl Grid.Row="0" Classes="railed" SelectedIndex="{Binding SelectedTabIndex}">
-                    <TabItem Header="Migrations" ToolTip.Tip="Alt+1">
-                        <Grid RowDefinitions="Auto,Auto,*" Margin="0,4,0,0">
+                <!-- The four screens, one cell, one visible at a time. There is no TabControl:
+                     the rail replaced the header strip, and hiding the TabItems to get rid of it
+                     meant asking the control to select a container it could refuse — which is what
+                     left the content area blank when a workspace opened. Which screen is showing is
+                     now a property of the view model and nothing else. -->
+                <Grid Grid.Row="0">
+                    <Grid RowDefinitions="Auto,Auto,*" Margin="0,4,0,0"
+                          IsVisible="{Binding ShowMigrations}">
 
                             <!-- Screen header: what this is, then the one primary action. The actions
                                  that belong to a particular migration are on the migration, in the
@@ -956,9 +953,8 @@
                             </Border>
                             </Grid>
                         </Grid>
-                    </TabItem>
-                    <TabItem Header="Script" ToolTip.Tip="Alt+2">
-                        <Grid RowDefinitions="Auto,Auto,Auto,*" Margin="0,4,0,0">
+                    <Grid RowDefinitions="Auto,Auto,Auto,*" Margin="0,4,0,0"
+                          IsVisible="{Binding ShowScript}">
 
                             <!-- Screen header, same shape as every other screen: what this is, then
                                  the one action that does the work. -->
@@ -1084,9 +1080,8 @@
                                 </Grid>
                             </Border>
                         </Grid>
-                    </TabItem>
-                    <TabItem Header="Diagrams" ToolTip.Tip="Alt+3">
-                        <Grid RowDefinitions="Auto,Auto,Auto,*" Margin="0,4,0,0">
+                    <Grid RowDefinitions="Auto,Auto,Auto,*" Margin="0,4,0,0"
+                          IsVisible="{Binding ShowDiagrams}">
 
                             <!-- Screen header. What gets drawn is decided here — which snapshot, and
                                  whether a migration's changes are marked — next to the action that
@@ -1389,9 +1384,7 @@
                                 </Border>
                             </Grid>
                         </Grid>
-                    </TabItem>
-                    <TabItem Header="Tools" ToolTip.Tip="Alt+4">
-                        <ScrollViewer Margin="0,4,0,0">
+                    <ScrollViewer Margin="0,4,0,0" IsVisible="{Binding ShowTools}">
                             <StackPanel Spacing="10">
 
                                 <StackPanel Spacing="2" Margin="0,0,0,4">
@@ -1501,8 +1494,7 @@
                                 </Grid>
                             </StackPanel>
                         </ScrollViewer>
-                    </TabItem>
-                </TabControl>
+                </Grid>
 
                 <!-- Nothing to resize while the console is folded away. The splitter's own height is
                      what separates the console from the tab above it, so a spacer of the same height
