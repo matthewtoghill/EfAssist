@@ -962,4 +962,27 @@ public class DiagramsViewModelTests : IDisposable
         Assert.Null(harness.ViewModel.Model);
         Assert.Null(harness.ViewModel.SelectedEntity);
     }
+
+    [Fact]
+    public void Rebuilding_the_snapshot_list_never_draws_anything()
+    {
+        var harness = Build(migrations: [Initial, AddPosts]);
+
+        // What the shell does as soon as a workspace's migrations have loaded.
+        harness.ViewModel.RefreshSnapshotOptions();
+
+        // A ComboBox bound to SelectedItem writes null back while its list is being rebuilt. That
+        // used to arrive as a snapshot change and start a generation on workspace open. IsRunning is
+        // the synchronous signal: the generation itself finishes on another turn, so an empty run
+        // list on its own would pass whether or not one had been started.
+        harness.ViewModel.SelectedSnapshot = "";
+        Assert.False(harness.Session.IsRunning);
+
+        harness.ViewModel.RefreshSnapshotOptions();
+        Assert.False(harness.Session.IsRunning);
+
+        Assert.Empty(harness.Session.Runs);
+        Assert.False(harness.ViewModel.HasDiagram);
+        Assert.Equal(DiagramsViewModel.CurrentModel, harness.ViewModel.SelectedSnapshot);
+    }
 }

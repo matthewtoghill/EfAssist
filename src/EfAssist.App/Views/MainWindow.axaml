@@ -642,7 +642,7 @@
                  already use, so the rail and the accelerators cannot disagree. -->
             <Border Grid.Column="0" BorderThickness="0,0,1,0" BorderBrush="{DynamicResource SubtleBorderBrush}">
                 <Grid RowDefinitions="*,Auto" Width="62">
-                <ListBox Grid.Row="0" Classes="rail" SelectedIndex="{Binding SelectedTabIndex}">
+                <ListBox Grid.Row="0" Classes="rail" SelectedIndex="{Binding RailIndex}">
                     <ListBoxItem ToolTip.Tip="Migrations (Alt+1)">
                         <Grid ColumnDefinitions="Auto,*">
                             <Border Grid.Column="0" Classes="railMark" Width="3" Margin="-8,0,0,0"

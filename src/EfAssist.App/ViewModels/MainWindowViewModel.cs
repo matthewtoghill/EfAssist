@@ -203,6 +203,24 @@ public partial class MainWindowViewModel : ObservableObject
     /// <summary>The same thing, named. See <see cref="SelectedTab"/>.</summary>
     public SelectedTab CurrentTab => (SelectedTab)SelectedTabIndex;
 
+    /// <summary>
+    /// What the navigation rail binds to. A <c>ListBox</c> starts with <c>SelectedIndex</c> at -1 and
+    /// a two-way binding can write that back before it has read this side, which left no screen
+    /// selected and an empty content area. "Nothing selected" is not a state this app has, so it is
+    /// ignored rather than propagated.
+    /// </summary>
+    public int RailIndex
+    {
+        get => SelectedTabIndex;
+        set
+        {
+            if (value >= 0)
+            {
+                SelectedTabIndex = value;
+            }
+        }
+    }
+
     // ---- Supplied by the view, which owns the TopLevel these need ----
 
     public Func<Task<string?>>? PickSolutionAsync { get; set; }
@@ -650,6 +668,10 @@ public partial class MainWindowViewModel : ObservableObject
         Session.WorkingDirectory = WorkingDirectory;
         HasWorkspace = true;
 
+        // Always the migrations list: it is what the app is for, and it is the only screen that says
+        // something useful before anything else has been asked for.
+        SelectedTabIndex = (int)SelectedTab.Migrations;
+
         // Key settings off the solution when there is one, so opening the folder and opening the
         // solution inside it are treated as the same workspace.
         var key = workspace.SolutionPath ?? workspace.Path;
@@ -1003,6 +1025,7 @@ public partial class MainWindowViewModel : ObservableObject
     partial void OnSelectedTabIndexChanged(int value)
     {
         OnPropertyChanged(nameof(CurrentTab));
+        OnPropertyChanged(nameof(RailIndex));
 
         switch ((SelectedTab)value)
         {

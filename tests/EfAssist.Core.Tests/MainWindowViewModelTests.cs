@@ -865,4 +865,35 @@ public class MainWindowViewModelTests : IDisposable
         viewModel.ToggleOutputCommand.Execute(null);
         Assert.Equal(expanded, viewModel.OutputExpanded);
     }
+
+    [Fact]
+    public async Task A_workspace_always_opens_on_the_migrations_screen()
+    {
+        var solution = CreateSolution();
+        var runner = new RoutingRunner();
+        var viewModel = NewViewModel(runner);
+
+        viewModel.SelectedTabIndex = (int)SelectedTab.Diagrams;
+
+        await OpenAsync(viewModel, solution);
+
+        Assert.Equal(SelectedTab.Migrations, viewModel.CurrentTab);
+    }
+
+    [Fact]
+    public void The_rail_cannot_leave_the_app_with_no_screen_selected()
+    {
+        var viewModel = NewViewModel(new RoutingRunner());
+        viewModel.SelectedTabIndex = (int)SelectedTab.Script;
+
+        // A ListBox starts at -1 and a two-way binding can write that back before it reads this
+        // side, which left the content area empty.
+        viewModel.RailIndex = -1;
+
+        Assert.Equal(SelectedTab.Script, viewModel.CurrentTab);
+        Assert.Equal((int)SelectedTab.Script, viewModel.RailIndex);
+
+        viewModel.RailIndex = (int)SelectedTab.Tools;
+        Assert.Equal(SelectedTab.Tools, viewModel.CurrentTab);
+    }
 }

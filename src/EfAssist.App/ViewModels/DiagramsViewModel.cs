@@ -399,22 +399,30 @@ public partial class DiagramsViewModel : ObservableObject
 
         var migrations = _migrations();
 
-        SnapshotOptions.Clear();
-        SnapshotOptions.Add(CurrentModel);
-        for (var i = migrations.Count - 1; i >= 0; i--)
+        // The whole rebuild is guarded, not just the final assignment. Clearing the list under a
+        // ComboBox bound to SelectedItem makes it write null back, and that arrives here as a
+        // snapshot change like any other — which used to start a generation on workspace open,
+        // because this runs as soon as the migrations list has loaded.
+        SetWithoutRegenerating(() =>
         {
-            SnapshotOptions.Add(LabelFor(migrations[i].Name, i + 1));
-        }
+            SnapshotOptions.Clear();
+            SnapshotOptions.Add(CurrentModel);
+            for (var i = migrations.Count - 1; i >= 0; i--)
+            {
+                SnapshotOptions.Add(LabelFor(migrations[i].Name, i + 1));
+            }
 
-        // A saved diagram of a migration the list does not have — because it has not been loaded yet,
-        // or because the migration has since been removed — keeps its entry rather than silently
-        // becoming a diagram of something else. Unnumbered: there is no known position for it.
-        if (selected != CurrentModel && !SnapshotOptions.Contains(selected))
-        {
-            SnapshotOptions.Insert(1, selected);
-        }
+            // A saved diagram of a migration the list does not have — because it has not been loaded
+            // yet, or because the migration has since been removed — keeps its entry rather than
+            // silently becoming a diagram of something else. Unnumbered: there is no known position
+            // for it.
+            if (selected != CurrentModel && !SnapshotOptions.Contains(selected))
+            {
+                SnapshotOptions.Insert(1, selected);
+            }
 
-        SetWithoutRegenerating(() => SelectedSnapshot = selected);
+            SelectedSnapshot = selected;
+        });
 
         OnPropertyChanged(nameof(HasMigrations));
     }
@@ -1467,6 +1475,13 @@ public partial class DiagramsViewModel : ObservableObject
     partial void OnSelectedSnapshotChanged(string value)
     {
         OnPropertyChanged(nameof(IsMigrationSelected));
+
+        // Nothing selected is not a snapshot: a ComboBox whose list is being rebuilt writes null
+        // back, and there is nothing to draw for it.
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return;
+        }
 
         // Generated rather than offered: switching migration costs one file read, and flicking
         // through the history to watch the model grow is the whole point of the picker. The

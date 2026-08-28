@@ -17,7 +17,7 @@ Last updated: 2026-08-28.
 | D3–D4 — Model diagrams: the tab, interaction, persistence | **Done** |
 | D5–D6 — Model diagrams: export, settings, docs | **Done** |
 
-Current state: `dotnet test EfAssist.slnx` → **629 passed, 0 failed**, about 70 seconds. The app launches, opens a real solution or folder, lists migrations with their applied state, can add, apply, roll back, remove and drop, generates SQL scripts into a syntax-highlighted viewer, draws the model as an interactive entity-relationship or class diagram that survives a restart and exports to JSON, SVG, PNG, PDF and Mermaid, and explains the common EF failures in plain language without hiding the raw output.
+Current state: `dotnet test EfAssist.slnx` → **632 passed, 0 failed**, about 70 seconds. The app launches, opens a real solution or folder, lists migrations with their applied state, can add, apply, roll back, remove and drop, generates SQL scripts into a syntax-highlighted viewer, draws the model as an interactive entity-relationship or class diagram that survives a restart and exports to JSON, SVG, PNG, PDF and Mermaid, and explains the common EF failures in plain language without hiding the raw output.
 
 The diagrams work is complete through D6, plus per-migration diagrams and diffing: the snapshot picker draws the model as of any migration from its `.Designer.cs`, and marks what that migration added, removed and changed against the one before it. The three remaining follow-ups — MSAGL layout, cross-context diagrams and diagram editing — are parked in `ROADMAP.md` with reasons.
 
@@ -1576,9 +1576,31 @@ workspace. Home is `CloseWorkspaceCommand` — the start screen is where the rec
 - `Ctrl+`` ` folds and unfolds the output pane — the gesture a terminal panel usually answers to, and
   free here. It is on the shortcut sheet, which is the list.
 
+### Two bugs on opening a workspace
+
+Both reported as "sometimes opens onto a blank page, and Activity says it generated a diagram". Two
+unrelated causes, both fixed at the root:
+
+- **The blank page was the rail.** A `ListBox` starts with `SelectedIndex` at -1, and a two-way
+  binding can write that back before it has read the view model, leaving the `TabControl` with
+  nothing selected and an empty content area. The rail now binds to `RailIndex`, which ignores a
+  negative index — "nothing selected" is not a state this app has.
+- **The diagram generation was the snapshot picker.** `RefreshSnapshotOptions` runs as soon as a
+  workspace's migrations have loaded, and clearing the list under a ComboBox bound to `SelectedItem`
+  makes it write null back. That arrived as an ordinary snapshot change, and switching snapshot
+  generates by design — so opening a workspace drew a diagram nobody asked for, whenever the
+  Diagrams screen had been realised. The whole rebuild is now inside the guard, and an empty
+  selection is ignored wherever it comes from.
+- A workspace also now explicitly opens on Migrations rather than on whatever was showing before it.
+  Tab selection was never persisted; this makes it deliberate rather than incidental.
+
+The regression test for the second one asserts on `Session.IsRunning` immediately after the change:
+generation completes on a later turn, so an empty run list on its own passed whether or not a
+generation had been started. Checked by removing the guard and watching it fail.
+
 ### Verified
 
-- 629 passed, 0 failed. New tests: a failure arrives expanded while a success stays collapsed and
+- 632 passed, 0 failed. New tests: a failure arrives expanded while a success stays collapsed and
   expanding one card leaves the other alone; `ShowRawOutput` mirrors `ShowActivity` both ways and
   `ShowInRawOutput` moves both plus scrolls to the recorded line; the strip's fold command.
 - The app launches cleanly. As before, nothing has been looked at on screen — the segmented
