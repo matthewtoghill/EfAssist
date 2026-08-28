@@ -196,8 +196,9 @@ public sealed class DisplaySettings
     public bool OutputExpanded { get; set; } = true;
 
     /// <summary>
-    /// Show the Diagrams tab's view options expanded. Off by default: the surface wants the height,
-    /// and the defaults are the useful ones.
+    /// Dead since the layout pass: the view options are a flyout on the Diagrams control row rather
+    /// than an expander that spent screen height staying open. Kept so an older settings file still
+    /// round-trips.
     /// </summary>
     public bool DiagramOptionsExpanded { get; set; }
 

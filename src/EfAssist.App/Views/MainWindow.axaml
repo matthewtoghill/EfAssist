@@ -980,37 +980,31 @@
                         </Grid>
                     </TabItem>
                     <TabItem Header="Diagrams" ToolTip.Tip="Alt+3">
-                        <Grid RowDefinitions="Auto,Auto,Auto,*" Margin="0,8,0,0">
+                        <Grid RowDefinitions="Auto,Auto,Auto,*" Margin="0,4,0,0">
 
-                            <!-- Toolbar -->
-                            <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,8">
-                                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6"
-                                            VerticalAlignment="Center">
-                                    <Button Content="Generate diagram" Command="{Binding Diagrams.GenerateCommand}"
-                                            ToolTip.Tip="Reads the model snapshot for this context. No build, no database." />
+                            <!-- Screen header. What gets drawn is decided here — which snapshot, and
+                                 whether a migration's changes are marked — next to the action that
+                                 draws it. How it is drawn is the row below. -->
+                            <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+                                <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Bottom">
+                                    <TextBlock Text="Diagrams" Classes="heading" />
+                                    <TextBlock Classes="hint"
+                                               Text="Read from the model snapshot — no build, no database." />
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"
+                                            VerticalAlignment="Bottom">
                                     <ComboBox ItemsSource="{Binding Diagrams.SnapshotOptions}"
                                               SelectedItem="{Binding Diagrams.SelectedSnapshot}"
-                                              MinWidth="180"
+                                              MinWidth="200"
                                               ToolTip.Tip="Which snapshot to draw: the context's current model, or the model as of one migration, from its .Designer.cs file." />
                                     <CheckBox Content="Mark changes"
                                               IsChecked="{Binding Diagrams.HighlightChanges}"
                                               IsEnabled="{Binding Diagrams.IsMigrationSelected}"
                                               ToolTip.Tip="Colour what the selected migration added, removed and changed, against the migration before it. Removed tables and columns are drawn from the earlier snapshot so there is something to strike out." />
-                                    <Button Content="{Binding Diagrams.SwitchViewLabel}"
-                                            Command="{Binding Diagrams.SwitchViewCommand}"
-                                            ToolTip.Tip="Switch between the table view and the class view. Each keeps its own arrangement." />
-                                    <Button Content="{Binding Diagrams.FlowLabel}"
-                                            Command="{Binding Diagrams.SwitchFlowCommand}"
-                                            ToolTip.Tip="Run the ranks the other way: left to right, or top to bottom. A shallow model reads better top to bottom. Each direction keeps its own arrangement." />
-                                    <Button Content="{Binding Diagrams.LockLabel}"
-                                            Command="{Binding Diagrams.ToggleLockCommand}"
-                                            ToolTip.Tip="{Binding Diagrams.LockTooltip}" />
-                                    <Button Content="Re-layout" Command="{Binding Diagrams.ReLayoutCommand}"
-                                            ToolTip.Tip="Arrange this view automatically, discarding nodes you have moved by hand." />
 
-                                    <!-- One menu rather than five buttons: the toolbar already carries
-                                         ten controls, and an export is a deliberate act rather than
-                                         something reached for mid-thought. -->
+                                    <!-- One menu rather than five buttons: an export is a deliberate
+                                         act rather than something reached for mid-thought. -->
                                     <DropDownButton Content="Export"
                                                     IsEnabled="{Binding Diagrams.HasDiagram}"
                                                     ToolTip.Tip="Write the diagram out as a file. Vector and image exports always use light colours, which is what a document or a pull request wants.">
@@ -1038,23 +1032,88 @@
                                             </MenuFlyout>
                                         </DropDownButton.Flyout>
                                     </DropDownButton>
+
+                                    <Button Classes="accent" Content="Generate diagram"
+                                            Command="{Binding Diagrams.GenerateCommand}"
+                                            ToolTip.Tip="Reads the model snapshot for this context. No build, no database." />
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- How it is drawn. Grouped by what each control does rather than as ten
+                                 buttons of equal weight: what the nodes are, which way the ranks run,
+                                 then arrangement, then the rest folded into one menu. Zoom is not here
+                                 — it belongs to the surface, and sits on it. -->
+                            <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,8">
+                                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6"
+                                            VerticalAlignment="Center">
+                                    <Button Content="{Binding Diagrams.SwitchViewLabel}"
+                                            Command="{Binding Diagrams.SwitchViewCommand}"
+                                            ToolTip.Tip="Switch between the table view and the class view. Each keeps its own arrangement." />
+                                    <Button Content="{Binding Diagrams.FlowLabel}"
+                                            Command="{Binding Diagrams.SwitchFlowCommand}"
+                                            ToolTip.Tip="Run the ranks the other way: left to right, or top to bottom. A shallow model reads better top to bottom. Each direction keeps its own arrangement." />
+
+                                    <Border Width="1" Height="24" Margin="2,0"
+                                            Background="{DynamicResource SubtleBorderBrush}" />
+
+                                    <Button Content="{Binding Diagrams.LockLabel}"
+                                            Command="{Binding Diagrams.ToggleLockCommand}"
+                                            ToolTip.Tip="{Binding Diagrams.LockTooltip}" />
+                                    <Button Content="Re-layout" Command="{Binding Diagrams.ReLayoutCommand}"
+                                            ToolTip.Tip="Arrange this view automatically, discarding nodes you have moved by hand." />
+
+                                    <!-- Nine switches that change what is on a node. A flyout rather
+                                         than an expander: they are set once and then left alone, and
+                                         an expander spent screen height saying so. -->
+                                    <Button Content="View options">
+                                        <Button.Flyout>
+                                            <Flyout Placement="BottomEdgeAlignedLeft">
+                                                <StackPanel Spacing="8" Width="300">
+                                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                                        <TextBlock Text="Properties" VerticalAlignment="Center" Opacity="0.7" />
+                                                        <ComboBox ItemsSource="{Binding Diagrams.PropertyDetails}"
+                                                                  SelectedItem="{Binding Diagrams.Properties}" MinWidth="170">
+                                                            <ComboBox.ItemTemplate>
+                                                                <DataTemplate>
+                                                                    <TextBlock Text="{Binding Converter={x:Static app:OutputConverters.SpacedName}}" />
+                                                                </DataTemplate>
+                                                            </ComboBox.ItemTemplate>
+                                                        </ComboBox>
+                                                    </StackPanel>
+                                                    <CheckBox Content="Show types" IsChecked="{Binding Diagrams.ShowTypes}"
+                                                              ToolTip.Tip="The column type beside each row in the table view, or the CLR type in the class view." />
+                                                    <CheckBox Content="Mark nullable" IsChecked="{Binding Diagrams.ShowNullability}"
+                                                              ToolTip.Tip="A trailing ? on columns that allow null." />
+                                                    <CheckBox Content="Show indexes" IsChecked="{Binding Diagrams.ShowIndexes}"
+                                                              ToolTip.Tip="An extra row per index. Useful when reading the schema, noisy at a glance." />
+                                                    <CheckBox Content="Show navigations" IsChecked="{Binding Diagrams.ShowNavigations}"
+                                                              IsEnabled="{Binding Diagrams.CanShowNavigations}"
+                                                              ToolTip.Tip="Class view only — a navigation is not a column." />
+                                                    <CheckBox Content="Show inheritance" IsChecked="{Binding Diagrams.ShowInheritance}"
+                                                              ToolTip.Tip="Dashed edges from a derived type to its base in a type-per-hierarchy mapping." />
+                                                    <CheckBox Content="Collapse join tables" IsChecked="{Binding Diagrams.CollapseJoinEntities}"
+                                                              ToolTip.Tip="Draw a many-to-many as one edge instead of showing the table EF generated for it." />
+                                                    <CheckBox Content="Inline owned types" IsChecked="{Binding Diagrams.InlineOwnedTypes}"
+                                                              ToolTip.Tip="Fold an owned reference into its owner, which is where its columns actually live. An owned collection has its own table and always stays separate." />
+                                                    <CheckBox Content="Label delete behaviour" IsChecked="{Binding Diagrams.ShowDeleteBehavior}"
+                                                              ToolTip.Tip="Write Cascade, Restrict or SetNull on each relationship. Accurate, and a lot of text." />
+                                                </StackPanel>
+                                            </Flyout>
+                                        </Button.Flyout>
+                                    </Button>
+
+                                    <TextBlock Text="{Binding Diagrams.SourceSummary}" Classes="hint"
+                                               VerticalAlignment="Center" Margin="4,0,0,0"
+                                               TextTrimming="CharacterEllipsis" MaxWidth="260" />
                                 </StackPanel>
 
                                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6"
                                             VerticalAlignment="Center">
                                     <TextBox Text="{Binding Diagrams.Search}" MinWidth="170"
-                                             PlaceholderText="Search.." />
+                                             PlaceholderText="Search entities" />
                                     <TextBlock Text="{Binding Diagrams.SearchSummary}" Classes="hint"
                                                VerticalAlignment="Center" MinWidth="58" />
                                     <Button Content="Next" Command="{Binding Diagrams.NextMatchCommand}" />
-                                    <Button Name="DiagramZoomOut" Content="&#x2212;" MinWidth="32"
-                                            ToolTip.Tip="Zoom out" />
-                                    <Button Name="DiagramZoomReset" Content="100%"
-                                            ToolTip.Tip="Reset the zoom and position" />
-                                    <Button Name="DiagramZoomIn" Content="+" MinWidth="32"
-                                            ToolTip.Tip="Zoom in" />
-                                    <Button Name="DiagramFit" Content="Fit"
-                                            ToolTip.Tip="Fit the whole diagram in the window" />
                                     <ToggleButton Content="Details" IsChecked="{Binding Diagrams.DetailVisible}"
                                                   ToolTip.Tip="Show the metadata pane for the selected entity." />
                                 </StackPanel>
@@ -1062,78 +1121,20 @@
 
                             <!-- Two separate staleness signals, worded differently on purpose: one says
                                  the diagram is behind its snapshot, the other says the snapshot is
-                                 behind the code. -->
-                            <StackPanel Grid.Row="1" Spacing="6" Margin="0,0,0,8">
+                                 behind the code. The diff legend is not here — it belongs with the
+                                 colours it explains, on the surface. -->
+                            <StackPanel Grid.Row="2" Spacing="6" Margin="0,0,0,8">
                                 <Border IsVisible="{Binding Diagrams.IsStale}" Classes="caution"
                                         CornerRadius="4" Padding="10,8">
                                     <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource AppFontSizeSmall}"
                                                Text="The model snapshot has changed since this diagram was drawn. Choose Generate diagram to bring it up to date." />
                                 </Border>
-                                <!-- The diff legend, not a warning: it says what the selected
-                                     migration changed, and which colour means what. -->
-                                <StackPanel IsVisible="{Binding Diagrams.ShowsDiff}"
-                                            Orientation="Horizontal" Spacing="12">
-                                    <TextBlock Text="{Binding Diagrams.DiffSummary}" Classes="hint"
-                                               VerticalAlignment="Center" TextWrapping="Wrap" />
-                                    <TextBlock Text="+ added" VerticalAlignment="Center"
-                                               FontSize="{DynamicResource AppFontSizeSmall}"
-                                               Foreground="{DynamicResource DiagramAddedBrush}" />
-                                    <TextBlock Text="&#x2212; removed" VerticalAlignment="Center"
-                                               FontSize="{DynamicResource AppFontSizeSmall}"
-                                               Foreground="{DynamicResource DiagramRemovedBrush}" />
-                                    <TextBlock Text="~ changed" VerticalAlignment="Center"
-                                               FontSize="{DynamicResource AppFontSizeSmall}"
-                                               Foreground="{DynamicResource DiagramModifiedBrush}" />
-                                </StackPanel>
                                 <Border IsVisible="{Binding Diagrams.ShowsPendingChangesWarning}" Classes="caution"
                                         CornerRadius="4" Padding="10,8">
                                     <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource AppFontSizeSmall}"
                                                Text="Your code has changed since the last migration, so this diagram is behind it. Add a migration to capture the changes." />
                                 </Border>
                             </StackPanel>
-
-                            <Expander Grid.Row="2" Header="View options" Margin="0,0,0,8"
-                                      HorizontalAlignment="Stretch"
-                                      IsExpanded="{Binding Diagrams.OptionsExpanded}">
-                                <Grid ColumnDefinitions="*,*,*" Margin="4,6,4,2">
-                                    <StackPanel Grid.Column="0" Spacing="6">
-                                        <StackPanel Orientation="Horizontal" Spacing="8">
-                                            <TextBlock Text="Properties" VerticalAlignment="Center" Opacity="0.7" />
-                                            <ComboBox ItemsSource="{Binding Diagrams.PropertyDetails}"
-                                                      SelectedItem="{Binding Diagrams.Properties}" MinWidth="170">
-                                                <ComboBox.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <TextBlock Text="{Binding Converter={x:Static app:OutputConverters.SpacedName}}" />
-                                                    </DataTemplate>
-                                                </ComboBox.ItemTemplate>
-                                            </ComboBox>
-                                        </StackPanel>
-                                        <CheckBox Content="Show types" IsChecked="{Binding Diagrams.ShowTypes}"
-                                                  ToolTip.Tip="The column type beside each row in the table view, or the CLR type in the class view." />
-                                        <CheckBox Content="Mark nullable" IsChecked="{Binding Diagrams.ShowNullability}"
-                                                  ToolTip.Tip="A trailing ? on columns that allow null." />
-                                    </StackPanel>
-
-                                    <StackPanel Grid.Column="1" Spacing="6">
-                                        <CheckBox Content="Show indexes" IsChecked="{Binding Diagrams.ShowIndexes}"
-                                                  ToolTip.Tip="An extra row per index. Useful when reading the schema, noisy at a glance." />
-                                        <CheckBox Content="Show navigations" IsChecked="{Binding Diagrams.ShowNavigations}"
-                                                  IsEnabled="{Binding Diagrams.CanShowNavigations}"
-                                                  ToolTip.Tip="Class view only — a navigation is not a column." />
-                                        <CheckBox Content="Show inheritance" IsChecked="{Binding Diagrams.ShowInheritance}"
-                                                  ToolTip.Tip="Dashed edges from a derived type to its base in a type-per-hierarchy mapping." />
-                                    </StackPanel>
-
-                                    <StackPanel Grid.Column="2" Spacing="6">
-                                        <CheckBox Content="Collapse join tables" IsChecked="{Binding Diagrams.CollapseJoinEntities}"
-                                                  ToolTip.Tip="Draw a many-to-many as one edge instead of showing the table EF generated for it." />
-                                        <CheckBox Content="Inline owned types" IsChecked="{Binding Diagrams.InlineOwnedTypes}"
-                                                  ToolTip.Tip="Fold an owned reference into its owner, which is where its columns actually live. An owned collection has its own table and always stays separate." />
-                                        <CheckBox Content="Label delete behaviour" IsChecked="{Binding Diagrams.ShowDeleteBehavior}"
-                                                  ToolTip.Tip="Write Cascade, Restrict or SetNull on each relationship. Accurate, and a lot of text." />
-                                    </StackPanel>
-                                </Grid>
-                            </Expander>
 
                             <!-- Surface, divider, detail. The detail column collapses to a zero-width
                                  column rather than hiding its content, so the diagram gets the space
@@ -1167,6 +1168,50 @@
                                                        TextWrapping="Wrap" TextAlignment="Center"
                                                        Classes="hint caution" />
                                         </StackPanel>
+
+                                        <!-- What the marked colours mean, on the drawing they describe
+                                             and only while it is marked. -->
+                                        <Border IsVisible="{Binding Diagrams.ShowsDiff}"
+                                                HorizontalAlignment="Left" VerticalAlignment="Top"
+                                                Margin="10" Padding="8,4" CornerRadius="4"
+                                                BorderThickness="1" BorderBrush="{DynamicResource SubtleBorderBrush}"
+                                                Background="{DynamicResource CardBackgroundBrush}">
+                                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                                <TextBlock Text="{Binding Diagrams.DiffSummary}"
+                                                           FontSize="{DynamicResource AppFontSizeSmall}"
+                                                           VerticalAlignment="Center" TextWrapping="Wrap"
+                                                           MaxWidth="360" />
+                                                <TextBlock Text="+ added" VerticalAlignment="Center"
+                                                           FontSize="{DynamicResource AppFontSizeSmall}"
+                                                           Foreground="{DynamicResource DiagramAddedBrush}" />
+                                                <TextBlock Text="&#x2212; removed" VerticalAlignment="Center"
+                                                           FontSize="{DynamicResource AppFontSizeSmall}"
+                                                           Foreground="{DynamicResource DiagramRemovedBrush}" />
+                                                <TextBlock Text="~ changed" VerticalAlignment="Center"
+                                                           FontSize="{DynamicResource AppFontSizeSmall}"
+                                                           Foreground="{DynamicResource DiagramModifiedBrush}" />
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- Zoom belongs to the viewport, so it rides on the viewport
+                                             rather than in the toolbar. The names are what the
+                                             code-behind wires the surface to — see MainWindow.axaml.cs. -->
+                                        <Border IsVisible="{Binding Diagrams.HasDiagram}"
+                                                HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                                Margin="10" Padding="5" CornerRadius="5"
+                                                BorderThickness="1" BorderBrush="{DynamicResource SubtleBorderBrush}"
+                                                Background="{DynamicResource CardBackgroundBrush}">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <Button Name="DiagramZoomOut" Content="&#x2212;" MinWidth="32"
+                                                        ToolTip.Tip="Zoom out" />
+                                                <Button Name="DiagramZoomReset" Content="100%"
+                                                        ToolTip.Tip="Reset the zoom and position" />
+                                                <Button Name="DiagramZoomIn" Content="+" MinWidth="32"
+                                                        ToolTip.Tip="Zoom in" />
+                                                <Button Name="DiagramFit" Content="Fit"
+                                                        ToolTip.Tip="Fit the whole diagram in the window" />
+                                            </StackPanel>
+                                        </Border>
                                     </Grid>
                                 </Border>
 
@@ -1180,8 +1225,7 @@
                                             <TextBlock Text="{Binding Diagrams.SelectedEntityTitle}"
                                                        IsVisible="{Binding Diagrams.HasSelection}"
                                                        FontWeight="SemiBold" TextWrapping="Wrap" />
-                                            <TextBlock Text="{Binding Diagrams.SourceSummary}" Classes="hint" />
-                                            <!-- The one thing a reader can get wrong about this tab:
+                                            <!-- The one thing a reader can get wrong about this screen:
                                                  it draws the mapped model as of the last migration,
                                                  not whatever the code says right now. -->
                                             <TextBlock IsVisible="{Binding Diagrams.HasDiagram}"

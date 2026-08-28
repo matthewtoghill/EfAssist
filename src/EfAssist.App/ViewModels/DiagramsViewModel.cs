@@ -114,7 +114,6 @@ public partial class DiagramsViewModel : ObservableObject
         _persist = persist;
         _display = display;
 
-        _optionsExpanded = display.DiagramOptionsExpanded;
         _detailVisible = display.DiagramDetailVisible;
         _kind = display.DefaultDiagramKind;
 
@@ -236,9 +235,6 @@ public partial class DiagramsViewModel : ObservableObject
         : "Left to right";
 
     // ---- View options ----
-
-    [ObservableProperty]
-    private bool _optionsExpanded;
 
     public IReadOnlyList<PropertyDetail> PropertyDetails { get; } = Enum.GetValues<PropertyDetail>();
 
@@ -1501,12 +1497,6 @@ public partial class DiagramsViewModel : ObservableObject
         ApplyComparison();
         Rebuild();
         Persist();
-    }
-
-    partial void OnOptionsExpandedChanged(bool value)
-    {
-        _display.DiagramOptionsExpanded = value;
-        _persist();
     }
 
     partial void OnPropertiesChanged(PropertyDetail value) => OptionChanged();
