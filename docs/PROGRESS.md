@@ -17,7 +17,7 @@ Last updated: 2026-08-28.
 | D3–D4 — Model diagrams: the tab, interaction, persistence | **Done** |
 | D5–D6 — Model diagrams: export, settings, docs | **Done** |
 
-Current state: `dotnet test EfAssist.slnx` → **633 passed, 0 failed**, about 70 seconds. The app launches, opens a real solution or folder, lists migrations with their applied state, can add, apply, roll back, remove and drop, generates SQL scripts into a syntax-highlighted viewer, draws the model as an interactive entity-relationship or class diagram that survives a restart and exports to JSON, SVG, PNG, PDF and Mermaid, and explains the common EF failures in plain language without hiding the raw output.
+Current state: `dotnet test EfAssist.slnx` → **634 passed, 0 failed**, about 70 seconds. The app launches, opens a real solution or folder, lists migrations with their applied state, can add, apply, roll back, remove and drop, generates SQL scripts into a syntax-highlighted viewer, draws the model as an interactive entity-relationship or class diagram that survives a restart and exports to JSON, SVG, PNG, PDF and Mermaid, and explains the common EF failures in plain language without hiding the raw output.
 
 The diagrams work is complete through D6, plus per-migration diagrams and diffing: the snapshot picker draws the model as of any migration from its `.Designer.cs`, and marks what that migration added, removed and changed against the one before it. The three remaining follow-ups — MSAGL layout, cross-context diagrams and diagram editing — are parked in `ROADMAP.md` with reasons.
 
@@ -1609,9 +1609,18 @@ The regression test for the second one asserts on `Session.IsRunning` immediatel
 generation completes on a later turn, so an empty run list on its own passed whether or not a
 generation had been started. Checked by removing the guard and watching it fail.
 
+### The diff legend
+
+Three lines in reading order — which migration is being compared, what it changed, then what the
+colours mean — and it can sit in any of the four corners of the surface. Right-click it to move it;
+the corner is app-wide (`DisplaySettings.DiagramLegendCorner`), because where a reader likes the key
+is a habit about reading diagrams rather than a fact about one solution. The zoom cluster keeps the
+bottom-right corner it has always had, and the legend is allowed there too: it is the reader's
+diagram, and there are four corners and two overlays.
+
 ### Verified
 
-- 633 passed, 0 failed. New tests: a failure arrives expanded while a success stays collapsed and
+- 634 passed, 0 failed. New tests: a failure arrives expanded while a success stays collapsed and
   expanding one card leaves the other alone; `ShowRawOutput` mirrors `ShowActivity` both ways and
   `ShowInRawOutput` moves both plus scrolls to the recorded line; the strip's fold command.
 - The app launches cleanly. As before, nothing has been looked at on screen — the segmented

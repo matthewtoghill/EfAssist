@@ -1,4 +1,5 @@
-﻿using EfAssist.App.ViewModels;
+﻿using Avalonia.Layout;
+using EfAssist.App.ViewModels;
 using EfAssist.Core.Diagrams;
 
 namespace EfAssist.Core.Tests;
@@ -984,5 +985,37 @@ public class DiagramsViewModelTests : IDisposable
         Assert.Empty(harness.Session.Runs);
         Assert.False(harness.ViewModel.HasDiagram);
         Assert.Equal(DiagramsViewModel.CurrentModel, harness.ViewModel.SelectedSnapshot);
+    }
+
+    [Fact]
+    public void The_legend_corner_maps_to_alignments_and_is_remembered_app_wide()
+    {
+        var display = new DisplaySettings();
+        var harness = Build(display: display);
+
+        // Where the legend has always been.
+        Assert.Equal(SurfaceCorner.TopLeft, harness.ViewModel.LegendCorner);
+        Assert.Equal(HorizontalAlignment.Left, harness.ViewModel.LegendHorizontalAlignment);
+        Assert.Equal(VerticalAlignment.Top, harness.ViewModel.LegendVerticalAlignment);
+        Assert.True(harness.ViewModel.LegendIsTopLeft);
+
+        harness.ViewModel.SetLegendCornerCommand.Execute("BottomRight");
+
+        Assert.Equal(HorizontalAlignment.Right, harness.ViewModel.LegendHorizontalAlignment);
+        Assert.Equal(VerticalAlignment.Bottom, harness.ViewModel.LegendVerticalAlignment);
+        Assert.False(harness.ViewModel.LegendIsTopLeft);
+        Assert.True(harness.ViewModel.LegendIsBottomRight);
+
+        // App-wide: where a reader likes the key is not a fact about one solution.
+        Assert.Equal(SurfaceCorner.BottomRight, display.DiagramLegendCorner);
+        Assert.True(harness.Persisted > 0);
+
+        // A menu parameter that is not a corner is ignored rather than throwing at a click.
+        harness.ViewModel.SetLegendCornerCommand.Execute("Middle");
+        Assert.Equal(SurfaceCorner.BottomRight, harness.ViewModel.LegendCorner);
+
+        // And the choice comes back on the next workspace.
+        var next = Build(display: display);
+        Assert.Equal(SurfaceCorner.BottomRight, next.ViewModel.LegendCorner);
     }
 }

@@ -1273,10 +1273,34 @@
                                         <!-- What the marked colours mean, on the drawing they describe
                                              and only while it is marked. -->
                                         <Border IsVisible="{Binding Diagrams.ShowsDiff}"
-                                                HorizontalAlignment="Left" VerticalAlignment="Top"
+                                                HorizontalAlignment="{Binding Diagrams.LegendHorizontalAlignment}"
+                                                VerticalAlignment="{Binding Diagrams.LegendVerticalAlignment}"
                                                 Margin="10" Padding="8,4" CornerRadius="4"
                                                 BorderThickness="1" BorderBrush="{DynamicResource SubtleBorderBrush}"
-                                                Background="{DynamicResource CardBackgroundBrush}">
+                                                Background="{DynamicResource CardBackgroundBrush}"
+                                                ToolTip.Tip="Right-click to move this key to another corner.">
+                                            <!-- Moved from the thing being moved. A radio group, so
+                                                 the menu says which corner it is in now. -->
+                                            <Border.ContextMenu>
+                                                <ContextMenu>
+                                                    <MenuItem Header="Top left" ToggleType="Radio"
+                                                              IsChecked="{Binding Diagrams.LegendIsTopLeft, Mode=OneWay}"
+                                                              Command="{Binding Diagrams.SetLegendCornerCommand}"
+                                                              CommandParameter="TopLeft" />
+                                                    <MenuItem Header="Top right" ToggleType="Radio"
+                                                              IsChecked="{Binding Diagrams.LegendIsTopRight, Mode=OneWay}"
+                                                              Command="{Binding Diagrams.SetLegendCornerCommand}"
+                                                              CommandParameter="TopRight" />
+                                                    <MenuItem Header="Bottom left" ToggleType="Radio"
+                                                              IsChecked="{Binding Diagrams.LegendIsBottomLeft, Mode=OneWay}"
+                                                              Command="{Binding Diagrams.SetLegendCornerCommand}"
+                                                              CommandParameter="BottomLeft" />
+                                                    <MenuItem Header="Bottom right" ToggleType="Radio"
+                                                              IsChecked="{Binding Diagrams.LegendIsBottomRight, Mode=OneWay}"
+                                                              Command="{Binding Diagrams.SetLegendCornerCommand}"
+                                                              CommandParameter="BottomRight" />
+                                                </ContextMenu>
+                                            </Border.ContextMenu>
                                             <!-- Three lines, in the order they are read: which
                                                  migration is being compared, what it changed, and
                                                  what the colours mean. -->

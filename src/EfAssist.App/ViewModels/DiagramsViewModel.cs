@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Layout;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EfAssist.Core;
@@ -115,6 +116,7 @@ public partial class DiagramsViewModel : ObservableObject
         _display = display;
 
         _detailVisible = display.DiagramDetailVisible;
+        _legendCorner = display.DiagramLegendCorner;
         _kind = display.DefaultDiagramKind;
 
         _session.PropertyChanged += (_, e) =>
@@ -217,6 +219,66 @@ public partial class DiagramsViewModel : ObservableObject
     public string? DiffMigration => _comparison is null || _saved.MigrationId is null
         ? null
         : NameOf(_saved.MigrationId);
+
+    /// <summary>
+    /// Which corner the legend sits in. Moved by right-clicking it, and kept app-wide — see
+    /// <see cref="DisplaySettings.DiagramLegendCorner"/>. The zoom cluster keeps the bottom-right
+    /// corner it has always had; putting the legend there too is allowed, because it is the reader's
+    /// diagram and there are four corners and two overlays.
+    /// </summary>
+    [ObservableProperty]
+    private SurfaceCorner _legendCorner;
+
+    partial void OnLegendCornerChanged(SurfaceCorner value)
+    {
+        OnPropertyChanged(nameof(LegendHorizontalAlignment));
+        OnPropertyChanged(nameof(LegendVerticalAlignment));
+        OnPropertyChanged(nameof(LegendIsTopLeft));
+        OnPropertyChanged(nameof(LegendIsTopRight));
+        OnPropertyChanged(nameof(LegendIsBottomLeft));
+        OnPropertyChanged(nameof(LegendIsBottomRight));
+
+        if (_restoring)
+        {
+            return;
+        }
+
+        _display.DiagramLegendCorner = value;
+        _persist();
+    }
+
+    /// <summary>The corner as the two alignments the overlay actually needs.</summary>
+    public HorizontalAlignment LegendHorizontalAlignment =>
+        LegendCorner is SurfaceCorner.TopRight or SurfaceCorner.BottomRight
+            ? HorizontalAlignment.Right
+            : HorizontalAlignment.Left;
+
+    public VerticalAlignment LegendVerticalAlignment =>
+        LegendCorner is SurfaceCorner.BottomLeft or SurfaceCorner.BottomRight
+            ? VerticalAlignment.Bottom
+            : VerticalAlignment.Top;
+
+    // One per corner, so the context menu can show which one is current.
+    public bool LegendIsTopLeft => LegendCorner == SurfaceCorner.TopLeft;
+
+    public bool LegendIsTopRight => LegendCorner == SurfaceCorner.TopRight;
+
+    public bool LegendIsBottomLeft => LegendCorner == SurfaceCorner.BottomLeft;
+
+    public bool LegendIsBottomRight => LegendCorner == SurfaceCorner.BottomRight;
+
+    /// <summary>
+    /// Moves the legend. The parameter arrives as a string because that is what a MenuItem's
+    /// CommandParameter is; anything unparseable is ignored rather than throwing at a click.
+    /// </summary>
+    [RelayCommand]
+    private void SetLegendCorner(string? corner)
+    {
+        if (Enum.TryParse<SurfaceCorner>(corner, out var value))
+        {
+            LegendCorner = value;
+        }
+    }
 
     public string? DiffChanges
     {

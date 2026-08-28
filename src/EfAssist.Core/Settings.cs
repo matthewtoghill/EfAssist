@@ -150,6 +150,19 @@ public sealed class WindowSettings
     public int? Y { get; set; }
 }
 
+/// <summary>Which corner of the diagram surface an overlay sits in.</summary>
+public enum SurfaceCorner
+{
+    /// <summary>Default, and first so <c>default(SurfaceCorner)</c> matches it.</summary>
+    TopLeft,
+
+    TopRight,
+
+    BottomLeft,
+
+    BottomRight,
+}
+
 /// <summary>Preferences that are the same wherever the app is pointed.</summary>
 public sealed class DisplaySettings
 {
@@ -201,6 +214,13 @@ public sealed class DisplaySettings
     /// round-trips.
     /// </summary>
     public bool DiagramOptionsExpanded { get; set; }
+
+    /// <summary>
+    /// Which corner of the diagram surface the diff legend sits in. App-wide rather than per
+    /// workspace: where a reader likes the key is a habit about reading diagrams, not a fact about
+    /// one solution.
+    /// </summary>
+    public SurfaceCorner DiagramLegendCorner { get; set; } = SurfaceCorner.TopLeft;
 
     /// <summary>
     /// Show the Diagrams tab's entity detail pane. On by default — it is where the metadata a node
