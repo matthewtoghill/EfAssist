@@ -175,8 +175,10 @@ public sealed class DisplaySettings
     public bool ShowLineNumbers { get; set; } = true;
 
     /// <summary>
-    /// Show the Migrations tab's action panel expanded. On by default; collapsing it gives the
-    /// height back to the migrations list and the detail pane.
+    /// Dead since the layout pass: the action panel it controlled is gone. Adding a migration is a
+    /// flyout on the Migrations header, a migration's own actions are in the detail pane beside it,
+    /// and the whole-database ones are in the Update database menu. Kept so a settings file written
+    /// by an earlier version still round-trips.
     /// </summary>
     public bool MigrationActionsExpanded { get; set; } = true;
 

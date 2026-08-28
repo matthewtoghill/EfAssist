@@ -983,4 +983,80 @@ public class MigrationsViewModelTests
         Assert.Single(asked);
         Assert.True(Called(runner, "database update"));
     }
+
+    [Fact]
+    public async Task The_filter_narrows_the_list_without_renumbering_it()
+    {
+        var (tab, runner, _, _) = Build();
+        runner.Rows = [("InitialCreate", true), ("AddBlogUrl", true), ("AddPostTags", false)];
+
+        await tab.RefreshCommand.ExecuteAsync(null);
+        Assert.Equal(3, tab.Migrations.Count);
+
+        tab.Filter = "post";
+
+        var row = Assert.Single(tab.Migrations);
+        Assert.Equal("AddPostTags", row.Name);
+
+        // The number describes where the migration sits in the apply order, not where its row sits
+        // on screen — filtering must not renumber anything.
+        Assert.Equal(3, row.Index);
+        Assert.True(tab.IsFiltered);
+        Assert.Contains("1 of 3", tab.Summary);
+
+        // Ids match too, so a pasted timestamp finds its row.
+        tab.Filter = "20260101000001";
+        Assert.Equal("AddBlogUrl", Assert.Single(tab.Migrations).Name);
+
+        tab.ClearFilterCommand.Execute(null);
+        Assert.Equal(3, tab.Migrations.Count);
+        Assert.False(tab.IsFiltered);
+        Assert.Contains("3 migrations", tab.Summary);
+    }
+
+    [Fact]
+    public async Task The_database_head_is_the_newest_applied_migration_whichever_way_the_list_runs()
+    {
+        var (tab, runner, _, _) = Build();
+        runner.Rows = [("InitialCreate", true), ("AddBlogUrl", true), ("AddPostTags", false)];
+
+        await tab.RefreshCommand.ExecuteAsync(null);
+
+        var head = Assert.Single(tab.Migrations, m => m.IsDatabaseHead);
+        Assert.Equal("AddBlogUrl", head.Name);
+
+        // Sort order is a view over the same list, so it cannot move where the database is.
+        tab.ToggleSortOrderCommand.Execute(null);
+        Assert.Equal("AddBlogUrl", Assert.Single(tab.Migrations, m => m.IsDatabaseHead).Name);
+    }
+
+    [Fact]
+    public async Task Nothing_is_marked_as_the_head_when_applied_state_is_unknown()
+    {
+        var (tab, runner, _, _) = Build();
+        runner.Rows = [("InitialCreate", true), ("AddBlogUrl", false)];
+        tab.Offline = true;
+
+        await tab.RefreshCommand.ExecuteAsync(null);
+
+        // Offline lists names without asking the database. A head drawn from a guess would be worse
+        // than no head at all.
+        Assert.All(tab.Migrations, m => Assert.Equal(MigrationState.Unknown, m.State));
+        Assert.DoesNotContain(tab.Migrations, m => m.IsDatabaseHead);
+    }
+
+    [Fact]
+    public async Task Remove_is_only_offered_on_the_migration_it_would_actually_take()
+    {
+        var (tab, runner, _, _) = Build();
+        runner.Rows = [("InitialCreate", true), ("AddBlogUrl", false)];
+
+        await tab.RefreshCommand.ExecuteAsync(null);
+
+        tab.SelectedMigration = tab.Migrations.First(m => m.Name == "InitialCreate");
+        Assert.False(tab.SelectedIsLast);
+
+        tab.SelectedMigration = tab.Migrations.First(m => m.Name == "AddBlogUrl");
+        Assert.True(tab.SelectedIsLast);
+    }
 }

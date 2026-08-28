@@ -595,25 +595,89 @@
 
                 <TabControl Grid.Row="0" Classes="railed" SelectedIndex="{Binding SelectedTabIndex}">
                     <TabItem Header="Migrations" ToolTip.Tip="Alt+1">
-                        <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="0,8,0,0">
+                        <Grid RowDefinitions="Auto,Auto,*" Margin="0,4,0,0">
 
-                            <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
-                                <Button Content="Refresh list" Command="{Binding Migrations.RefreshCommand}" />
-                                <!-- Icon only: the arrow shows which way the list currently runs. -->
-                                <Button Command="{Binding Migrations.ToggleSortOrderCommand}"
-                                        Content="{Binding Migrations.SortGlyph}"
-                                        ToolTip.Tip="{Binding Migrations.SortTooltip}"
-                                        FontSize="{DynamicResource AppFontSizeLarge}" Padding="10,0" MinWidth="36"
-                                        VerticalAlignment="Stretch" VerticalContentAlignment="Center"
-                                        HorizontalContentAlignment="Center" />
-                                <TextBlock Text="{Binding Migrations.Summary}" VerticalAlignment="Center" Opacity="0.8" />
-                                <Border IsVisible="{Binding Migrations.ShowsStaleWarning}"
-                                        Classes="caution"
-                                        CornerRadius="3" Padding="6,2" VerticalAlignment="Center"
-                                        ToolTip.Tip="The last command failed, was cancelled, or could not be listed. Refresh to confirm what is really there.">
-                                    <TextBlock Text="May be out of date" FontSize="{DynamicResource AppFontSizeTiny}" />
-                                </Border>
-                            </StackPanel>
+                            <!-- Screen header: what this is, then the one primary action. The actions
+                                 that belong to a particular migration are on the migration, in the
+                                 detail pane, rather than in a block at the bottom of the screen. -->
+                            <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+                                <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Bottom">
+                                    <TextBlock Text="Migrations" Classes="heading" />
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Text="{Binding Migrations.Summary}" Opacity="0.75"
+                                                   FontSize="{DynamicResource AppFontSizeSmall}"
+                                                   VerticalAlignment="Center" />
+                                        <Border IsVisible="{Binding Migrations.ShowsStaleWarning}"
+                                                Classes="caution"
+                                                CornerRadius="3" Padding="6,1" VerticalAlignment="Center"
+                                                ToolTip.Tip="The last command failed, was cancelled, or could not be listed. Refresh to confirm what is really there.">
+                                            <TextBlock Text="May be out of date"
+                                                       FontSize="{DynamicResource AppFontSizeTiny}" />
+                                        </Border>
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"
+                                            VerticalAlignment="Bottom">
+                                    <Button Content="Refresh list" Command="{Binding Migrations.RefreshCommand}" />
+                                    <!-- Icon only: the arrow shows which way the list currently runs. -->
+                                    <Button Command="{Binding Migrations.ToggleSortOrderCommand}"
+                                            Content="{Binding Migrations.SortGlyph}"
+                                            ToolTip.Tip="{Binding Migrations.SortTooltip}"
+                                            FontSize="{DynamicResource AppFontSizeLarge}" Padding="10,0" MinWidth="36"
+                                            VerticalContentAlignment="Center"
+                                            HorizontalContentAlignment="Center" />
+
+                                    <Border Width="1" Height="26" Background="{DynamicResource SubtleBorderBrush}" />
+
+                                    <!-- Everything that writes to the database, in one menu. Each of
+                                         these confirms first and names its target. -->
+                                    <Button Content="Update database">
+                                        <Button.Flyout>
+                                            <MenuFlyout>
+                                                <MenuItem Header="Update to latest"
+                                                          Command="{Binding Migrations.UpdateToLatestCommand}"
+                                                          ToolTip.Tip="Apply every pending migration." />
+                                                <MenuItem Header="Update to the selected migration"
+                                                          Command="{Binding Migrations.UpdateToSelectedCommand}"
+                                                          ToolTip.Tip="Apply or roll back to whichever migration is selected. Rolling back is confirmed first, and names what would be reverted." />
+                                                <Separator />
+                                                <MenuItem Header="Revert all migrations"
+                                                          Command="{Binding Migrations.RevertAllCommand}"
+                                                          ToolTip.Tip="Runs every Down in reverse: the schema goes back to empty, and the data with it." />
+                                                <MenuItem Header="Drop database…"
+                                                          Command="{Binding Migrations.DropDatabaseCommand}" />
+                                            </MenuFlyout>
+                                        </Button.Flyout>
+                                    </Button>
+
+                                    <!-- The screen's primary action. A flyout rather than a block of
+                                         fields on the screen: naming a migration is a moment, not a
+                                         permanent part of the layout. -->
+                                    <Button Classes="accent" Content="Add migration">
+                                        <Button.Flyout>
+                                            <Flyout Placement="BottomEdgeAlignedRight">
+                                                <StackPanel Width="320" Spacing="2">
+                                                    <TextBlock Text="Add migration" FontWeight="SemiBold" />
+                                                    <TextBlock Classes="hint" Margin="0,0,0,6"
+                                                               Text="Writes source files into the migrations project. Touches no database." />
+                                                    <TextBox Text="{Binding Migrations.NewMigrationName}"
+                                                             PlaceholderText="MigrationName" />
+                                                    <TextBlock Text="{Binding Migrations.NewMigrationNameError}"
+                                                               IsVisible="{Binding Migrations.HasNewMigrationNameError}"
+                                                               Classes="danger" FontSize="{DynamicResource AppFontSizeTiny}"
+                                                               TextWrapping="Wrap" Margin="0,4,0,0" />
+                                                    <TextBox Text="{Binding Migrations.OutputDirectory}"
+                                                             PlaceholderText="Output folder (optional)" Margin="0,6,0,0" />
+                                                    <Button Content="Add" Classes="accent"
+                                                            Command="{Binding Migrations.AddCommand}"
+                                                            HorizontalAlignment="Stretch" Margin="0,8,0,0" />
+                                                </StackPanel>
+                                            </Flyout>
+                                        </Button.Flyout>
+                                    </Button>
+                                </StackPanel>
+                            </Grid>
 
                             <Border Grid.Row="1" IsVisible="{Binding Migrations.HasConnectionWarning}"
                                     Classes="caution" CornerRadius="4" Padding="10,8" Margin="0,0,0,8">
@@ -625,42 +689,73 @@
                             <Grid Grid.Row="2" ColumnDefinitions="2*,Auto,3*">
 
                             <Border Grid.Column="0" BorderThickness="1" BorderBrush="{DynamicResource SubtleBorderBrush}">
-                                <Grid>
-                                    <TextBlock IsVisible="{Binding !Migrations.HasMigrations}"
-                                               Text="No migrations to show. Refresh the list, or add the first migration below."
-                                               Opacity="0.6" Margin="16" TextWrapping="Wrap"
-                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                    <ListBox ItemsSource="{Binding Migrations.Migrations}"
-                                             SelectedItem="{Binding Migrations.SelectedMigration}"
-                                             IsVisible="{Binding Migrations.HasMigrations}">
-                                        <ListBox.ItemTemplate>
-                                            <DataTemplate x:DataType="vm:MigrationRow">
-                                                <Grid ColumnDefinitions="34,86,*">
-                                                    <!-- Chronological position, so it does not
-                                                         renumber when the sort order flips. -->
-                                                    <TextBlock Grid.Column="0" Text="{Binding Index}"
-                                                               HorizontalAlignment="Right" Margin="0,0,10,0"
-                                                               VerticalAlignment="Center"
-                                                               Opacity="0.55" FontSize="{DynamicResource AppFontSizeMono}"
-                                                               FontFamily="Consolas,Menlo,monospace" />
-                                                    <Border Grid.Column="1" CornerRadius="3" Padding="6,2"
-                                                            HorizontalAlignment="Left" VerticalAlignment="Center"
-                                                            Classes.badgeApplied="{Binding State, Converter={x:Static app:OutputConverters.IsApplied}}"
-                                                            Classes.badgePending="{Binding State, Converter={x:Static app:OutputConverters.IsPending}}"
-                                                            Classes.badgeUnknown="{Binding State, Converter={x:Static app:OutputConverters.IsUnknownState}}">
-                                                        <TextBlock Text="{Binding State, Converter={x:Static app:OutputConverters.StateLabel}}"
-                                                                   Foreground="{DynamicResource StateBadgeForegroundBrush}"
-                                                                   FontSize="{DynamicResource AppFontSizeTiny}" />
-                                                    </Border>
-                                                    <StackPanel Grid.Column="2" Spacing="1">
-                                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
-                                                        <TextBlock Text="{Binding Id}" FontSize="{DynamicResource AppFontSizeMono}" Opacity="0.55"
+                                <Grid RowDefinitions="Auto,*">
+
+                                    <!-- Filter. Display only: it narrows what is listed and never what
+                                         a command runs, which is why the summary above says how many
+                                         of how many are showing. -->
+                                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="6,6,6,6">
+                                        <TextBox Grid.Column="0" Text="{Binding Migrations.Filter}"
+                                                 PlaceholderText="Filter by name or id" />
+                                        <Button Grid.Column="1" Content="&#x2715;" Margin="6,0,0,0"
+                                                Padding="8,0" MinWidth="0"
+                                                IsVisible="{Binding Migrations.IsFiltered}"
+                                                Command="{Binding Migrations.ClearFilterCommand}"
+                                                ToolTip.Tip="Clear the filter" />
+                                    </Grid>
+
+                                    <Grid Grid.Row="1">
+                                        <TextBlock IsVisible="{Binding !Migrations.HasMigrations}"
+                                                   Text="No migrations to show. Refresh the list, or add the first migration."
+                                                   Opacity="0.6" Margin="16" TextWrapping="Wrap"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        <ListBox ItemsSource="{Binding Migrations.Migrations}"
+                                                 SelectedItem="{Binding Migrations.SelectedMigration}"
+                                                 IsVisible="{Binding Migrations.HasMigrations}">
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:MigrationRow">
+                                                    <Grid ColumnDefinitions="34,86,*,Auto">
+                                                        <!-- Chronological position, so it does not
+                                                             renumber when the sort order flips. -->
+                                                        <TextBlock Grid.Column="0" Text="{Binding Index}"
+                                                                   HorizontalAlignment="Right" Margin="0,0,10,0"
+                                                                   VerticalAlignment="Center"
+                                                                   Opacity="0.55" FontSize="{DynamicResource AppFontSizeMono}"
                                                                    FontFamily="Consolas,Menlo,monospace" />
-                                                    </StackPanel>
-                                                </Grid>
-                                            </DataTemplate>
-                                        </ListBox.ItemTemplate>
-                                    </ListBox>
+                                                        <Border Grid.Column="1" CornerRadius="3" Padding="6,2"
+                                                                HorizontalAlignment="Left" VerticalAlignment="Center"
+                                                                Classes.badgeApplied="{Binding State, Converter={x:Static app:OutputConverters.IsApplied}}"
+                                                                Classes.badgePending="{Binding State, Converter={x:Static app:OutputConverters.IsPending}}"
+                                                                Classes.badgeUnknown="{Binding State, Converter={x:Static app:OutputConverters.IsUnknownState}}">
+                                                            <TextBlock Text="{Binding State, Converter={x:Static app:OutputConverters.StateLabel}}"
+                                                                       Foreground="{DynamicResource StateBadgeForegroundBrush}"
+                                                                       FontSize="{DynamicResource AppFontSizeTiny}" />
+                                                        </Border>
+                                                        <StackPanel Grid.Column="2" Spacing="1">
+                                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                                            <TextBlock Text="{Binding Id}" FontSize="{DynamicResource AppFontSizeMono}" Opacity="0.55"
+                                                                       FontFamily="Consolas,Menlo,monospace" />
+                                                        </StackPanel>
+
+                                                        <!-- Where the database actually is. On the row
+                                                             rather than as a divider between rows, so
+                                                             it says the same thing in both sort orders.
+                                                             Absent entirely when applied state is
+                                                             unknown — see MigrationRow. -->
+                                                        <Border Grid.Column="3" IsVisible="{Binding IsDatabaseHead}"
+                                                                CornerRadius="3" Padding="6,2" Margin="8,0,0,0"
+                                                                VerticalAlignment="Center"
+                                                                Background="{DynamicResource StateAppliedBrush}"
+                                                                ToolTip.Tip="The newest migration the database has. Everything below it in the apply order is pending.">
+                                                            <TextBlock Text="Database is here"
+                                                                       Foreground="{DynamicResource StateBadgeForegroundBrush}"
+                                                                       FontSize="{DynamicResource AppFontSizeTiny}" />
+                                                        </Border>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                        </ListBox>
+                                    </Grid>
                                 </Grid>
                             </Border>
 
@@ -678,8 +773,30 @@
 
                                     <StackPanel Grid.Row="0" Spacing="6" Margin="10,8"
                                                 IsVisible="{Binding Migrations.Detail.HasMigration}">
-                                        <TextBlock Text="{Binding Migrations.SelectedMigration.Name}"
-                                                   FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <TextBlock Grid.Column="0" Text="{Binding Migrations.SelectedMigration.Name}"
+                                                       FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                                                       VerticalAlignment="Center" />
+
+                                            <!-- This migration's own actions. They used to live in an
+                                                 expander at the bottom of the screen, where nothing
+                                                 said which migration they would act on. -->
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                                                <Button Content="Apply up to here"
+                                                        Command="{Binding Migrations.UpdateToSelectedCommand}"
+                                                        ToolTip.Tip="Apply or roll back the database to this migration. Confirmed first, naming anything that would be reverted." />
+                                                <Button Content="Remove"
+                                                        Classes="danger"
+                                                        IsVisible="{Binding Migrations.SelectedIsLast}"
+                                                        Command="{Binding Migrations.RemoveCommand}"
+                                                        ToolTip.Tip="Delete this migration's files. EF can only remove the most recent migration, so this is offered on that one alone." />
+                                                <CheckBox Content="Force"
+                                                          IsVisible="{Binding Migrations.SelectedIsLast}"
+                                                          IsChecked="{Binding Migrations.ForceRemove}"
+                                                          ToolTip.Tip="Also revert the migration from the database if it has been applied." />
+                                            </StackPanel>
+                                        </Grid>
+
                                         <TextBlock Text="{Binding Migrations.Detail.Subtitle}"
                                                    Classes="hint" TextTrimming="CharacterEllipsis"
                                                    ToolTip.Tip="{Binding Migrations.Detail.Subtitle}" />
@@ -723,52 +840,6 @@
                                 </Grid>
                             </Border>
                             </Grid>
-
-                            <!-- Collapsible: these actions are needed occasionally, and folded away
-                                 they give their height back to the list and the detail pane. -->
-                            <Expander Grid.Row="3" Margin="0,10,0,0" HorizontalAlignment="Stretch" IsExpanded="{Binding MigrationActionsExpanded}">
-                                <Expander.Header>
-                                    <TextBlock Text="Actions" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                </Expander.Header>
-                                <Grid ColumnDefinitions="*,*,*">
-
-                                    <StackPanel Grid.Column="0" Margin="0,0,10,0">
-                                        <TextBlock Text="Add migration" Classes="group" />
-                                        <TextBox Text="{Binding Migrations.NewMigrationName}" PlaceholderText="MigrationName" />
-                                        <TextBlock Text="{Binding Migrations.NewMigrationNameError}"
-                                                   IsVisible="{Binding Migrations.HasNewMigrationNameError}"
-                                                   Classes="danger" FontSize="{DynamicResource AppFontSizeTiny}" TextWrapping="Wrap"
-                                                   Margin="0,4,0,0" />
-                                        <TextBox Text="{Binding Migrations.OutputDirectory}"
-                                                 PlaceholderText="Output folder (optional)" Margin="0,6,0,0" />
-                                        <Button Content="Add" Command="{Binding Migrations.AddCommand}"
-                                                HorizontalAlignment="Stretch" Margin="0,6,0,0" />
-                                    </StackPanel>
-
-                                    <StackPanel Grid.Column="1" Margin="0,0,10,0">
-                                        <TextBlock Text="Apply to database" Classes="group" />
-                                        <Button Content="Update to latest" Command="{Binding Migrations.UpdateToLatestCommand}"
-                                                HorizontalAlignment="Stretch" />
-                                        <Button Content="Update to selected" Command="{Binding Migrations.UpdateToSelectedCommand}"
-                                                HorizontalAlignment="Stretch" Margin="0,6,0,0" />
-                                        <TextBlock Classes="hint"
-                                                   Text="Rolling back to an earlier migration is confirmed first, and names what would be reverted." />
-                                    </StackPanel>
-
-                                    <StackPanel Grid.Column="2">
-                                        <TextBlock Text="Destructive" Classes="group danger" />
-                                        <Button Content="Remove last migration" Command="{Binding Migrations.RemoveCommand}"
-                                                HorizontalAlignment="Stretch" />
-                                        <CheckBox Content="Force (revert if applied)"
-                                                  IsChecked="{Binding Migrations.ForceRemove}" Margin="0,4,0,0" />
-                                        <Button Content="Revert all migrations" Command="{Binding Migrations.RevertAllCommand}"
-                                                HorizontalAlignment="Stretch" Margin="0,6,0,0" />
-                                        <Button Content="Drop database…" Command="{Binding Migrations.DropDatabaseCommand}"
-                                                HorizontalAlignment="Stretch" Margin="0,6,0,0"
-                                                Classes="danger" />
-                                    </StackPanel>
-                                </Grid>
-                            </Expander>
                         </Grid>
                     </TabItem>
                     <TabItem Header="Script" ToolTip.Tip="Alt+2">

@@ -102,7 +102,6 @@ public partial class MainWindowViewModel : ObservableObject
         _wrapOutput = settings.Display.WrapOutput;
         _wrapSql = settings.Display.WrapSql;
         _showLineNumbers = settings.Display.ShowLineNumbers;
-        _migrationActionsExpanded = settings.Display.MigrationActionsExpanded;
         _outputExpanded = settings.Display.OutputExpanded;
         _defaultDiagramKind = settings.Display.DefaultDiagramKind;
         _openMaximised = settings.Display.Window.Maximised;
@@ -359,18 +358,11 @@ public partial class MainWindowViewModel : ObservableObject
 
     /// <summary>
     /// Whether the output console is open. App-wide and persisted, on the same footing as
-    /// <see cref="MigrationActionsExpanded"/>: the console is shared by every tab, so folding it
+    /// <see cref="WrapOutput"/>: the console is shared by every tab, so folding it
     /// away is a single choice rather than one per screen.
     /// </summary>
     [ObservableProperty]
     private bool _outputExpanded;
-
-    /// <summary>
-    /// Whether the Migrations tab's action panel is open. App-wide and persisted, so a user who
-    /// folds it away does not have to fold it again next launch.
-    /// </summary>
-    [ObservableProperty]
-    private bool _migrationActionsExpanded;
 
     /// <summary>
     /// Open the main window maximised. Also written when the window closes, so leaving it maximised
@@ -1147,13 +1139,6 @@ public partial class MainWindowViewModel : ObservableObject
         // Only decides which view a workspace opens on the first time. A workspace that has been
         // switched keeps its own choice, so changing this never overrides one already made.
         _settings.Display.DefaultDiagramKind = value;
-        SettingsStore.Save(_settings, _settingsPath);
-    }
-
-    partial void OnMigrationActionsExpandedChanged(bool value)
-    {
-        // App-wide, same as WrapOutput.
-        _settings.Display.MigrationActionsExpanded = value;
         SettingsStore.Save(_settings, _settingsPath);
     }
 
