@@ -128,7 +128,8 @@ public partial class MainWindowViewModel : ObservableObject
             () => Migrations.Ordered,
             Persist,
             idempotentRequested: () => Idempotent,
-            onIdempotentUnsupported: () => Idempotent = false);
+            onIdempotentUnsupported: () => Idempotent = false,
+            selectedMigration: () => Migrations.SelectedMigration?.Name);
         Migrations = new MigrationsViewModel(
             Session,
             BuildTargetForCommands,
@@ -1205,6 +1206,19 @@ public partial class MainWindowViewModel : ObservableObject
         }
 
         await Session.RunAsync(run.Args, run.Label);
+    }
+
+    /// <summary>
+    /// Takes the migration selected on the Migrations screen over to the Script screen as the start
+    /// of a range. The two screens are about the same history, and this is the one hand-off between
+    /// them worth a button: reading a migration and then asking what it would take to get from there
+    /// to now.
+    /// </summary>
+    [RelayCommand]
+    private void ScriptFromSelected()
+    {
+        Script.Range = ScriptRange.FromSelected;
+        SelectedTabIndex = (int)SelectedTab.Script;
     }
 
     partial void OnOutputExpandedChanged(bool value)

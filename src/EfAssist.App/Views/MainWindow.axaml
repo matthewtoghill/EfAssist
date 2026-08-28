@@ -47,6 +47,12 @@
             <Setter Property="Margin" Value="0,0,0,6" />
         </Style>
 
+        <!-- A field's caption where it sits beside the field rather than above it. -->
+        <Style Selector="TextBlock.lbl">
+            <Setter Property="FontSize" Value="{DynamicResource AppFontSizeTiny}" />
+            <Setter Property="Opacity" Value="0.55" />
+        </Style>
+
         <!-- The default splitter is an invisible strip, so there is nothing to aim at. This gives it
              a grip, a resize cursor and a hover highlight. -->
         <Style Selector="GridSplitter.pane">
@@ -785,6 +791,9 @@
                                                 <Button Content="Apply up to here"
                                                         Command="{Binding Migrations.UpdateToSelectedCommand}"
                                                         ToolTip.Tip="Apply or roll back the database to this migration. Confirmed first, naming anything that would be reverted." />
+                                                <Button Content="Script from here"
+                                                        Command="{Binding ScriptFromSelectedCommand}"
+                                                        ToolTip.Tip="Open the Script screen with the range set from this migration to the latest." />
                                                 <Button Content="Remove"
                                                         Classes="danger"
                                                         IsVisible="{Binding Migrations.SelectedIsLast}"
@@ -843,69 +852,80 @@
                         </Grid>
                     </TabItem>
                     <TabItem Header="Script" ToolTip.Tip="Alt+2">
-                        <Grid RowDefinitions="Auto,Auto,Auto,*" Margin="0,8,0,0">
+                        <Grid RowDefinitions="Auto,Auto,Auto,*" Margin="0,4,0,0">
 
-                            <!-- Range -->
-                            <Grid Grid.Row="0" ColumnDefinitions="Auto,*" Margin="0,0,0,8">
-                                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12"
-                                            VerticalAlignment="Center">
-                                    <TextBlock Text="Range" VerticalAlignment="Center" FontWeight="SemiBold" />
-                                    <ComboBox ItemsSource="{Binding Script.Ranges}"
-                                              SelectedItem="{Binding Script.Range}" MinWidth="120" />
-                                    <StackPanel Orientation="Horizontal" Spacing="6"
-                                                IsVisible="{Binding Script.IsCustomRange}">
-                                        <TextBlock Text="from" VerticalAlignment="Center" Opacity="0.7" />
-                                        <ComboBox ItemsSource="{Binding Script.FromOptions}"
-                                                  SelectedItem="{Binding Script.SelectedFrom}" MinWidth="170" />
-                                        <TextBlock Text="to" VerticalAlignment="Center" Opacity="0.7" />
-                                        <ComboBox ItemsSource="{Binding Script.ToOptions}"
-                                                  SelectedItem="{Binding Script.SelectedTo}" MinWidth="170" />
-                                    </StackPanel>
+                            <!-- Screen header, same shape as every other screen: what this is, then
+                                 the one action that does the work. -->
+                            <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+                                <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Bottom">
+                                    <TextBlock Text="Script" Classes="heading" />
+                                    <TextBlock Classes="hint"
+                                               Text="SQL for a range of migrations, written to a file. Nothing runs against the database." />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"
+                                            VerticalAlignment="Bottom">
+                                    <TextBlock Classes="hint caution" VerticalAlignment="Center"
+                                               MaxWidth="220" TextWrapping="Wrap"
+                                               IsVisible="{Binding Script.ShowsStaleWarning}"
+                                               Text="The SQL below is from an earlier run — the last attempt failed." />
+                                    <Button Classes="accent" Content="Generate script"
+                                            Command="{Binding Script.GenerateCommand}" />
                                 </StackPanel>
                             </Grid>
 
-                            <Border Grid.Row="1" IsVisible="{Binding Script.HasRangeWarning}"
-                                    Classes="caution" CornerRadius="4" Padding="10,8" Margin="0,0,0,8">
-                                <TextBlock Text="{Binding Script.RangeWarning}" TextWrapping="Wrap" FontSize="{DynamicResource AppFontSizeSmall}" />
-                            </Border>
+                            <!-- One band for the whole question this screen asks: which migrations,
+                                 and where the file goes. It used to be three stacked rows of labels
+                                 and boxes that did not say they were one decision. -->
+                            <Border Grid.Row="1" BorderThickness="1" BorderBrush="{DynamicResource SubtleBorderBrush}"
+                                    Padding="12,10" Margin="0,0,0,8">
+                                <StackPanel Spacing="10">
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <TextBlock Text="Range" Classes="lbl" Width="72"
+                                                   VerticalAlignment="Center" />
+                                        <ComboBox ItemsSource="{Binding Script.Ranges}"
+                                                  SelectedItem="{Binding Script.Range}" MinWidth="150">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding Converter={x:Static app:OutputConverters.SpacedName}}" />
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
 
-                            <!-- Destination and actions -->
-                            <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
-                                <StackPanel Grid.Column="0" Spacing="6">
-                                    <StackPanel Orientation="Horizontal" Spacing="6">
-                                        <TextBlock Text="Scripts folder" VerticalAlignment="Center" Width="90" Opacity="0.7" />
-                                        <TextBox Text="{Binding Script.OutputFolder}" MinWidth="320"
+                                        <!-- Only the custom range has two ends to pick. -->
+                                        <StackPanel Orientation="Horizontal" Spacing="6"
+                                                    IsVisible="{Binding Script.IsCustomRange}">
+                                            <TextBlock Text="from" VerticalAlignment="Center" Opacity="0.7" />
+                                            <ComboBox ItemsSource="{Binding Script.FromOptions}"
+                                                      SelectedItem="{Binding Script.SelectedFrom}" MinWidth="200" />
+                                            <TextBlock Text="to" VerticalAlignment="Center" Opacity="0.7" />
+                                            <ComboBox ItemsSource="{Binding Script.ToOptions}"
+                                                      SelectedItem="{Binding Script.SelectedTo}" MinWidth="200" />
+                                        </StackPanel>
+
+                                        <TextBlock Classes="hint" VerticalAlignment="Center"
+                                                   TextWrapping="Wrap" MaxWidth="320"
+                                                   IsVisible="{Binding Script.HasRangeWarning}"
+                                                   Text="{Binding Script.RangeWarning}" />
+                                    </StackPanel>
+
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Text="Write to" Classes="lbl" Width="72"
+                                                   VerticalAlignment="Center" />
+                                        <TextBox Text="{Binding Script.OutputFolder}" MinWidth="300"
                                                  PlaceholderText="Not set — ask each time" />
                                         <Button Content="Browse…" Command="{Binding Script.BrowseOutputFolderCommand}" />
                                         <Button Content="Clear" Command="{Binding Script.ClearOutputFolderCommand}" />
-                                    </StackPanel>
-                                    <StackPanel Orientation="Horizontal" Spacing="6">
-                                        <TextBlock Text="File name" VerticalAlignment="Center" Width="90" Opacity="0.7" />
-                                        <TextBox Text="{Binding Script.FileName}" MinWidth="320" />
-                                        <Button Content="Reset" Command="{Binding Script.ResetFileNameCommand}"
+                                        <TextBox Text="{Binding Script.FileName}" MinWidth="280" />
+                                        <Button Content="Reset name" Command="{Binding Script.ResetFileNameCommand}"
                                                 ToolTip.Tip="Go back to the name suggested by the current choices." />
                                     </StackPanel>
+
                                     <TextBlock Text="{Binding Script.DestinationHint}" Classes="hint" />
                                 </StackPanel>
+                            </Border>
 
-                                <StackPanel Grid.Column="1" Spacing="6" VerticalAlignment="Top">
-                                    <TextBlock Classes="hint caution"
-                                               IsVisible="{Binding Script.ShowsStaleWarning}"
-                                               Text="The SQL below is from an earlier run — the last attempt failed." />
-                                    <Button Content="Generate script" Command="{Binding Script.GenerateCommand}"
-                                            HorizontalAlignment="Stretch" />
-                                    <StackPanel Orientation="Horizontal" Spacing="6">
-                                        <Button Content="Copy SQL" Command="{Binding Script.CopySqlCommand}" />
-                                        <Button Content="Open file" Command="{Binding Script.OpenCommand}" />
-                                        <Button Content="Open folder" Command="{Binding Script.RevealCommand}" />
-                                    </StackPanel>
-                                    <StackPanel Orientation="Horizontal" Spacing="12">
-                                        <CheckBox Content="Wrap" IsChecked="{Binding WrapSql}"
-                                                  ToolTip.Tip="Wrap long lines instead of scrolling sideways." />
-                                        <TextBlock Text="Ctrl+F to search" Classes="hint" VerticalAlignment="Center" />
-                                    </StackPanel>
-                                </StackPanel>
-                            </Grid>
+                            <!-- Nothing in row 2: the range warning and the stale notice both sit
+                                 with what they describe rather than as bands across the screen. -->
 
                             <!-- Viewer. AvaloniaEdit rather than a TextBox, for syntax highlighting,
                                  line numbers and its built-in Ctrl+F panel. Read-only: editing a
@@ -917,20 +937,44 @@
                                  a definition carries literal colours, so it has to be reloaded when
                                  the theme variant changes. See MainWindow.axaml.cs. -->
                             <Border Grid.Row="3" BorderThickness="1" BorderBrush="{DynamicResource SubtleBorderBrush}">
-                                <Grid>
-                                    <TextBlock IsVisible="{Binding !Script.HasSql}"
-                                               Text="No script generated yet. Pick a range and choose Generate script."
-                                               Opacity="0.6" Margin="16" TextWrapping="Wrap"
-                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                    <ae:TextEditor x:Name="SqlEditor"
-                                                   IsVisible="{Binding Script.HasSql}"
-                                                   IsReadOnly="True"
-                                                   ShowLineNumbers="{Binding ShowLineNumbers}"
-                                                   WordWrap="{Binding WrapSql}"
-                                                   FontFamily="Consolas,Menlo,monospace" FontSize="{DynamicResource AppFontSizeMono}"
-                                                   Background="Transparent"
-                                                   HorizontalScrollBarVisibility="Auto"
-                                                   VerticalScrollBarVisibility="Auto" />
+                                <Grid RowDefinitions="Auto,*">
+
+                                    <!-- What the file in the viewer actually is, and what can be done
+                                         with it. -->
+                                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto"
+                                          IsVisible="{Binding Script.HasSql}"
+                                          Background="{DynamicResource PanelBackgroundBrush}">
+                                        <TextBlock Grid.Column="0" Text="{Binding Script.SqlSummary}"
+                                                   Margin="10,7" VerticalAlignment="Center"
+                                                   FontSize="{DynamicResource AppFontSizeSmall}"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
+                                                    Margin="6,5" VerticalAlignment="Center">
+                                            <TextBlock Text="Ctrl+F to search" Classes="hint"
+                                                       VerticalAlignment="Center" />
+                                            <CheckBox Content="Wrap" IsChecked="{Binding WrapSql}"
+                                                      ToolTip.Tip="Wrap long lines instead of scrolling sideways." />
+                                            <Button Content="Copy SQL" Command="{Binding Script.CopySqlCommand}" />
+                                            <Button Content="Open file" Command="{Binding Script.OpenCommand}" />
+                                            <Button Content="Open folder" Command="{Binding Script.RevealCommand}" />
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <Grid Grid.Row="1">
+                                        <TextBlock IsVisible="{Binding !Script.HasSql}"
+                                                   Text="No script generated yet. Pick a range and choose Generate script."
+                                                   Opacity="0.6" Margin="16" TextWrapping="Wrap"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        <ae:TextEditor x:Name="SqlEditor"
+                                                       IsVisible="{Binding Script.HasSql}"
+                                                       IsReadOnly="True"
+                                                       ShowLineNumbers="{Binding ShowLineNumbers}"
+                                                       WordWrap="{Binding WrapSql}"
+                                                       FontFamily="Consolas,Menlo,monospace" FontSize="{DynamicResource AppFontSizeMono}"
+                                                       Background="Transparent"
+                                                       HorizontalScrollBarVisibility="Auto"
+                                                       VerticalScrollBarVisibility="Auto" />
+                                    </Grid>
                                 </Grid>
                             </Border>
                         </Grid>
