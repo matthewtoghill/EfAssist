@@ -1277,12 +1277,15 @@
                                                 Margin="10" Padding="8,4" CornerRadius="4"
                                                 BorderThickness="1" BorderBrush="{DynamicResource SubtleBorderBrush}"
                                                 Background="{DynamicResource CardBackgroundBrush}">
-                                            <!-- Two lines: what the selected migration changed, then
-                                                 what the colours mean. One line put a sentence and a
-                                                 key on the same row, and the key is read far more
-                                                 often than the sentence. -->
+                                            <!-- Three lines, in the order they are read: which
+                                                 migration is being compared, what it changed, and
+                                                 what the colours mean. -->
                                             <StackPanel Spacing="3">
-                                                <TextBlock Text="{Binding Diagrams.DiffSummary}"
+                                                <TextBlock Text="{Binding Diagrams.DiffMigration}"
+                                                           FontWeight="SemiBold"
+                                                           FontSize="{DynamicResource AppFontSizeSmall}"
+                                                           TextWrapping="Wrap" MaxWidth="360" />
+                                                <TextBlock Text="{Binding Diagrams.DiffChanges}"
                                                            FontSize="{DynamicResource AppFontSizeSmall}"
                                                            TextWrapping="Wrap" MaxWidth="360" />
                                                 <StackPanel Orientation="Horizontal" Spacing="12">

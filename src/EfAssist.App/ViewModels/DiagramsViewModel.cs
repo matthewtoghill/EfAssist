@@ -209,6 +209,30 @@ public partial class DiagramsViewModel : ObservableObject
 
     public bool ShowsDiff => DiffSummary is not null;
 
+    /// <summary>
+    /// The two halves of <see cref="DiffSummary"/>, for the legend on the surface: which migration is
+    /// being compared, and what it changed. One line each — the sentence is read once and the change
+    /// list is read repeatedly, and they were sharing a row.
+    /// </summary>
+    public string? DiffMigration => _comparison is null || _saved.MigrationId is null
+        ? null
+        : NameOf(_saved.MigrationId);
+
+    public string? DiffChanges
+    {
+        get
+        {
+            if (_comparison is null || _saved.MigrationId is null)
+            {
+                return null;
+            }
+
+            return _comparison.Diff.Summary is { Length: > 0 } summary
+                ? summary
+                : "Makes no change to the model.";
+        }
+    }
+
     // ---- View selection ----
 
     public IReadOnlyList<DiagramKind> Kinds { get; } = Enum.GetValues<DiagramKind>();
@@ -703,6 +727,8 @@ public partial class DiagramsViewModel : ObservableObject
             : null;
 
         OnPropertyChanged(nameof(DiffSummary));
+        OnPropertyChanged(nameof(DiffMigration));
+        OnPropertyChanged(nameof(DiffChanges));
         OnPropertyChanged(nameof(ShowsDiff));
     }
 
@@ -1117,6 +1143,8 @@ public partial class DiagramsViewModel : ObservableObject
         _matches.Clear();
         OnPropertyChanged(nameof(SourceSummary));
         OnPropertyChanged(nameof(DiffSummary));
+        OnPropertyChanged(nameof(DiffMigration));
+        OnPropertyChanged(nameof(DiffChanges));
         OnPropertyChanged(nameof(ShowsDiff));
     }
 
