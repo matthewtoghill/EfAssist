@@ -1277,20 +1277,25 @@
                                                 Margin="10" Padding="8,4" CornerRadius="4"
                                                 BorderThickness="1" BorderBrush="{DynamicResource SubtleBorderBrush}"
                                                 Background="{DynamicResource CardBackgroundBrush}">
-                                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                            <!-- Two lines: what the selected migration changed, then
+                                                 what the colours mean. One line put a sentence and a
+                                                 key on the same row, and the key is read far more
+                                                 often than the sentence. -->
+                                            <StackPanel Spacing="3">
                                                 <TextBlock Text="{Binding Diagrams.DiffSummary}"
                                                            FontSize="{DynamicResource AppFontSizeSmall}"
-                                                           VerticalAlignment="Center" TextWrapping="Wrap"
-                                                           MaxWidth="360" />
-                                                <TextBlock Text="+ added" VerticalAlignment="Center"
-                                                           FontSize="{DynamicResource AppFontSizeSmall}"
-                                                           Foreground="{DynamicResource DiagramAddedBrush}" />
-                                                <TextBlock Text="&#x2212; removed" VerticalAlignment="Center"
-                                                           FontSize="{DynamicResource AppFontSizeSmall}"
-                                                           Foreground="{DynamicResource DiagramRemovedBrush}" />
-                                                <TextBlock Text="~ changed" VerticalAlignment="Center"
-                                                           FontSize="{DynamicResource AppFontSizeSmall}"
-                                                           Foreground="{DynamicResource DiagramModifiedBrush}" />
+                                                           TextWrapping="Wrap" MaxWidth="360" />
+                                                <StackPanel Orientation="Horizontal" Spacing="12">
+                                                    <TextBlock Text="+ added"
+                                                               FontSize="{DynamicResource AppFontSizeSmall}"
+                                                               Foreground="{DynamicResource DiagramAddedBrush}" />
+                                                    <TextBlock Text="&#x2212; removed"
+                                                               FontSize="{DynamicResource AppFontSizeSmall}"
+                                                               Foreground="{DynamicResource DiagramRemovedBrush}" />
+                                                    <TextBlock Text="~ changed"
+                                                               FontSize="{DynamicResource AppFontSizeSmall}"
+                                                               Foreground="{DynamicResource DiagramModifiedBrush}" />
+                                                </StackPanel>
                                             </StackPanel>
                                         </Border>
 
