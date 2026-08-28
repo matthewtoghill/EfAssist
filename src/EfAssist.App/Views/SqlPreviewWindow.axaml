@@ -1,0 +1,61 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EfAssist.App.ViewModels"
+        xmlns:ae="using:AvaloniaEdit"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="820" d:DesignHeight="560"
+        x:Class="EfAssist.App.Views.SqlPreviewWindow"
+        x:DataType="vm:SqlPreviewRequest"
+        Title="{Binding Title}"
+        Width="820" Height="560"
+        MinWidth="420" MinHeight="280"
+        FontSize="{DynamicResource AppFontSize}"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+
+    <Grid RowDefinitions="Auto,*,Auto" Margin="16">
+
+        <Border Grid.Row="0" IsVisible="{Binding HasCaveat}" Classes="caution"
+                CornerRadius="4" Padding="10,8" Margin="0,0,0,10">
+            <TextBlock Text="{Binding Caveat}" TextWrapping="Wrap"
+                       FontSize="{DynamicResource AppFontSizeSmall}" />
+        </Border>
+
+        <!-- Read-only, and deliberately so: this is evidence for a decision, not a place to edit
+             SQL. The highlighting definition carries literal colours, so it is reloaded when the
+             theme variant changes — see the code-behind, and SyntaxHighlighting's own remarks. -->
+        <Border Grid.Row="1" BorderThickness="1" BorderBrush="{DynamicResource SubtleBorderBrush}">
+            <Grid>
+                <TextBlock IsVisible="{Binding IsEmpty}"
+                           Text="The script is empty — this would run no statements."
+                           Opacity="0.6" Margin="16" TextWrapping="Wrap"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                <ae:TextEditor x:Name="Editor"
+                               IsVisible="{Binding !IsEmpty}"
+                               IsReadOnly="True"
+                               ShowLineNumbers="{Binding ShowLineNumbers}"
+                               WordWrap="{Binding Wrap}"
+                               FontFamily="Consolas,Menlo,monospace" FontSize="{DynamicResource AppFontSizeMono}"
+                               Background="Transparent"
+                               HorizontalScrollBarVisibility="Auto"
+                               VerticalScrollBarVisibility="Auto" />
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto" Margin="0,12,0,0">
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                <Button Name="CopyButton" Content="Copy" ToolTip.Tip="Copy the SQL to the clipboard" />
+                <Button Name="OpenButton" Content="Open file"
+                        ToolTip.Tip="{Binding Path}" />
+            </StackPanel>
+
+            <TextBlock Grid.Column="1" VerticalAlignment="Center" Margin="12,0"
+                       Opacity="0.7" FontSize="{DynamicResource AppFontSizeSmall}"
+                       TextTrimming="CharacterEllipsis"
+                       Text="Ctrl+F to search. Nothing has run yet — close this to answer the confirmation." />
+
+            <Button Grid.Column="2" Name="CloseButton" Content="Close" IsCancel="True" MinWidth="90" />
+        </Grid>
+    </Grid>
+</Window>

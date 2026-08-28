@@ -25,6 +25,12 @@ public partial class MainWindow : Window
     private MigrationDetailViewModel? _detail;
 
     /// <summary>
+    /// The confirmation currently on screen, if any. Only the SQL preview needs it, to own its own
+    /// window and to know whether the question it belongs to is still being asked.
+    /// </summary>
+    private ConfirmWindow? _confirm;
+
+    /// <summary>
     /// The console row's height while expanded, so folding it away and back does not throw away a
     /// height the user set with the splitter.
     /// </summary>
@@ -75,6 +81,7 @@ public partial class MainWindow : Window
             viewModel.Script.OpenFileAsync = path => OpenWithShellAsync(path, reveal: false);
             viewModel.Script.RevealFileAsync = path => OpenWithShellAsync(path, reveal: true);
             viewModel.Migrations.Detail.OpenFileAsync = path => OpenWithShellAsync(path, reveal: false);
+            viewModel.Migrations.ShowSqlPreviewAsync = ShowSqlPreviewAsync;
 
             // Layout sizes nodes from measured text, which Core cannot do — it has no Avalonia
             // reference and no font. Without this it falls back to a character-count approximation
@@ -295,8 +302,42 @@ public partial class MainWindow : Window
     /// Modal, and owned by this window, so a destructive action cannot be triggered while its
     /// warning is on screen.
     /// </summary>
-    private Task<bool> ConfirmAsync(ConfirmRequest request) =>
-        new ConfirmWindow(request).ShowDialog<bool>(this);
+    private async Task<bool> ConfirmAsync(ConfirmRequest request)
+    {
+        // Held while the dialog is up so a SQL preview can be owned by it and stack above it. A
+        // field rather than a parameter because the preview is requested by the view model, which
+        // knows nothing about windows.
+        var window = new ConfirmWindow(request);
+        _confirm = window;
+
+        try
+        {
+            return await window.ShowDialog<bool>(this);
+        }
+        finally
+        {
+            _confirm = null;
+        }
+    }
+
+    /// <summary>
+    /// Shows generated SQL over the confirmation that asked for it.
+    /// </summary>
+    /// <remarks>
+    /// Does nothing if that confirmation has already been answered — the user can cancel while the
+    /// script is still generating, and a preview window opening after the question has gone would be
+    /// a surprise attached to nothing. The status line still names the file it was written to.
+    /// </remarks>
+    private async Task ShowSqlPreviewAsync(SqlPreviewRequest request)
+    {
+        if (_confirm is null)
+        {
+            return;
+        }
+
+        await new SqlPreviewWindow(request, path => OpenWithShellAsync(path, reveal: false))
+            .ShowDialog(_confirm);
+    }
 
     private Task ShowErrorAsync(ErrorDetail detail) =>
         new ErrorWindow(detail).ShowDialog(this);

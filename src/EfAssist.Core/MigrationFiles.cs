@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 
 namespace EfAssist.Core;
@@ -118,6 +118,43 @@ public static class MigrationFiles
         var key = Key(Path.GetFullPath(migrationsProjectPath) + "|" + (context ?? ""));
         var fileName = idempotent ? migrationId + "_idempotent.sql" : migrationId + ".sql";
         return Path.Combine(Path.GetTempPath(), "EfAssist", "preview", key, fileName);
+    }
+
+    /// <summary>
+    /// Where to generate the SQL a <c>database update</c> would run, for the preview offered on its
+    /// confirmation. Shares <see cref="ScriptCachePath"/>'s folder and its per-workspace keying; only
+    /// the file name differs, because a range is not a migration.
+    /// </summary>
+    /// <remarks>
+    /// The <c>update_</c> prefix cannot collide with a migration's own file: a migration id starts
+    /// with its timestamp. Never <c>--idempotent</c>, so there is no variant to keep apart —
+    /// <c>database update</c> does not run idempotent SQL, and previewing SQL the run would not
+    /// execute would defeat the point of the preview.
+    /// </remarks>
+    /// <param name="from">The migration the database is at, or <c>"0"</c> for an empty database.</param>
+    /// <param name="to">The migration being moved to; null for the latest.</param>
+    public static string UpdatePreviewPath(
+        string migrationsProjectPath, string? context, string? from, string? to) =>
+        ScriptCachePath(
+            migrationsProjectPath,
+            context,
+            $"update_{Safe(from) ?? "0"}_to_{Safe(to) ?? "latest"}");
+
+    /// <summary>
+    /// Strips anything a file name cannot hold. Migration names are C# identifiers, so in practice
+    /// this changes nothing — but these values reach a path, and a path is not the place to find out
+    /// that an assumption was wrong.
+    /// </summary>
+    private static string? Safe(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var invalid = Path.GetInvalidFileNameChars();
+        var cleaned = new string([.. value.Select(c => invalid.Contains(c) ? '_' : c)]);
+        return cleaned.Length > 64 ? cleaned[..64] : cleaned;
     }
 
     private static string Key(string value)

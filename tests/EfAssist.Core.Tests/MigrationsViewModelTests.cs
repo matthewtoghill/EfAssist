@@ -1,4 +1,4 @@
-using EfAssist.App.ViewModels;
+﻿using EfAssist.App.ViewModels;
 using EfAssist.Core;
 
 namespace EfAssist.Core.Tests;
@@ -34,6 +34,9 @@ public class MigrationsViewModelTests
 
         public string Provider { get; set; } = "Microsoft.EntityFrameworkCore.SqlServer";
 
+        /// <summary>What a generated script contains. Written to whatever --output asks for.</summary>
+        public string ScriptBody { get; set; } = "CREATE TABLE [Blogs] ([Id] int NOT NULL);";
+
         public Task<EfResult> RunAsync(
             IReadOnlyList<string> args,
             string workingDirectory,
@@ -63,6 +66,16 @@ public class MigrationsViewModelTests
                 }
 
                 return Result(Data(MigrationsJson(offline)));
+            }
+
+            if (key == "migrations script")
+            {
+                // The real CLI writes the SQL to --output and prints almost nothing. The preview
+                // reads that file back, so a fake that only returns success gives it nothing to read.
+                var output = args.ToList()[args.ToList().IndexOf("--output") + 1];
+                Directory.CreateDirectory(Path.GetDirectoryName(output)!);
+                File.WriteAllText(output, ScriptBody);
+                return Result(new EfResult(0, [], "fake", "."));
             }
 
             if (key == "dbcontext info")
@@ -128,6 +141,40 @@ public class MigrationsViewModelTests
 
         return (tab, runner, confirm, persists);
     }
+
+    /// <summary>
+    /// Wires a preview sink and a confirmation that presses Preview before answering, which is what
+    /// the dialog does when the user clicks the button.
+    /// </summary>
+    private static (List<SqlPreviewRequest> Previews, List<ConfirmRequest> Asked) WirePreview(
+        MigrationsViewModel tab, bool answer = false)
+    {
+        List<SqlPreviewRequest> previews = [];
+        List<ConfirmRequest> asked = [];
+
+        tab.ShowSqlPreviewAsync = preview =>
+        {
+            previews.Add(preview);
+            return Task.CompletedTask;
+        };
+
+        tab.ConfirmAsync = async request =>
+        {
+            asked.Add(request);
+            if (request.PreviewAsync is not null)
+            {
+                await request.PreviewAsync();
+            }
+
+            return answer;
+        };
+
+        return (previews, asked);
+    }
+
+    /// <summary>The positional migration arguments of the last generated script, in order.</summary>
+    private static IReadOnlyList<string> ScriptRange(FakeEf runner) =>
+        [.. LastCall(runner, "migrations script").Skip(3).TakeWhile(a => !a.StartsWith('-'))];
 
     private static IReadOnlyList<string> LastCall(FakeEf runner, string key) =>
         runner.Calls.Last(a => string.Join(' ', a.Skip(1).Take(2)) == key);
@@ -787,5 +834,153 @@ public class MigrationsViewModelTests
 
         Assert.True(tab.IsStale);
         Assert.False(tab.ShowsStaleWarning);
+    }
+
+    // ---- The SQL preview offered on an update confirmation ----
+
+    [Fact]
+    public async Task Applying_forward_previews_from_the_last_applied_migration_to_the_latest()
+    {
+        var (tab, runner, _, _) = Build();
+        await tab.RefreshCommand.ExecuteAsync(null);
+        var (previews, asked) = WirePreview(tab);
+
+        await tab.UpdateToLatestCommand.ExecuteAsync(null);
+
+        // Only the start is named: no "to" means the latest, which is what the update would do.
+        Assert.Equal(["InitialCreate"], ScriptRange(runner));
+        Assert.True(asked.Single().HasPreview);
+
+        var preview = previews.Single();
+        Assert.Equal(runner.ScriptBody, preview.Sql);
+        Assert.Contains("apply all outstanding", preview.Title);
+        Assert.Null(preview.Caveat);
+    }
+
+    [Fact]
+    public async Task Rolling_back_previews_the_down_sql_by_scripting_the_range_backwards()
+    {
+        var (tab, runner, _, _) = Build();
+        runner.Rows = [("A", true), ("B", true)];
+        await tab.RefreshCommand.ExecuteAsync(null);
+        tab.SelectedMigration = tab.Migrations.Single(m => m.Name == "A");
+        var (previews, _) = WirePreview(tab);
+
+        await tab.UpdateToSelectedCommand.ExecuteAsync(null);
+
+        // From where the database is to where it would end up. Running backwards is what makes EF
+        // emit the Down SQL, which is the half of a rollback worth reading before agreeing to it.
+        Assert.Equal(["B", "A"], ScriptRange(runner));
+        Assert.Contains("update to 'A'", previews.Single().Title);
+    }
+
+    [Fact]
+    public async Task Reverting_everything_previews_the_script_back_to_an_empty_database()
+    {
+        var (tab, runner, _, _) = Build();
+        runner.Rows = [("A", true), ("B", true)];
+        await tab.RefreshCommand.ExecuteAsync(null);
+        var (previews, _) = WirePreview(tab);
+
+        await tab.RevertAllCommand.ExecuteAsync(null);
+
+        Assert.Equal(["B", "0"], ScriptRange(runner));
+        Assert.Contains("revert all", previews.Single().Title);
+    }
+
+    [Fact]
+    public async Task A_preview_of_an_offline_list_scripts_from_zero_and_says_the_start_is_assumed()
+    {
+        var (tab, runner, _, _) = Build();
+        tab.Offline = true;
+        await tab.RefreshCommand.ExecuteAsync(null);
+        var (previews, _) = WirePreview(tab);
+
+        await tab.UpdateToLatestCommand.ExecuteAsync(null);
+
+        // Nothing is known to be applied, so the only honest starting point is the empty database —
+        // said out loud rather than left to look like the exact script the update will run.
+        Assert.Equal(["0"], ScriptRange(runner));
+        var preview = previews.Single();
+        Assert.NotNull(preview.Caveat);
+        Assert.Contains("unknown", preview.Caveat);
+        Assert.Contains("empty database", preview.Caveat);
+    }
+
+    [Fact]
+    public async Task A_preview_is_never_idempotent_whatever_the_shared_option_says()
+    {
+        var runner = new FakeEf();
+        var session = new CommandSession(runner) { PostToUiThread = action => action() };
+        var tab = new MigrationsViewModel(
+            session,
+            () => Target,
+            () => { },
+            idempotentRequested: () => true,
+            canUseIdempotent: () => true);
+
+        await tab.RefreshCommand.ExecuteAsync(null);
+        WirePreview(tab);
+
+        await tab.UpdateToLatestCommand.ExecuteAsync(null);
+
+        // `database update` does not run idempotent SQL, so previewing it would show something the
+        // run will not execute — which defeats the only purpose the preview has.
+        Assert.DoesNotContain("--idempotent", LastCall(runner, "migrations script"));
+    }
+
+    [Fact]
+    public async Task Previewing_runs_nothing_against_the_database_and_declining_still_applies_nothing()
+    {
+        var (tab, runner, _, _) = Build();
+        await tab.RefreshCommand.ExecuteAsync(null);
+        WirePreview(tab, answer: false);
+
+        await tab.UpdateToLatestCommand.ExecuteAsync(null);
+
+        Assert.True(Called(runner, "migrations script"));
+        Assert.False(Called(runner, "database update"));
+    }
+
+    [Fact]
+    public async Task Dropping_a_database_offers_no_preview_because_it_runs_no_migration_sql()
+    {
+        var (tab, _, _, _) = Build();
+        await tab.RefreshCommand.ExecuteAsync(null);
+        var (_, asked) = WirePreview(tab);
+
+        await tab.DropDatabaseCommand.ExecuteAsync(null);
+
+        Assert.False(asked.Single().HasPreview);
+    }
+
+    [Fact]
+    public async Task With_no_preview_hook_wired_up_the_confirmation_offers_no_preview_button()
+    {
+        var (tab, _, confirm, _) = Build();
+        await tab.RefreshCommand.ExecuteAsync(null);
+
+        await tab.UpdateToLatestCommand.ExecuteAsync(null);
+
+        // The view supplies the hook. Without one there is no window to show the SQL in, so the
+        // dialog must not offer a button that would do nothing.
+        Assert.False(confirm.Last!.HasPreview);
+    }
+
+    [Fact]
+    public async Task A_failed_preview_leaves_the_confirmation_standing_and_shows_no_sql()
+    {
+        var (tab, runner, _, _) = Build();
+        await tab.RefreshCommand.ExecuteAsync(null);
+        runner.Failing.Add("migrations script");
+        var (previews, asked) = WirePreview(tab, answer: true);
+
+        await tab.UpdateToLatestCommand.ExecuteAsync(null);
+
+        // The generation failing is not an answer to the question. The dialog stays up, the user
+        // still decides, and here they say yes without ever having seen the SQL.
+        Assert.Empty(previews);
+        Assert.Single(asked);
+        Assert.True(Called(runner, "database update"));
     }
 }

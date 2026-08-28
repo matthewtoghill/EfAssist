@@ -1,4 +1,4 @@
-<Window xmlns="https://github.com/avaloniaui"
+﻿<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:EfAssist.App.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -7,7 +7,7 @@
         x:Class="EfAssist.App.Views.ConfirmWindow"
         x:DataType="vm:ConfirmRequest"
         Title="{Binding Title}"
-        Width="460" SizeToContent="Height"
+        Width="520" SizeToContent="Height"
         MinHeight="180"
         CanResize="False"
         FontSize="{DynamicResource AppFontSize}"
@@ -30,9 +30,17 @@
             <TextBox Name="TypedValue" />
         </StackPanel>
 
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-            <Button Name="CancelButton" Content="Cancel" IsCancel="True" MinWidth="90" />
-            <Button Name="ConfirmButton" Content="{Binding ConfirmText}" MinWidth="90" Classes="danger" />
-        </StackPanel>
+        <!-- Preview sits left, apart from the answer buttons: it is not an answer, and putting it
+             beside Confirm would make a safety check one slip away from the thing it guards. -->
+        <Grid ColumnDefinitions="Auto,*,Auto">
+            <Button Grid.Column="0" Name="PreviewButton" Content="Preview SQL"
+                    IsVisible="{Binding HasPreview}"
+                    ToolTip.Tip="Generate the SQL this would run and show it. Builds the project, so it takes a moment." />
+
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+                <Button Name="CancelButton" Content="Cancel" IsCancel="True" MinWidth="90" />
+                <Button Name="ConfirmButton" Content="{Binding ConfirmText}" MinWidth="90" Classes="danger" />
+            </StackPanel>
+        </Grid>
     </StackPanel>
 </Window>
