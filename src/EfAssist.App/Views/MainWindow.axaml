@@ -701,7 +701,7 @@
             </Border>
 
             <!-- Tabs above, console below, draggable divider between. -->
-            <Grid Name="MainPane" Grid.Column="1" RowDefinitions="*,Auto,200" Margin="0,12,12,0">
+            <Grid Name="MainPane" Grid.Column="1" RowDefinitions="*,Auto,200" Margin="12,4,12,0">
 
                 <!-- The four screens, one cell, one visible at a time. There is no TabControl:
                      the rail replaced the header strip, and hiding the TabItems to get rid of it
@@ -1542,7 +1542,7 @@
                      gone wrong. Opened, it has two views of the same session: Activity, one card per
                      command with its own outcome and guidance, and the raw console. Inset
                      horizontally so its frame lines up with the tab content above it. -->
-                <Grid Grid.Row="2" RowDefinitions="Auto,*" Margin="12,0,11,10">
+                <Grid Grid.Row="2" RowDefinitions="Auto,*" Margin="0,0,0,10">
 
                     <!-- The strip. The whole thing is the hit target for folding and unfolding, with
                          the controls worth having without unfolding beside it. -->
