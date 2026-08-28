@@ -47,6 +47,19 @@
             <Setter Property="Margin" Value="0,0,0,6" />
         </Style>
 
+        <!-- A card on a screen: one subject, its state and its actions together. -->
+        <Style Selector="Border.card">
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource SubtleBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="5" />
+            <Setter Property="Padding" Value="14" />
+        </Style>
+        <!-- A card whose actions are destructive says so with its edge, not only its words. -->
+        <Style Selector="Border.card.danger">
+            <Setter Property="BorderBrush" Value="{DynamicResource DiagnosisErrorBorderBrush}" />
+        </Style>
+
         <!-- A field's caption where it sits beside the field rather than above it. -->
         <Style Selector="TextBlock.lbl">
             <Setter Property="FontSize" Value="{DynamicResource AppFontSizeTiny}" />
@@ -647,12 +660,6 @@
                                                 <MenuItem Header="Update to the selected migration"
                                                           Command="{Binding Migrations.UpdateToSelectedCommand}"
                                                           ToolTip.Tip="Apply or roll back to whichever migration is selected. Rolling back is confirmed first, and names what would be reverted." />
-                                                <Separator />
-                                                <MenuItem Header="Revert all migrations"
-                                                          Command="{Binding Migrations.RevertAllCommand}"
-                                                          ToolTip.Tip="Runs every Down in reverse: the schema goes back to empty, and the data with it." />
-                                                <MenuItem Header="Drop database…"
-                                                          Command="{Binding Migrations.DropDatabaseCommand}" />
                                             </MenuFlyout>
                                         </Button.Flyout>
                                     </Button>
@@ -1285,25 +1292,116 @@
                         </Grid>
                     </TabItem>
                     <TabItem Header="Tools" ToolTip.Tip="Alt+4">
-                        <StackPanel Margin="0,12,0,0" Spacing="16" MaxWidth="520">
-                            <StackPanel Spacing="6">
-                                <TextBlock Text="Pending model changes" Classes="group" />
-                                <TextBlock Classes="hint"
-                                           Text="Checks whether the current model differs from the last migration, without adding one." />
-                                <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,4,0,0">
-                                    <Button Content="Check for pending changes"
-                                            Command="{Binding Tools.CheckPendingModelChangesCommand}" />
-                                    <Border CornerRadius="3" Padding="6,2" VerticalAlignment="Center"
-                                            Classes.badgeApplied="{Binding Tools.ModelCheckState, Converter={x:Static app:OutputConverters.IsModelUpToDate}}"
-                                            Classes.badgePending="{Binding Tools.ModelCheckState, Converter={x:Static app:OutputConverters.IsModelPending}}"
-                                            Classes.badgeUnknown="{Binding Tools.ModelCheckState, Converter={x:Static app:OutputConverters.IsModelUnknown}}">
-                                        <TextBlock Text="{Binding Tools.ModelCheckState, Converter={x:Static app:OutputConverters.ModelCheckLabel}}"
-                                                   Foreground="{DynamicResource StateBadgeForegroundBrush}"
-                                                   FontSize="{DynamicResource AppFontSizeTiny}" />
-                                    </Border>
+                        <ScrollViewer Margin="0,4,0,0">
+                            <StackPanel Spacing="10">
+
+                                <StackPanel Spacing="2" Margin="0,0,0,4">
+                                    <TextBlock Text="Tools" Classes="heading" />
+                                    <TextBlock Classes="hint"
+                                               Text="Checks, what this workspace is pointed at, and the actions that affect the whole database." />
                                 </StackPanel>
+
+                                <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" MaxWidth="1100"
+                                      HorizontalAlignment="Left">
+
+                                    <!-- Pending model changes -->
+                                    <Border Grid.Row="0" Grid.Column="0" Classes="card" Margin="0,0,10,10">
+                                        <StackPanel Spacing="8">
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <TextBlock Text="Pending model changes" Classes="group"
+                                                           Margin="0" VerticalAlignment="Center" />
+                                                <Border CornerRadius="3" Padding="6,2" VerticalAlignment="Center"
+                                                        Classes.badgeApplied="{Binding Tools.ModelCheckState, Converter={x:Static app:OutputConverters.IsModelUpToDate}}"
+                                                        Classes.badgePending="{Binding Tools.ModelCheckState, Converter={x:Static app:OutputConverters.IsModelPending}}"
+                                                        Classes.badgeUnknown="{Binding Tools.ModelCheckState, Converter={x:Static app:OutputConverters.IsModelUnknown}}">
+                                                    <TextBlock Text="{Binding Tools.ModelCheckState, Converter={x:Static app:OutputConverters.ModelCheckLabel}}"
+                                                               Foreground="{DynamicResource StateBadgeForegroundBrush}"
+                                                               FontSize="{DynamicResource AppFontSizeTiny}" />
+                                                </Border>
+                                            </StackPanel>
+                                            <TextBlock Classes="hint" TextWrapping="Wrap"
+                                                       Text="Asks EF whether the model differs from the last migration, without adding one. Builds the startup project — drawing a diagram does not." />
+                                            <Button Content="Check for pending changes"
+                                                    HorizontalAlignment="Left"
+                                                    Command="{Binding Tools.CheckPendingModelChangesCommand}" />
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Environment. The facts live here; the update actions stay in
+                                         Settings rather than being offered in two places. -->
+                                    <Border Grid.Row="0" Grid.Column="1" Classes="card" Margin="0,0,0,10">
+                                        <StackPanel Spacing="8">
+                                            <TextBlock Text="Environment" Classes="group" Margin="0" />
+                                            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto">
+                                                <TextBlock Grid.Row="0" Grid.Column="0" Text="dotnet-ef"
+                                                           Classes="lbl" Width="90" />
+                                                <TextBlock Grid.Row="0" Grid.Column="1"
+                                                           Text="{Binding EnvironmentSummary}"
+                                                           TextWrapping="Wrap"
+                                                           FontSize="{DynamicResource AppFontSizeSmall}" />
+                                                <TextBlock Grid.Row="1" Grid.Column="0" Text="EfAssist"
+                                                           Classes="lbl" Width="90" Margin="0,4,0,0" />
+                                                <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal"
+                                                            Spacing="8" Margin="0,4,0,0">
+                                                    <TextBlock Text="{Binding Update.CurrentVersion}"
+                                                               FontSize="{DynamicResource AppFontSizeSmall}"
+                                                               VerticalAlignment="Center" />
+                                                    <Border Classes="caution" CornerRadius="3" Padding="6,1"
+                                                            VerticalAlignment="Center"
+                                                            IsVisible="{Binding Update.IsUpdateAvailable}">
+                                                        <TextBlock Text="{Binding Update.Message}"
+                                                                   FontSize="{DynamicResource AppFontSizeTiny}" />
+                                                    </Border>
+                                                </StackPanel>
+                                            </Grid>
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <Button Content="Update and restart" Classes="accent"
+                                                        IsVisible="{Binding Update.IsUpdateAvailable}"
+                                                        Command="{Binding Update.UpdateNowCommand}" />
+                                                <Button Content="Settings…" Command="{Binding OpenSettingsCommand}"
+                                                        ToolTip.Tip="Theme, colours, font size, updating dotnet-ef and checking for app updates." />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Workspace -->
+                                    <Border Grid.Row="1" Grid.Column="0" Classes="card" Margin="0,0,10,0">
+                                        <StackPanel Spacing="8">
+                                            <TextBlock Text="Workspace" Classes="group" Margin="0" />
+                                            <TextBlock Text="{Binding WorkspacePath}" TextWrapping="Wrap"
+                                                       FontFamily="Consolas,Menlo,monospace"
+                                                       FontSize="{DynamicResource AppFontSizeMono}"
+                                                       Opacity="0.8" />
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <Button Content="Open folder" Command="{Binding ShowWorkspaceFolderCommand}" />
+                                                <Button Content="Refresh contexts" Command="{Binding RefreshContextsCommand}" />
+                                                <Button Content="Close workspace" Command="{Binding CloseWorkspaceCommand}" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Whole-database actions. They used to sit in the Migrations
+                                         actions expander, beside per-migration ones, which made it
+                                         look as though they acted on the selected migration. They do
+                                         not: they act on every migration. -->
+                                    <Border Grid.Row="1" Grid.Column="1" Classes="card danger">
+                                        <StackPanel Spacing="8">
+                                            <TextBlock Text="Whole-database actions" Classes="group danger"
+                                                       Margin="0" />
+                                            <TextBlock Classes="hint" TextWrapping="Wrap"
+                                                       Text="These act on every migration, not the one selected on the Migrations screen. Each confirms first and shows the SQL it would run." />
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <Button Content="Revert all migrations"
+                                                        Command="{Binding Migrations.RevertAllCommand}"
+                                                        ToolTip.Tip="Runs every Down in reverse: the schema goes back to empty, and the data with it." />
+                                                <Button Content="Drop database…" Classes="danger"
+                                                        Command="{Binding Migrations.DropDatabaseCommand}" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
                             </StackPanel>
-                        </StackPanel>
+                        </ScrollViewer>
                     </TabItem>
                 </TabControl>
 
