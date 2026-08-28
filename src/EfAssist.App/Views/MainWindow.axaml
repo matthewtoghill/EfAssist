@@ -24,6 +24,7 @@
         <KeyBinding Gesture="Ctrl+OemComma" Command="{Binding OpenSettingsCommand}" />
         <!-- F1 as well as Alt+/: the slash key is not in the same place on every layout, and help is
              what F1 is for. -->
+        <KeyBinding Gesture="Ctrl+OemTilde" Command="{Binding ToggleOutputCommand}" />
         <KeyBinding Gesture="F1" Command="{Binding ShowShortcutsCommand}" />
         <KeyBinding Gesture="Alt+OemQuestion" Command="{Binding ShowShortcutsCommand}" />
         <KeyBinding Gesture="Alt+D1" Command="{Binding SelectTabCommand}" CommandParameter="0" />
@@ -1607,9 +1608,11 @@
                                                         <!-- Collapsed, a run is this line and nothing
                                                              else. The whole line is the hit target. -->
                                                         <Button Classes="rowToggle" Padding="8,6"
+                                                                HorizontalContentAlignment="Stretch"
                                                                 Command="{Binding ToggleExpandedCommand}"
                                                                 ToolTip.Tip="Show or hide this command's detail">
-                                                            <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto">
+                                                            <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto"
+                                                                  HorizontalAlignment="Stretch">
                                                                 <Path Grid.Column="0" Classes="stripChevron"
                                                                       Classes.open="{Binding IsExpanded}"
                                                                       Margin="0,0,8,0"
@@ -1652,7 +1655,7 @@
                                                         <!-- Expanded: the guidance, and what can be done
                                                              about it. -->
                                                         <StackPanel IsVisible="{Binding IsExpanded}"
-                                                                    Margin="10,0,10,10" Spacing="8">
+                                                                    Margin="10,8,10,10" Spacing="8">
                                                             <StackPanel Spacing="2" IsVisible="{Binding Failed}">
                                                                 <TextBlock Text="{Binding Problem}"
                                                                            FontWeight="SemiBold" TextWrapping="Wrap"

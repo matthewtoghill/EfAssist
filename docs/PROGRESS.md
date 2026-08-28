@@ -1566,6 +1566,16 @@ that is not about it. The gear left the top bar, which is otherwise entirely abo
 workspace. Home is `CloseWorkspaceCommand` — the start screen is where the recent list lives, so
 "back to the start" and "close this workspace" are the same action.
 
+### Round 2 tweaks
+
+- The Activity header row is stretched to the card's width. It was not, so the star column between
+  the command line and the outcome collapsed and the outcome and the time sat mid-row instead of at
+  the right edge.
+- The expanded detail gained 8px above it; it was flush against the header line, with the 10px below
+  it that it should have had on both sides.
+- `Ctrl+`` ` folds and unfolds the output pane — the gesture a terminal panel usually answers to, and
+  free here. It is on the shortcut sheet, which is the list.
+
 ### Verified
 
 - 629 passed, 0 failed. New tests: a failure arrives expanded while a success stays collapsed and

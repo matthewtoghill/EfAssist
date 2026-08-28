@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace EfAssist.App.ViewModels;
 
@@ -31,6 +31,7 @@ public static class Shortcuts
         ]),
 
         new ShortcutGroup("Panels", [
+            new Shortcut("Ctrl+`", "Show or hide the output panel"),
             new Shortcut("Ctrl+,", "Settings: theme, colours, font size, dotnet-ef and app updates"),
         ]),
 
