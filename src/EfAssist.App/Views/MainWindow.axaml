@@ -22,7 +22,6 @@
 
     <Window.KeyBindings>
         <KeyBinding Gesture="Ctrl+OemComma" Command="{Binding OpenSettingsCommand}" />
-        <KeyBinding Gesture="Ctrl+B" Command="{Binding ToggleLeftPanelCommand}" />
         <KeyBinding Gesture="Alt+D1" Command="{Binding SelectTabCommand}" CommandParameter="0" />
         <KeyBinding Gesture="Alt+D2" Command="{Binding SelectTabCommand}" CommandParameter="1" />
         <KeyBinding Gesture="Alt+D3" Command="{Binding SelectTabCommand}" CommandParameter="2" />
@@ -87,27 +86,6 @@
         <Style Selector="GridSplitter.paneV:pointerover /template/ Border#Grip">
             <Setter Property="Background" Value="{DynamicResource SplitterGripHoverBrush}" />
             <Setter Property="Width" Value="5" />
-        </Style>
-
-        <!-- The options panel's collapse chevron. Chromeless until hovered, so it reads as part of
-             the panel edge rather than as another action button. -->
-        <Style Selector="Button.paneToggle">
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Padding" Value="6,2" />
-            <Setter Property="MinWidth" Value="0" />
-            <Setter Property="Opacity" Value="0.7" />
-        </Style>
-        <Style Selector="Button.paneToggle:pointerover">
-            <Setter Property="Opacity" Value="1" />
-        </Style>
-        <!-- Fluent gives the ContentPresenter its own per-state background, so the button's own
-             Transparent is not enough to keep the resting bar invisible. -->
-        <Style Selector="Button.paneToggle /template/ ContentPresenter">
-            <Setter Property="Background" Value="Transparent" />
-        </Style>
-        <Style Selector="Button.paneToggle:pointerover /template/ ContentPresenter">
-            <Setter Property="Background" Value="{DynamicResource PanelBackgroundBrush}" />
         </Style>
 
         <!-- Navigation rail. A ListBox rather than four buttons: selection visuals, keyboard
@@ -377,6 +355,70 @@
                          nothing most of the time. -->
                     <Button Content="Cancel" Command="{Binding Session.CancelCommand}"
                             IsVisible="{Binding Session.IsRunning}" />
+
+                    <!-- Run options. These are workspace-scoped switches, saved with the workspace,
+                         so they sit beside the workspace-scoped pickers rather than being repeated
+                         on every screen. Folded away, with a count on the button: a switch that
+                         changes what a command does must never be silently on. -->
+                    <Button ToolTip.Tip="Options every dotnet ef command in this workspace runs with.">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="Run options" VerticalAlignment="Center" />
+                            <Border CornerRadius="3" Padding="5,1" VerticalAlignment="Center"
+                                    Background="{DynamicResource StateUnknownBrush}"
+                                    IsVisible="{Binding HasActiveRunOptions}">
+                                <TextBlock Text="{Binding ActiveRunOptionCount, StringFormat='{}{0} on'}"
+                                           FontSize="{DynamicResource AppFontSizeTiny}"
+                                           Foreground="{DynamicResource StateBadgeForegroundBrush}" />
+                            </Border>
+                        </StackPanel>
+                        <Button.Flyout>
+                            <Flyout Placement="BottomEdgeAlignedRight">
+                                <StackPanel Width="320" Spacing="2">
+                                    <TextBlock Text="Run options" FontWeight="SemiBold" />
+                                    <TextBlock Classes="hint" Margin="0,0,0,4"
+                                               Text="Applies to every dotnet ef command in this workspace, and is saved with it." />
+
+                                    <CheckBox Content="Skip build (--no-build)" IsChecked="{Binding NoBuild}"
+                                              Margin="0,6,0,0" />
+                                    <TextBlock Classes="hint"
+                                               Text="Faster, but uses whatever was last compiled. Results can be wrong if the model has changed since." />
+
+                                    <CheckBox Content="Offline (--no-connect)" IsChecked="{Binding Migrations.Offline}"
+                                              Margin="0,8,0,0" />
+                                    <TextBlock Classes="hint"
+                                               Text="List migration names without reaching the database. Applied state shows as Unknown." />
+
+                                    <!-- Shared by the Script tab and a migration's SQL preview in the detail
+                                         pane — one option, not two that could disagree. Disabled once the
+                                         provider is known not to support it (SQLite); until then it defaults
+                                         to enabled, since it is better to attempt it and surface EF's own
+                                         error than to grey out something that would have worked. -->
+                                    <CheckBox Content="Idempotent scripts (--idempotent)" IsChecked="{Binding Idempotent}"
+                                              IsEnabled="{Binding Script.CanUseIdempotent}"
+                                              ToolTip.Tip="{Binding Script.IdempotentTooltip}" Margin="0,8,0,0" />
+                                    <TextBlock Classes="hint"
+                                               Text="Generated SQL checks the migrations history table first, so it is safe to run more than once." />
+
+                                    <Border Height="1" Margin="0,12,0,2"
+                                            Background="{DynamicResource SubtleBorderBrush}" />
+
+                                    <TextBlock Text="Context discovery" Classes="label" />
+                                    <ComboBox ItemsSource="{Binding DiscoveryModes}"
+                                              SelectedItem="{Binding DiscoveryMode}"
+                                              HorizontalAlignment="Stretch" />
+                                    <TextBlock Classes="hint"
+                                               Text="When to list DbContexts on open. Listing builds the startup project, so large solutions may prefer Manual." />
+
+                                    <TextBlock Text="Migration list" Classes="label" />
+                                    <ComboBox ItemsSource="{Binding Migrations.RefreshModes}"
+                                              SelectedItem="{Binding Migrations.RefreshMode}"
+                                              HorizontalAlignment="Stretch" />
+                                    <TextBlock Classes="hint" Margin="0,0,0,4"
+                                               Text="When to load migrations. Remembered rows always read as Unknown until refreshed — applied state is never cached." />
+                                </StackPanel>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
                     <Button Content="Refresh contexts" Command="{Binding RefreshContextsCommand}" />
                     <Button Command="{Binding ShowWorkspaceFolderCommand}"
                             Padding="10,6" MinWidth="36"
@@ -467,11 +509,10 @@
             </StackPanel>
         </Border>
 
-        <!-- Workspace -->
-        <!-- Rail, then the options panel, then the work surface. The three project and context
-             pickers moved to the top bar; what is left in the panel is the command options, and
-             those move into a Run options popover in the next pass. -->
-        <Grid Grid.Row="2" IsVisible="{Binding HasWorkspace}" ColumnDefinitions="Auto,Auto,*">
+        <!-- Workspace: rail, then the work surface. The 320px options panel is gone — its three
+             pickers are in the top bar and its five switches are in the Run options popover
+             beside them. -->
+        <Grid Grid.Row="2" IsVisible="{Binding HasWorkspace}" ColumnDefinitions="Auto,*">
 
             <!-- Navigation rail. SelectedIndex is the same index Alt+1..4 and SelectTabCommand
                  already use, so the rail and the accelerators cannot disagree. -->
@@ -520,65 +561,8 @@
                 </ListBox>
             </Border>
 
-            <!-- Collapsed: strip. -->
-            <Border Grid.Column="1" Width="28" IsVisible="{Binding !LeftPanelExpanded}"
-                    BorderThickness="0,0,1,0" BorderBrush="{DynamicResource SubtleBorderBrush}">
-                <Button Classes="paneToggle" Content="&#xBB;" VerticalAlignment="Top" Margin="0,10,0,0"
-                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                        Command="{Binding ToggleLeftPanelCommand}"
-                        ToolTip.Tip="Show the options panel (Ctrl+B)" />
-            </Border>
-
-            <Grid Grid.Column="1" RowDefinitions="Auto,*" IsVisible="{Binding LeftPanelExpanded}" Width="300">
-
-                <!-- Full-width hit area, glyph still on the right: the whole strip above the panel
-                     is the target, not a 20px chevron. -->
-                <Button Grid.Row="0" Classes="paneToggle" Content="&#xAB;"
-                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Right"
-                        Padding="6,4,10,4" Margin="0,8,0,0"
-                        Command="{Binding ToggleLeftPanelCommand}"
-                        ToolTip.Tip="Hide the options panel (Ctrl+B)" />
-
-                <ScrollViewer Grid.Row="1" Padding="12,0,12,12">
-                    <StackPanel>
-                        <TextBlock Text="Context discovery" Classes="label" />
-                        <ComboBox ItemsSource="{Binding DiscoveryModes}"
-                                  SelectedItem="{Binding DiscoveryMode}"
-                                  HorizontalAlignment="Stretch" />
-                        <TextBlock Classes="hint"
-                                   Text="When to list DbContexts on open. Listing builds the startup project, so large solutions may prefer Manual." />
-
-                        <TextBlock Text="Migration list" Classes="label" />
-                        <ComboBox ItemsSource="{Binding Migrations.RefreshModes}"
-                                  SelectedItem="{Binding Migrations.RefreshMode}"
-                                  HorizontalAlignment="Stretch" />
-                        <TextBlock Classes="hint"
-                                   Text="When to load migrations. Remembered rows always read as Unknown until refreshed — applied state is never cached." />
-
-                        <CheckBox Content="Skip build (--no-build)" IsChecked="{Binding NoBuild}" Margin="0,12,0,0" />
-                        <TextBlock Classes="hint"
-                                   Text="Faster, but uses whatever was last compiled. Results can be wrong if the model has changed since." />
-
-                        <CheckBox Content="Offline (--no-connect)" IsChecked="{Binding Migrations.Offline}" Margin="0,8,0,0" />
-                        <TextBlock Classes="hint"
-                                   Text="List migration names without reaching the database. Applied state shows as Unknown." />
-
-                        <!-- Shared by the Script tab and a migration's SQL preview in the detail pane —
-                             one option, not two that could disagree. Disabled once the provider is known
-                             not to support it (SQLite); until then it defaults to enabled, since it is
-                             better to attempt it and surface EF's own error than to grey out something
-                             that would have worked. -->
-                        <CheckBox Content="Idempotent scripts (--idempotent)" IsChecked="{Binding Idempotent}"
-                                  IsEnabled="{Binding Script.CanUseIdempotent}"
-                                  ToolTip.Tip="{Binding Script.IdempotentTooltip}" Margin="0,8,0,0" />
-                        <TextBlock Classes="hint" Margin="0,0,0,8"
-                                   Text="Generated SQL checks the migrations history table first, so it is safe to run more than once." />
-                    </StackPanel>
-                </ScrollViewer>
-            </Grid>
-
             <!-- Tabs above, console below, draggable divider between. -->
-            <Grid Name="MainPane" Grid.Column="2" RowDefinitions="*,Auto,200" Margin="0,12,12,0">
+            <Grid Name="MainPane" Grid.Column="1" RowDefinitions="*,Auto,200" Margin="0,12,12,0">
 
                 <TabControl Grid.Row="0" Classes="railed" SelectedIndex="{Binding SelectedTabIndex}">
                     <TabItem Header="Migrations" ToolTip.Tip="Alt+1">

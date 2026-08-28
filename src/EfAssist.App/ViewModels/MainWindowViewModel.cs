@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -102,7 +103,6 @@ public partial class MainWindowViewModel : ObservableObject
         _showLineNumbers = settings.Display.ShowLineNumbers;
         _migrationActionsExpanded = settings.Display.MigrationActionsExpanded;
         _outputExpanded = settings.Display.OutputExpanded;
-        _leftPanelExpanded = settings.Display.LeftPanelExpanded;
         _defaultDiagramKind = settings.Display.DefaultDiagramKind;
         _openMaximised = settings.Display.Window.Maximised;
         Appearance = new SettingsViewModel(
@@ -137,6 +137,7 @@ public partial class MainWindowViewModel : ObservableObject
             idempotentRequested: () => Idempotent,
             canUseIdempotent: () => Script.CanUseIdempotent,
             ensureProviderKnownAsync: Script.EnsureProviderKnownAsync);
+        Migrations.PropertyChanged += OnMigrationsPropertyChanged;
         Tools = new ToolsViewModel(Session, BuildTargetForCommands);
         Diagrams = new DiagramsViewModel(
             Session,
@@ -332,14 +333,6 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     private bool _showLineNumbers;
-
-    /// <summary>
-    /// Whether the workspace settings panel down the left is open. App-wide and persisted, on the
-    /// same footing as <see cref="OutputExpanded"/>: the panel is shared by every tab, so folding it
-    /// away to a rail is a single choice rather than one per screen.
-    /// </summary>
-    [ObservableProperty]
-    private bool _leftPanelExpanded;
 
     /// <summary>
     /// Whether the output console is open. App-wide and persisted, on the same footing as
@@ -1065,12 +1058,44 @@ public partial class MainWindowViewModel : ObservableObject
 
     partial void OnDiscoveryModeChanged(DiscoveryMode value) => Persist();
 
-    partial void OnNoBuildChanged(bool value) => Persist();
+    partial void OnNoBuildChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ActiveRunOptionCount));
+        OnPropertyChanged(nameof(HasActiveRunOptions));
+        Persist();
+    }
 
     partial void OnIdempotentChanged(bool value)
     {
         Script.NotifyIdempotentChanged();
+        OnPropertyChanged(nameof(ActiveRunOptionCount));
+        OnPropertyChanged(nameof(HasActiveRunOptions));
         Persist();
+    }
+
+    /// <summary>
+    /// How many of the three command switches are on. The popover that holds them is closed most of
+    /// the time, and a switch that changes what a command does must not be invisible while it is —
+    /// this is what the count badge on the button reads.
+    /// </summary>
+    public int ActiveRunOptionCount =>
+        (NoBuild ? 1 : 0) + (Migrations.Offline ? 1 : 0) + (Idempotent ? 1 : 0);
+
+    public bool HasActiveRunOptions => ActiveRunOptionCount > 0;
+
+    /// <summary>
+    /// Offline lives on the migrations list, so its changes arrive from there rather than from a
+    /// generated hook on this class.
+    /// </summary>
+    private void OnMigrationsPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(MigrationsViewModel.Offline))
+        {
+            return;
+        }
+
+        OnPropertyChanged(nameof(ActiveRunOptionCount));
+        OnPropertyChanged(nameof(HasActiveRunOptions));
     }
 
     partial void OnWrapOutputChanged(bool value)
@@ -1108,16 +1133,6 @@ public partial class MainWindowViewModel : ObservableObject
         _settings.Display.MigrationActionsExpanded = value;
         SettingsStore.Save(_settings, _settingsPath);
     }
-
-    partial void OnLeftPanelExpandedChanged(bool value)
-    {
-        // App-wide, same as WrapOutput.
-        _settings.Display.LeftPanelExpanded = value;
-        SettingsStore.Save(_settings, _settingsPath);
-    }
-
-    [RelayCommand]
-    private void ToggleLeftPanel() => LeftPanelExpanded = !LeftPanelExpanded;
 
     /// <summary>
     /// Selects a tab by index, for the Alt+1..4 accelerators. The parameter arrives as a string

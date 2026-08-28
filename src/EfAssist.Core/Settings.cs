@@ -181,8 +181,9 @@ public sealed class DisplaySettings
     public bool MigrationActionsExpanded { get; set; } = true;
 
     /// <summary>
-    /// Show the workspace settings panel down the left expanded. On by default; collapsing it folds
-    /// the panel down to a rail and gives the width back to whichever tab is open.
+    /// Dead since the layout pass: the panel it controlled is gone, its pickers are in the top bar
+    /// and its switches are in the Run options popover. Kept so a settings file written by an
+    /// earlier version still round-trips rather than losing the rest of its display block.
     /// </summary>
     public bool LeftPanelExpanded { get; set; } = true;
 

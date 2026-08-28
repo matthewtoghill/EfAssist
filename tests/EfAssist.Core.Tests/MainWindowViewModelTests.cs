@@ -1,4 +1,4 @@
-using System.Collections.Specialized;
+﻿using System.Collections.Specialized;
 using EfAssist.App.ViewModels;
 using EfAssist.Core;
 
@@ -779,5 +779,37 @@ public class MainWindowViewModelTests : IDisposable
 
         Assert.False(viewModel.ContextsStale);
         Assert.False(viewModel.Session.HasDiagnosis);
+    }
+
+    [Fact]
+    public void Run_option_count_tracks_the_three_switches_wherever_they_live()
+    {
+        var viewModel = NewViewModel(new RoutingRunner());
+
+        Assert.Equal(0, viewModel.ActiveRunOptionCount);
+        Assert.False(viewModel.HasActiveRunOptions);
+
+        var changes = new List<string?>();
+        viewModel.PropertyChanged += (_, e) => changes.Add(e.PropertyName);
+
+        viewModel.NoBuild = true;
+        viewModel.Idempotent = true;
+
+        // Offline lives on the migrations list, not on the shell, and still has to be counted.
+        viewModel.Migrations.Offline = true;
+
+        Assert.Equal(3, viewModel.ActiveRunOptionCount);
+        Assert.True(viewModel.HasActiveRunOptions);
+
+        // The badge is bound, so every switch has to raise the change - including the one that
+        // arrives from another view model.
+        Assert.Equal(3, changes.Count(name => name == nameof(MainWindowViewModel.ActiveRunOptionCount)));
+
+        viewModel.NoBuild = false;
+        viewModel.Idempotent = false;
+        viewModel.Migrations.Offline = false;
+
+        Assert.Equal(0, viewModel.ActiveRunOptionCount);
+        Assert.False(viewModel.HasActiveRunOptions);
     }
 }
