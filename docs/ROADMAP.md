@@ -116,29 +116,33 @@ Let the app opt in to GitHub pre-releases, so a beta can be tried without publis
 - **Revisit when:** there is someone to beta-test for.
 - **Cost:** hours for the flag, most of the work is the downgrade path.
 
-### UI/UX and layout pass — partly done, the full pass still parked
-General review of layout, spacing, information density and visual polish across both screens. A run of
-density and navigation changes has landed; the open-ended polish pass has not.
+### UI/UX and layout pass — done
+Built as the Option A layout, on `feat/app-layout-redesign`. See `docs/LAYOUT-REDESIGN-PLAN.md` for
+the plan and `docs/PROGRESS.md` § Layout pass for what landed and what was decided along the way.
 
-- **Current state (done):** the left workspace panel collapses to a 28px rail with a reopen button, and
-  the state persists (`DisplaySettings.LeftPanelExpanded`, `Ctrl+B`). The output panel and the migration
-  actions group collapse the same way, each with its own persisted flag. Tab navigation has `Alt+1`–`Alt+4`
-  accelerators, advertised as a tooltip on each tab header, driven by `SelectTabCommand` — which ignores an
-  unparseable parameter rather than throwing at a keystroke. "Open folder" buttons reveal the open
-  workspace's folder and any recent entry's folder in the OS file browser without opening the workspace
-  (`ShowWorkspaceFolderCommand` / `ShowRecentFolderCommand`). The main toolbar was re-laid-out around the
-  workspace name (`WorkspaceName`, which keeps a folder's whole name and drops a solution file's
-  extension), and the button set moved to icons. Earlier passes added row numbers on the migrations list
-  and a visible grab handle on the output splitter.
-- **Not done:** the cross-cutting pass itself — a deliberate review of spacing, alignment and information
-  density across both screens, rather than the individual complaints fixed as they were noticed. Window
-  size and position persist, but the Migrations tab splitter position does not (see `PROGRESS.md`
-  § Deliberate shortcuts). There is no keyboard-shortcut reference anywhere in the app; `Ctrl+,`,
-  `Ctrl+B` and `Alt+1`–`4` are discoverable only from a tooltip or the source.
-- **Revisit when:** there's a specific list of layout/UX complaints to work through, or a design pass is
-  scheduled. The one-off route has worked so far, which is an argument for continuing it rather than
-  scheduling the big pass.
-- **Cost:** unknown until scoped — likely several small changes rather than one big one.
+- **What changed:** the 320px options panel is gone — its pickers are a breadcrumb in the top bar and
+  its switches are a Run options popover with a count badge; the tab strip is a 62px icon rail; the
+  200px console folded to a one-line strip that opens onto Activity (one card per command, with the
+  diagnosis attached to the run that caused it) or the raw console; each screen gained a header with
+  one primary action; the Migrations actions expander was replaced by per-migration actions in the
+  detail pane, a filter, and a "Database is here" marker; whole-database actions moved to Tools,
+  which is now four cards; the Diagrams toolbar was regrouped and zoom moved onto the surface; and
+  `F1` opens a shortcut sheet, which the app had no equivalent of.
+- **Still open:** the Migrations splitter position is still not persisted (see `PROGRESS.md`
+  § Deliberate shortcuts), and no one has looked at the new screens in the dark variant or at a
+  non-default font size yet.
+
+### Activity across restarts
+Keep the per-command Activity list — command, outcome, duration, diagnosis — after the app closes,
+instead of only for the session.
+
+- **Why parked:** EF output carries server names and connection strings, so persisting it means
+  deciding what to redact, where to put a size cap, and what to do with a history whose console
+  lines no longer exist. In memory it is free and cannot leak.
+- **Revisit when:** someone wants yesterday's failure back, or the same failure has to be compared
+  across two runs of the app.
+- **Cost:** a schema addition beside the workspace settings, a redaction pass, a cap, and a load
+  path — the recording itself already exists.
 
 ### App icon — done
 `Assets/app-logo.ico` replaced the Avalonia template default. It is referenced from three places, and each one covers a different surface:

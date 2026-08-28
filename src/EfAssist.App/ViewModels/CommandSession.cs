@@ -314,10 +314,6 @@ public partial class CommandSession : ObservableObject
         StatusMessage = "Ready.";
     }
 
-    /// <summary>Hides the guidance panel without touching the output it describes.</summary>
-    [RelayCommand]
-    private void DismissDiagnosis() => Diagnosis = null;
-
     [RelayCommand(CanExecute = nameof(IsRunning))]
     private void Cancel()
     {

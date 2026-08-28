@@ -64,20 +64,6 @@ public class CommandSessionTests
     }
 
     [Fact]
-    public async Task Dismissing_the_explanation_leaves_the_output_alone()
-    {
-        var session = Build(new ScriptedRunner(() => Failure("Build failed.")));
-
-        await session.RunAsync(["ef", "migrations", "list"], "Listing migrations");
-        var lines = session.Output.Count;
-
-        session.DismissDiagnosisCommand.Execute(null);
-
-        Assert.False(session.HasDiagnosis);
-        Assert.Equal(lines, session.Output.Count);
-    }
-
-    [Fact]
     public async Task Copy_diagnostics_produces_one_pasteable_block()
     {
         var copied = "";
