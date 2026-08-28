@@ -81,6 +81,7 @@ public partial class MainWindow : Window
             viewModel.ConfirmAsync = ConfirmAsync;
             viewModel.ShowErrorAsync = ShowErrorAsync;
             viewModel.ShowSettingsAsync = ShowSettingsAsync;
+            viewModel.ShowShortcutsAsync = ShowShortcutsAsync;
             viewModel.RestartRequested = Restart;
             viewModel.Script.PickSaveFileAsync = PickSaveFileAsync;
             viewModel.Script.PickFolderAsync = PickFolderAsync;
@@ -402,6 +403,8 @@ public partial class MainWindow : Window
     /// </summary>
     private Task ShowSettingsAsync() =>
         new SettingsWindow { DataContext = DataContext }.ShowDialog(this);
+
+    private Task ShowShortcutsAsync() => new ShortcutsWindow().ShowDialog(this);
 
     /// <summary>
     /// Relaunches the app so a colour change takes effect. Started before shutting down, because the

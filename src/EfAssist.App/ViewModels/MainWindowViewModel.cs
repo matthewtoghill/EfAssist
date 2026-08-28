@@ -1241,6 +1241,22 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     public Func<Task>? ShowSettingsAsync { get; set; }
 
+    /// <summary>Supplied by the view: shows the keyboard shortcut reference.</summary>
+    public Func<Task>? ShowShortcutsAsync { get; set; }
+
+    /// <summary>
+    /// Opens the shortcut sheet. The app had no shortcut reference anywhere until this: Ctrl+, and
+    /// Alt+1..4 were discoverable from a tooltip or the source and nowhere else.
+    /// </summary>
+    [RelayCommand]
+    private async Task ShowShortcuts()
+    {
+        if (ShowShortcutsAsync is not null)
+        {
+            await ShowShortcutsAsync();
+        }
+    }
+
     [RelayCommand]
     private async Task OpenSettingsAsync()
     {

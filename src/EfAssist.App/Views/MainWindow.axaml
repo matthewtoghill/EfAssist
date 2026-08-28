@@ -22,6 +22,10 @@
 
     <Window.KeyBindings>
         <KeyBinding Gesture="Ctrl+OemComma" Command="{Binding OpenSettingsCommand}" />
+        <!-- F1 as well as Alt+/: the slash key is not in the same place on every layout, and help is
+             what F1 is for. -->
+        <KeyBinding Gesture="F1" Command="{Binding ShowShortcutsCommand}" />
+        <KeyBinding Gesture="Alt+OemQuestion" Command="{Binding ShowShortcutsCommand}" />
         <KeyBinding Gesture="Alt+D1" Command="{Binding SelectTabCommand}" CommandParameter="0" />
         <KeyBinding Gesture="Alt+D2" Command="{Binding SelectTabCommand}" CommandParameter="1" />
         <KeyBinding Gesture="Alt+D3" Command="{Binding SelectTabCommand}" CommandParameter="2" />
@@ -478,7 +482,9 @@
                             ToolTip.Tip="Settings (Ctrl+,): theme, colours, font size, dotnet-ef and app updates.">
                         <PathIcon Data="{StaticResource settings_regular}" Width="16" Height="16" />
                     </Button>
-                    <Button Content="Close workspace" Command="{Binding CloseWorkspaceCommand}" />
+                    <Button Content="?" Padding="12,6" MinWidth="36"
+                            Command="{Binding ShowShortcutsCommand}"
+                            ToolTip.Tip="Keyboard shortcuts (F1, or Alt+/)" />
                 </StackPanel>
             </Grid>
         </Border>
