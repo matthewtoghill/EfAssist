@@ -84,6 +84,9 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     private ToolStatus? _toolStatus;
 
+    /// <summary>The project's resolved EF Core version, as of the last summary rebuild.</summary>
+    private string? _efCoreVersion;
+
     public MainWindowViewModel() : this(new EfRunner(), SettingsStore.Load())
     {
     }
@@ -289,6 +292,22 @@ public partial class MainWindowViewModel : ObservableObject
     private string? _environmentSummary;
 
     public static string InstallCommand => ToolStatus.InstallCommand;
+
+    /// <summary>
+    /// The parts of <see cref="EnvironmentSummary"/> on their own, because the Tools screen labels
+    /// each one instead of running them together on a single line.
+    /// </summary>
+    public string EfToolVersionText => _toolStatus is not { EfToolAvailable: true } status
+        ? "not installed"
+        : status.EfToolVersion ?? "unknown";
+
+    public string EfCoreVersionText => _efCoreVersion is null
+        ? "unknown"
+        : Preflight.ToolIsOlderThanProject(_toolStatus?.EfToolVersion, _efCoreVersion)
+            ? $"{_efCoreVersion} (newer than the tool)"
+            : _efCoreVersion;
+
+    public string SdkVersionText => _toolStatus?.SdkVersion ?? "unknown";
 
     public bool HasPreflightProblem => !string.IsNullOrEmpty(PreflightProblem);
 
@@ -965,6 +984,10 @@ public partial class MainWindowViewModel : ObservableObject
         if (_toolStatus is not { } status)
         {
             EnvironmentSummary = null;
+            _efCoreVersion = null;
+            OnPropertyChanged(nameof(EfToolVersionText));
+            OnPropertyChanged(nameof(EfCoreVersionText));
+            OnPropertyChanged(nameof(SdkVersionText));
             return;
         }
 
@@ -974,6 +997,11 @@ public partial class MainWindowViewModel : ObservableObject
         var projectVersion =
             (MigrationsProject is null ? null : Preflight.ProjectEfCoreVersion(MigrationsProject.Path))
             ?? (StartupProject is null ? null : Preflight.ProjectEfCoreVersion(StartupProject.Path));
+
+        _efCoreVersion = projectVersion;
+        OnPropertyChanged(nameof(EfToolVersionText));
+        OnPropertyChanged(nameof(EfCoreVersionText));
+        OnPropertyChanged(nameof(SdkVersionText));
 
         var parts = new List<string>(3);
 

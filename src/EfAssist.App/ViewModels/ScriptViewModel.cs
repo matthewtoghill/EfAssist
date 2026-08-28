@@ -160,6 +160,10 @@ public partial class ScriptViewModel : ObservableObject
         ? $"Scripts are written to {OutputFolder.Trim()}."
         : "No folder is set, so you will be asked where to save each script.";
 
+    /// <summary>The same fact as a path, for the Tools screen's workspace list.</summary>
+    public string OutputFolderSummary =>
+        UsesConfiguredFolder ? OutputFolder.Trim() : "asked each time";
+
     // ---- Result ----
 
     [ObservableProperty]
@@ -649,6 +653,7 @@ public partial class ScriptViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(UsesConfiguredFolder));
         OnPropertyChanged(nameof(DestinationHint));
+        OnPropertyChanged(nameof(OutputFolderSummary));
         _persist();
     }
 

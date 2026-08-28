@@ -654,6 +654,28 @@ public class MainWindowViewModelTests : IDisposable
         // The one place the assets-file shape is checked against a real restore rather than
         // hand-written JSON. The command above built the sample, so there is one to read.
         Assert.Contains("EF Core ", viewModel.EnvironmentSummary);
+
+        // The Tools screen labels the same three facts separately, so they have to be real values
+        // rather than the placeholders a workspace with nothing probed shows.
+        Assert.NotEqual("not installed", viewModel.EfToolVersionText);
+        Assert.NotEqual("unknown", viewModel.EfToolVersionText);
+        Assert.NotEqual("unknown", viewModel.EfCoreVersionText);
+        Assert.NotEqual("unknown", viewModel.SdkVersionText);
+    }
+
+    [Fact]
+    public void The_environment_versions_say_so_before_anything_has_been_probed()
+    {
+        var viewModel = NewViewModel(new RoutingRunner());
+
+        Assert.Equal("not installed", viewModel.EfToolVersionText);
+        Assert.Equal("unknown", viewModel.EfCoreVersionText);
+        Assert.Equal("unknown", viewModel.SdkVersionText);
+
+        // The scripts line on the same screen: a folder, or the fact that there is not one.
+        Assert.Equal("asked each time", viewModel.Script.OutputFolderSummary);
+        viewModel.Script.OutputFolder = @"C:\Repos\Contoso\scripts";
+        Assert.Equal(@"C:\Repos\Contoso\scripts", viewModel.Script.OutputFolderSummary);
     }
 
     private static string RepositoryRoot()

@@ -17,7 +17,7 @@ Last updated: 2026-08-28.
 | D3–D4 — Model diagrams: the tab, interaction, persistence | **Done** |
 | D5–D6 — Model diagrams: export, settings, docs | **Done** |
 
-Current state: `dotnet test EfAssist.slnx` → **634 passed, 0 failed**, about 70 seconds. The app launches, opens a real solution or folder, lists migrations with their applied state, can add, apply, roll back, remove and drop, generates SQL scripts into a syntax-highlighted viewer, draws the model as an interactive entity-relationship or class diagram that survives a restart and exports to JSON, SVG, PNG, PDF and Mermaid, and explains the common EF failures in plain language without hiding the raw output.
+Current state: `dotnet test EfAssist.slnx` → **635 passed, 0 failed**, about 70 seconds. The app launches, opens a real solution or folder, lists migrations with their applied state, can add, apply, roll back, remove and drop, generates SQL scripts into a syntax-highlighted viewer, draws the model as an interactive entity-relationship or class diagram that survives a restart and exports to JSON, SVG, PNG, PDF and Mermaid, and explains the common EF failures in plain language without hiding the raw output.
 
 The diagrams work is complete through D6, plus per-migration diagrams and diffing: the snapshot picker draws the model as of any migration from its `.Designer.cs`, and marks what that migration added, removed and changed against the one before it. The three remaining follow-ups — MSAGL layout, cross-context diagrams and diagram editing — are parked in `ROADMAP.md` with reasons.
 
@@ -1618,9 +1618,28 @@ is a habit about reading diagrams rather than a fact about one solution. The zoo
 bottom-right corner it has always had, and the legend is allowed there too: it is the reader's
 diagram, and there are four corners and two overlays.
 
+### The Tools screen's two info cards
+
+The designs had these as labelled fact lists; the first pass shipped one run-together version line
+and a Settings button, which meant the versions could not be read at a glance and every action they
+suggest lived somewhere else.
+
+- **Environment** now labels `dotnet-ef`, `EF Core`, `SDK`, `Provider` and `EfAssist` separately.
+  The three versions come from the same `ToolStatus` that builds `EnvironmentSummary`, split into
+  `EfToolVersionText` / `EfCoreVersionText` / `SdkVersionText` so the one-line form used on the home
+  page and in the diagnostics header keeps working unchanged. The provider is probed lazily, so it
+  reads "not known yet" rather than pretending to be missing.
+- Its actions are the ones the card's own facts imply: **Update dotnet-ef**, **Copy install
+  command**, and a single update slot that shows **Check for updates** until a check finds one and
+  then becomes **Update EfAssist and restart**. The Settings button is gone — the rail has a
+  settings icon, and the card no longer needs to send people elsewhere for what it is about.
+- **Workspace** lists folder, solution, migrations project and scripts folder. The settings-file
+  line and its button stayed out: nobody needs to open that file by hand. `ScriptViewModel` gained
+  `OutputFolderSummary` — the same fact as `DestinationHint`, as a path rather than a sentence.
+
 ### Verified
 
-- 634 passed, 0 failed. New tests: a failure arrives expanded while a success stays collapsed and
+- 635 passed, 0 failed. New tests: a failure arrives expanded while a success stays collapsed and
   expanding one card leaves the other alone; `ShowRawOutput` mirrors `ShowActivity` both ways and
   `ShowInRawOutput` moves both plus scrolls to the recorded line; the strip's fold command.
 - The app launches cleanly. As before, nothing has been looked at on screen — the segmented
