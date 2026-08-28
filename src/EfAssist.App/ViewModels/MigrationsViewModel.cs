@@ -301,7 +301,8 @@ public partial class MigrationsViewModel : ObservableObject
         IsStale = true;
         var result = await _session.RunAsync(
             EfArgs.MigrationsRemove(target, ForceRemove),
-            $"Removing migration '{last.Name}'");
+            $"Removing migration '{last.Name}'",
+            destructive: true);
 
         if (result is null)
         {
@@ -378,7 +379,10 @@ public partial class MigrationsViewModel : ObservableObject
         }
 
         IsStale = true;
-        var result = await _session.RunAsync(EfArgs.DatabaseDrop(target), $"Dropping database '{name}'");
+        var result = await _session.RunAsync(
+            EfArgs.DatabaseDrop(target),
+            $"Dropping database '{name}'",
+            destructive: true);
         if (result is null)
         {
             return;
@@ -431,7 +435,10 @@ public partial class MigrationsViewModel : ObservableObject
         };
 
         IsStale = true;
-        var result = await _session.RunAsync(EfArgs.DatabaseUpdate(target, targetMigration), label);
+        var result = await _session.RunAsync(
+            EfArgs.DatabaseUpdate(target, targetMigration),
+            label,
+            destructive: true);
         if (result is null)
         {
             return;

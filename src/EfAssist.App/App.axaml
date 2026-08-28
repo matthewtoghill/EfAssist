@@ -1,4 +1,4 @@
-<Application xmlns="https://github.com/avaloniaui"
+﻿<Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="EfAssist.App.App"
              xmlns:local="using:EfAssist.App"
@@ -47,6 +47,9 @@
                     <!-- Structure -->
                     <SolidColorBrush x:Key="SubtleBorderBrush" Color="#22000000" />
                     <SolidColorBrush x:Key="PanelBackgroundBrush" Color="#08000000" />
+                    <!-- A card raised off a panel: the Activity list sits on the panel wash, and its
+                         cards have to read as separate objects on it. -->
+                    <SolidColorBrush x:Key="CardBackgroundBrush" Color="#FFFFFFFF" />
                     <SolidColorBrush x:Key="SplitterGripBrush" Color="#44000000" />
                     <SolidColorBrush x:Key="SplitterGripHoverBrush" Color="#88000000" />
 
@@ -107,6 +110,7 @@
                 <ResourceDictionary x:Key="Dark">
                     <SolidColorBrush x:Key="SubtleBorderBrush" Color="#33FFFFFF" />
                     <SolidColorBrush x:Key="PanelBackgroundBrush" Color="#11FFFFFF" />
+                    <SolidColorBrush x:Key="CardBackgroundBrush" Color="#1AFFFFFF" />
                     <SolidColorBrush x:Key="SplitterGripBrush" Color="#55FFFFFF" />
                     <SolidColorBrush x:Key="SplitterGripHoverBrush" Color="#AAFFFFFF" />
 

@@ -234,11 +234,51 @@
             <Setter Property="Padding" Value="10,0" />
         </Style>
 
-        <!-- The console expander is the whole bottom pane, so its header bar and its content both
-             have to take the width and the height rather than shrink to their text. -->
-        <Style Selector="Expander.output /template/ ToggleButton">
-            <Setter Property="HorizontalAlignment" Value="Stretch" />
-            <Setter Property="HorizontalContentAlignment" Value="Left" />
+        <!-- The folded output strip. Chromeless: it is a line of text that happens to be clickable,
+             not another button competing with the screen's own actions. -->
+        <Style Selector="ToggleButton.outputStrip">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="4,5" />
+            <Setter Property="MinHeight" Value="0" />
+        </Style>
+        <Style Selector="ToggleButton.outputStrip /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="ToggleButton.outputStrip:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource PanelBackgroundBrush}" />
+        </Style>
+        <Style Selector="ToggleButton.outputStrip:checked /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+
+        <!-- One chevron, rotated: pointing right while folded, down while open. -->
+        <Style Selector="Path.stripChevron">
+            <Setter Property="Stroke" Value="{DynamicResource OutputMutedBrush}" />
+            <Setter Property="StrokeThickness" Value="1.6" />
+            <Setter Property="Width" Value="9" />
+            <Setter Property="Height" Value="9" />
+            <Setter Property="Stretch" Value="Uniform" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="ToggleButton.outputStrip:checked Path.stripChevron">
+            <Setter Property="RenderTransform" Value="rotate(90deg)" />
+        </Style>
+
+        <!-- An Activity card. Raised off the pane's wash, and washed red when the command it
+             records failed — the same two colours the diagnosis panel used. -->
+        <Style Selector="Border.runCard">
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource SubtleBorderBrush}" />
+        </Style>
+        <Style Selector="Border.runCard.failed">
+            <Setter Property="Background" Value="{DynamicResource DiagnosisErrorBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource DiagnosisErrorBorderBrush}" />
+        </Style>
+
+        <!-- A succeeded outcome, in the strip. -->
+        <Style Selector="TextBlock.applied">
+            <Setter Property="Foreground" Value="{DynamicResource StateAppliedBrush}" />
         </Style>
 
         <!-- Migration state badge -->
@@ -250,17 +290,6 @@
         </Style>
         <Style Selector="Border.badgeUnknown">
             <Setter Property="Background" Value="{DynamicResource StateUnknownBrush}" />
-        </Style>
-
-        <!-- Diagnosis panel: red for a failure, amber for something EF warned about and carried on
-             past. The two are not the same and the panel should not pretend they are. -->
-        <Style Selector="Border.diagnosis">
-            <Setter Property="Background" Value="{DynamicResource DiagnosisErrorBackgroundBrush}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource DiagnosisErrorBorderBrush}" />
-        </Style>
-        <Style Selector="Border.diagnosis.warning">
-            <Setter Property="Background" Value="{DynamicResource DiagnosisWarningBackgroundBrush}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource DiagnosisWarningBorderBrush}" />
         </Style>
     </Window.Styles>
 
@@ -1128,60 +1157,167 @@
                               ToolTip.Tip="Drag to resize the output panel" />
                 <Border Grid.Row="1" Height="12" IsVisible="{Binding !OutputExpanded}" />
 
-                <!-- Output console. Inset horizontally so its frame lines up with the tab content
-                     above it rather than standing 8px wider on each side, and off the status bar. -->
+                <!-- Output. Folded, it is one line saying what ran last and how it went — the 200px
+                     pane used to hold that height open on every screen whether or not anything had
+                     gone wrong. Opened, it has two views of the same session: Activity, one card per
+                     command with its own outcome and guidance, and the raw console. Inset
+                     horizontally so its frame lines up with the tab content above it. -->
                 <Grid Grid.Row="2" RowDefinitions="Auto,*" Margin="12,0,11,10">
 
-                    <!-- Guidance for a recognised failure. Sits directly above the raw output it
-                         explains, so the real message is never more than a glance away. -->
-                    <Border Grid.Row="0" IsVisible="{Binding Session.HasDiagnosis}"
-                            Classes="diagnosis"
-                            Classes.warning="{Binding Session.Diagnosis.IsWarning, FallbackValue=False}"
-                            BorderThickness="1"
-                            CornerRadius="4" Padding="10,8" Margin="0,0,0,8">
-                        <Grid ColumnDefinitions="*,Auto">
-                            <StackPanel Grid.Column="0" Spacing="4">
-                                <TextBlock Text="{Binding Session.Diagnosis.Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
-                                <TextBlock Text="{Binding Session.Diagnosis.Guidance}"
-                                           TextWrapping="Wrap" FontSize="{DynamicResource AppFontSizeSmall}" Opacity="0.85" />
-                            </StackPanel>
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
-                                        VerticalAlignment="Top">
-                                <Button Content="Copy diagnostics"
-                                        Command="{Binding Session.CopyDiagnosticsCommand}" />
-                                <Button Content="Dismiss"
-                                        Command="{Binding Session.DismissDiagnosisCommand}" />
-                            </StackPanel>
-                        </Grid>
-                    </Border>
+                    <!-- The strip. The whole thing is the hit target for folding and unfolding, with
+                         the controls worth having without unfolding beside it. -->
+                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                        <ToggleButton Grid.Column="0" Classes="outputStrip"
+                                      IsChecked="{Binding OutputExpanded}"
+                                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                      ToolTip.Tip="Show or hide the output panel">
+                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                <Path Classes="stripChevron" Data="{StaticResource chevron_right}" />
+                                <TextBlock Text="Output" FontWeight="SemiBold" VerticalAlignment="Center" />
 
-                    <!-- Header keeps the console's controls reachable while it is folded away: Clear and
-                         Copy are worth having without unfolding, and so is the running indicator. -->
-                    <Expander Grid.Row="1" Classes="output" IsExpanded="{Binding OutputExpanded}"
-                              Padding="0"
-                              HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
-                              HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
-                        <Expander.Header>
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <TextBlock Text="Output" VerticalAlignment="Center" FontWeight="SemiBold" />
-                                <CheckBox Content="Wrap" IsChecked="{Binding WrapOutput}" VerticalAlignment="Center"
-                                          ToolTip.Tip="Wrap long lines instead of scrolling sideways. Applies to every workspace." />
-                                <Button Content="Copy all" Command="{Binding Session.CopyOutputCommand}"
-                                        ToolTip.Tip="Copy the whole console. Individual lines can also be selected directly." />
-                                <Button Content="Copy diagnostics" Command="{Binding Session.CopyDiagnosticsCommand}" />
-                                <Button Content="Clear" Command="{Binding Session.ClearOutputCommand}" />
-                                <ProgressBar IsIndeterminate="True" Width="120" VerticalAlignment="Center"
+                                <!-- What ran last, in the strip rather than only in the pane: this is
+                                     the line that makes opening the pane unnecessary most of the time. -->
+                                <TextBlock Text="{Binding Session.LastRun.Label}" VerticalAlignment="Center"
+                                           IsVisible="{Binding Session.LastRun, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                           Opacity="0.85" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding Session.LastRun.OutcomeSummary}" VerticalAlignment="Center"
+                                           IsVisible="{Binding Session.LastRun, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                           FontSize="{DynamicResource AppFontSizeSmall}"
+                                           Classes.danger="{Binding Session.LastRun.Failed, FallbackValue=False}"
+                                           Classes.applied="{Binding Session.LastRun.Succeeded, FallbackValue=False}" />
+                                <Border Width="1" Height="14" Background="{DynamicResource SubtleBorderBrush}"
+                                        IsVisible="{Binding Session.LastRun, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                                <TextBlock Classes="hint" VerticalAlignment="Center"
+                                           Text="{Binding Session.Runs.Count, StringFormat='{}{0} commands this session'}" />
+                                <ProgressBar IsIndeterminate="True" Width="110" VerticalAlignment="Center"
                                              IsVisible="{Binding Session.IsRunning}" />
                             </StackPanel>
-                        </Expander.Header>
+                        </ToggleButton>
 
-                        <!-- No border of its own: the expander already draws one round the pane, and
-                             two lines a pixel apart just look like a mistake. -->
-                        <Border BorderThickness="0" Background="{DynamicResource PanelBackgroundBrush}">
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
+                                    VerticalAlignment="Center">
+                            <CheckBox Content="Wrap" IsChecked="{Binding WrapOutput}" VerticalAlignment="Center"
+                                      ToolTip.Tip="Wrap long lines instead of scrolling sideways. Applies to every workspace." />
+                            <Button Content="Copy all" Command="{Binding Session.CopyOutputCommand}"
+                                    ToolTip.Tip="Copy the whole console. Individual lines can also be selected directly." />
+                            <Button Content="Copy diagnostics" Command="{Binding Session.CopyDiagnosticsCommand}" />
+                            <Button Content="Clear" Command="{Binding Session.ClearOutputCommand}" />
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- The pane. Row 2 of MainPane is sized to Auto while folded, so this is simply
+                         not there rather than being an empty box. -->
+                    <Grid Grid.Row="1" RowDefinitions="Auto,*" IsVisible="{Binding OutputExpanded}"
+                          Margin="0,6,0,0">
+
+                        <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="0,0,0,6">
+                            <!-- One bound radio is enough: the group unchecks the other, so choosing
+                                 Raw output turns ShowActivity off. -->
+                            <RadioButton GroupName="OutputView" Content="Activity"
+                                         IsChecked="{Binding ShowActivity}" />
+                            <RadioButton GroupName="OutputView" Content="Raw output" />
+                            <Border Classes="caution" CornerRadius="10" Padding="8,1"
+                                    VerticalAlignment="Center"
+                                    IsVisible="{Binding Session.HasUnreadFailure}">
+                                <TextBlock Text="Something failed" FontSize="{DynamicResource AppFontSizeTiny}" />
+                            </Border>
+                            <TextBlock Classes="hint" VerticalAlignment="Center"
+                                       Text="This session's commands. Not written to disk." />
+                        </StackPanel>
+
+                        <!-- Activity: one card per command. -->
+                        <Border Grid.Row="1" IsVisible="{Binding ShowActivity}"
+                                BorderThickness="1" BorderBrush="{DynamicResource SubtleBorderBrush}"
+                                Background="{DynamicResource PanelBackgroundBrush}">
+                            <Grid>
+                                <TextBlock IsVisible="{Binding !Session.Runs.Count}"
+                                           Text="Nothing has run yet. Commands appear here as they finish."
+                                           Opacity="0.6" Margin="16" TextWrapping="Wrap"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                <ScrollViewer Padding="8">
+                                    <ItemsControl ItemsSource="{Binding Session.Runs}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:CommandRun">
+                                                <Border Classes="runCard"
+                                                        Classes.failed="{Binding Failed}"
+                                                        Margin="0,0,0,6" Padding="10,8" CornerRadius="4"
+                                                        BorderThickness="1">
+                                                    <StackPanel Spacing="6">
+                                                        <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
+                                                            <!-- Outcome as a glyph as well as words: a
+                                                                 list of cards is scanned, not read. -->
+                                                            <TextBlock Grid.Column="0" Text="&#x2713;"
+                                                                       IsVisible="{Binding Succeeded}"
+                                                                       Foreground="{DynamicResource StateAppliedBrush}"
+                                                                       FontWeight="Bold" Margin="0,0,8,0" />
+                                                            <TextBlock Grid.Column="0" Text="&#x2715;"
+                                                                       IsVisible="{Binding Failed}"
+                                                                       Classes="danger" FontWeight="Bold"
+                                                                       Margin="0,0,8,0" />
+                                                            <TextBlock Grid.Column="0" Text="&#x2013;"
+                                                                       IsVisible="{Binding Cancelled}"
+                                                                       Foreground="{DynamicResource OutputMutedBrush}"
+                                                                       FontWeight="Bold" Margin="0,0,8,0" />
+                                                            <TextBlock Grid.Column="1" Text="{Binding Label}"
+                                                                       FontWeight="SemiBold" />
+                                                            <TextBlock Grid.Column="2" Text="{Binding CommandLine}"
+                                                                       Margin="8,0,8,0" Opacity="0.7"
+                                                                       FontFamily="Consolas,Menlo,monospace"
+                                                                       FontSize="{DynamicResource AppFontSizeMono}"
+                                                                       VerticalAlignment="Center"
+                                                                       TextTrimming="CharacterEllipsis" />
+                                                            <TextBlock Grid.Column="3" Text="{Binding OutcomeSummary}"
+                                                                       FontSize="{DynamicResource AppFontSizeSmall}"
+                                                                       VerticalAlignment="Center"
+                                                                       Classes.danger="{Binding Failed}" />
+                                                            <TextBlock Grid.Column="4" Classes="hint"
+                                                                       Margin="8,0,0,0" VerticalAlignment="Center"
+                                                                       Text="{Binding StartedAt, StringFormat='{}{0:HH:mm}'}" />
+                                                        </Grid>
+
+                                                        <!-- The guidance, attached to the command that
+                                                             caused it rather than to the console. -->
+                                                        <StackPanel Spacing="2" IsVisible="{Binding Failed}">
+                                                            <TextBlock Text="{Binding Problem}"
+                                                                       FontWeight="SemiBold" TextWrapping="Wrap"
+                                                                       IsVisible="{Binding Problem, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                                                            <TextBlock Text="{Binding Diagnosis.Guidance}"
+                                                                       TextWrapping="Wrap" Opacity="0.85"
+                                                                       FontSize="{DynamicResource AppFontSizeSmall}"
+                                                                       IsVisible="{Binding Diagnosis, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                                                        </StackPanel>
+
+                                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                                            <Button Content="Show in raw output"
+                                                                    Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).ShowInRawOutputCommand}"
+                                                                    CommandParameter="{Binding}"
+                                                                    ToolTip.Tip="Jump to this command's first line in the console." />
+                                                            <Button Content="Run again"
+                                                                    IsVisible="{Binding CanRerun}"
+                                                                    Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).RerunCommand}"
+                                                                    CommandParameter="{Binding}"
+                                                                    ToolTip.Tip="Run the same command again, with the same options." />
+                                                            <TextBlock Classes="hint" VerticalAlignment="Center"
+                                                                       IsVisible="{Binding Destructive}"
+                                                                       Text="Writes to the database — repeat it from the screen that asks first." />
+                                                        </StackPanel>
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </Grid>
+                        </Border>
+
+                        <!-- Raw output: the whole console, unchanged. -->
+                        <Border Grid.Row="1" IsVisible="{Binding !ShowActivity}"
+                                BorderThickness="1" BorderBrush="{DynamicResource SubtleBorderBrush}"
+                                Background="{DynamicResource PanelBackgroundBrush}">
                             <!-- Horizontal scrolling only makes sense when lines are not wrapped. -->
                             <ScrollViewer Name="OutputScroller" Padding="8"
                                           HorizontalScrollBarVisibility="{Binding WrapOutput, Converter={x:Static app:OutputConverters.HorizontalScrollBar}}">
-                                <ItemsControl ItemsSource="{Binding Session.Output}">
+                                <ItemsControl Name="OutputItems" ItemsSource="{Binding Session.Output}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate x:DataType="core:OutputLine">
                                             <!-- Selectable so a single line can be copied without reaching for the whole diagnostics block. -->
@@ -1198,14 +1334,27 @@
                                 </ItemsControl>
                             </ScrollViewer>
                         </Border>
-                    </Expander>
+                    </Grid>
                 </Grid>
             </Grid>
         </Grid>
 
-        <!-- Status bar -->
+        <!-- Status bar. The failure is named here as well as in Activity: the pane can be folded
+             away, and a command that failed must not be something you have to go looking for. -->
         <Border Grid.Row="3" Padding="12,6" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource SubtleBorderBrush}">
-            <TextBlock Text="{Binding Session.StatusMessage}" TextTrimming="CharacterEllipsis" />
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" Text="{Binding Session.StatusMessage}"
+                           TextTrimming="CharacterEllipsis" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"
+                            IsVisible="{Binding Session.HasUnreadFailure}">
+                    <TextBlock Classes="danger" VerticalAlignment="Center"
+                               Text="{Binding Session.LastRun.Label, StringFormat='{}{0} failed'}" />
+                    <Button Content="Show" Padding="8,2"
+                            Command="{Binding ShowInRawOutputCommand}"
+                            CommandParameter="{Binding Session.LastRun}"
+                            ToolTip.Tip="Open the output panel at this command's lines." />
+                </StackPanel>
+            </Grid>
         </Border>
     </Grid>
 </Window>

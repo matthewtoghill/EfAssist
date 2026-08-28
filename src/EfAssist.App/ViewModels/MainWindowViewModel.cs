@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
@@ -147,6 +148,28 @@ public partial class MainWindowViewModel : ObservableObject
             Persist,
             settings.Display);
         Update = new UpdateViewModel(updater ?? new VelopackUpdater());
+
+        // A failure used to announce itself with a banner pinned above the console. The Activity
+        // list carries the same guidance attached to the command that caused it, so the pane opens
+        // on it instead — once, on the failure, rather than holding height open for every command.
+        Session.Runs.CollectionChanged += (_, e) =>
+        {
+            if (e.Action != NotifyCollectionChangedAction.Add)
+            {
+                return;
+            }
+
+            foreach (CommandRun run in e.NewItems!)
+            {
+                if (!run.Failed)
+                {
+                    continue;
+                }
+
+                ShowActivity = true;
+                OutputExpanded = true;
+            }
+        };
     }
 
     /// <summary>Runs commands and owns the output console. Shared by every tab.</summary>
@@ -1146,6 +1169,57 @@ public partial class MainWindowViewModel : ObservableObject
         {
             SelectedTabIndex = value;
         }
+    }
+
+    /// <summary>
+    /// Which view the output pane is showing: the per-command Activity list, or the raw console.
+    /// Two views of the same session rather than two panes — the console is still the whole
+    /// scrollback, and Activity is a way of navigating it.
+    /// </summary>
+    [ObservableProperty]
+    private bool _showActivity = true;
+
+    partial void OnShowActivityChanged(bool value)
+    {
+        if (value)
+        {
+            Session.MarkActivityRead();
+        }
+    }
+
+    /// <summary>Set by the view: scrolls the console to a line, for "Show in raw output".</summary>
+    public Action<int>? ScrollOutputToLine { get; set; }
+
+    /// <summary>
+    /// Jumps from an Activity card to that command's first line in the console. The join between the
+    /// two views: Activity navigates the output rather than replacing it.
+    /// </summary>
+    [RelayCommand]
+    private void ShowInRawOutput(CommandRun? run)
+    {
+        if (run is null)
+        {
+            return;
+        }
+
+        OutputExpanded = true;
+        ShowActivity = false;
+        ScrollOutputToLine?.Invoke(run.FirstOutputLine);
+    }
+
+    /// <summary>
+    /// Repeats a recorded command with the same arguments. Destructive runs are excluded — those
+    /// went through a confirmation showing the SQL, and re-running one from here would skip it.
+    /// </summary>
+    [RelayCommand]
+    private async Task RerunAsync(CommandRun? run)
+    {
+        if (run is null || !run.CanRerun || Session.IsRunning)
+        {
+            return;
+        }
+
+        await Session.RunAsync(run.Args, run.Label);
     }
 
     partial void OnOutputExpandedChanged(bool value)

@@ -9,6 +9,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input.Platform;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using AvaloniaEdit.Document;
 using AvaloniaEdit.Search;
 using EfAssist.App.ViewModels;
@@ -98,6 +99,7 @@ public partial class MainWindow : Window
             viewModel.Diagrams.FitToWindow = DiagramView.FitToWindow;
 
             viewModel.Session.Output.CollectionChanged += ScrollOutputToEnd;
+            viewModel.ScrollOutputToLine = ScrollOutputToLine;
 
             // The expander folds its own content, but the row it sits in still has to give the
             // height back — a fixed row would leave the fold showing as empty space.
@@ -283,6 +285,34 @@ public partial class MainWindow : Window
         // Remember what the splitter left it at before collapsing to the header bar.
         _outputHeight = row.Height;
         row.Height = GridLength.Auto;
+    }
+
+    /// <summary>
+    /// Brings one console line into view, for an Activity card's "Show in raw output". The console is
+    /// an ItemsControl inside a ScrollViewer, so every line is realised and can be asked to show
+    /// itself; a line index past the end means the console was cleared since the run, and scrolling
+    /// to the top is the honest answer.
+    /// </summary>
+    private void ScrollOutputToLine(int index)
+    {
+        // The pane has only just been shown, so its children do not exist yet this frame.
+        Dispatcher.UIThread.Post(() =>
+        {
+            var lines = OutputItems.ItemsPanelRoot?.Children;
+
+            if (lines is null || lines.Count == 0)
+            {
+                return;
+            }
+
+            if (index < 0 || index >= lines.Count)
+            {
+                OutputScroller.ScrollToHome();
+                return;
+            }
+
+            lines[index].BringIntoView();
+        }, DispatcherPriority.Loaded);
     }
 
     private void ScrollOutputToEnd(object? sender, NotifyCollectionChangedEventArgs e)
