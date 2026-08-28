@@ -48,6 +48,12 @@ public partial class MainWindow : Window
         // Subscribed here rather than in DataContextChanged, which can fire more than once.
         Closing += OnClosing;
 
+        // The top bar carries three pickers, the environment summary and five buttons, which do not
+        // all fit at the 900px minimum width. There is no container query, so the one class the
+        // styles key off is set here on resize.
+        SizeChanged += (_, e) => ApplyTopBarDensity(e.NewSize.Width);
+        ApplyTopBarDensity(Width);
+
         WireDiagramSurface();
 
         // A definition holds literal colours, so a theme switch needs a different one. This fires
@@ -244,6 +250,24 @@ public partial class MainWindow : Window
         {
             ApplyOutputHeight(viewModel.OutputExpanded);
         }
+    }
+
+    /// <summary>
+    /// Adds or removes the top bar's "narrow" class, which drops the picker captions and the
+    /// environment summary. The threshold is where the full bar stops fitting at the shipped font
+    /// size; the pickers themselves never hide, since they are the point of the bar.
+    /// </summary>
+    private void ApplyTopBarDensity(double width)
+    {
+        const double NarrowBelow = 1180;
+
+        if (width < NarrowBelow)
+        {
+            TopBar.Classes.Add("narrow");
+            return;
+        }
+
+        TopBar.Classes.Remove("narrow");
     }
 
     private void ApplyOutputHeight(bool expanded)

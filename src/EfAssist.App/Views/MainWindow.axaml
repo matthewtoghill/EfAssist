@@ -89,8 +89,8 @@
             <Setter Property="Width" Value="5" />
         </Style>
 
-        <!-- The left panel's collapse chevron. Chromeless until hovered, so it reads as part of the
-             panel edge rather than as another action button. -->
+        <!-- The options panel's collapse chevron. Chromeless until hovered, so it reads as part of
+             the panel edge rather than as another action button. -->
         <Style Selector="Button.paneToggle">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
@@ -108,6 +108,101 @@
         </Style>
         <Style Selector="Button.paneToggle:pointerover /template/ ContentPresenter">
             <Setter Property="Background" Value="{DynamicResource PanelBackgroundBrush}" />
+        </Style>
+
+        <!-- Navigation rail. A ListBox rather than four buttons: selection visuals, keyboard
+             navigation and the bound SelectedIndex all come for free, and the index is exactly what
+             the tab host and the Alt+1..4 accelerators already speak. -->
+        <Style Selector="ListBox.rail">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0,6" />
+        </Style>
+        <Style Selector="ListBox.rail ListBoxItem">
+            <Setter Property="Padding" Value="0,7" />
+            <Setter Property="Margin" Value="0,0,3,0" />
+            <Setter Property="CornerRadius" Value="0,4,4,0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+        <!-- The rail item is a glyph over a caption, and the caption has to stay legible at the
+             rail's width rather than being sized like body text. -->
+        <Style Selector="ListBox.rail TextBlock.railLabel">
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="Opacity" Value="0.75" />
+        </Style>
+        <Style Selector="ListBox.rail ListBoxItem:selected TextBlock.railLabel">
+            <Setter Property="Opacity" Value="1" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <!-- Stroke follows the item's own foreground rather than a named Fluent brush, so it stays
+             right in both variants and under a custom foreground without another resource to keep
+             in step. -->
+        <Style Selector="ListBox.rail Path.railIcon">
+            <Setter Property="Stroke" Value="{Binding $parent[ListBoxItem].Foreground}" />
+            <Setter Property="StrokeThickness" Value="1.6" />
+            <Setter Property="Opacity" Value="0.75" />
+            <Setter Property="Width" Value="20" />
+            <Setter Property="Height" Value="20" />
+            <Setter Property="Stretch" Value="Uniform" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="ListBox.rail ListBoxItem:selected Path.railIcon">
+            <Setter Property="Stroke" Value="{DynamicResource AppAccentBrush}" />
+            <Setter Property="Opacity" Value="1" />
+        </Style>
+        <Style Selector="ListBox.rail ListBoxItem:selected TextBlock.railLabel">
+            <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}" />
+        </Style>
+        <!-- The accent stripe down the selected item's leading edge. A Border inside the item
+             template, shown only for the selected one. -->
+        <Style Selector="ListBox.rail Border.railMark">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="ListBox.rail ListBoxItem:selected Border.railMark">
+            <Setter Property="IsVisible" Value="True" />
+        </Style>
+
+        <!-- The tab host keeps every TabItem, its content switching and the Alt+1..4 accelerators;
+             the rail replaces only the header strip. In Avalonia a TabItem *is* its header — the
+             selected item's content is rendered by the TabControl's own presenter — so hiding the
+             items hides the strip and nothing else. -->
+        <Style Selector="TabControl.railed > TabItem">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+
+        <!-- Breadcrumb pickers in the top bar. The caption says which choice the picker is, and it
+             is the first thing to go when the window is too narrow to carry all three. -->
+        <Style Selector="TextBlock.pillLabel">
+            <Setter Property="FontSize" Value="{DynamicResource AppFontSizeTiny}" />
+            <Setter Property="Opacity" Value="0.55" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="ComboBox.pill">
+            <Setter Property="MinWidth" Value="110" />
+            <Setter Property="MaxWidth" Value="220" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Path.crumb">
+            <Setter Property="Stroke" Value="{DynamicResource SystemControlForegroundBaseHighBrush}" />
+            <Setter Property="StrokeThickness" Value="1.4" />
+            <Setter Property="Opacity" Value="0.35" />
+            <Setter Property="Width" Value="9" />
+            <Setter Property="Height" Value="9" />
+            <Setter Property="Stretch" Value="Uniform" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <!-- Narrow window: the captions and the environment summary go, the pickers stay. Set from
+             code-behind on resize — there is no container query, and one class is cheaper than a
+             second layout. -->
+        <Style Selector="Border.narrow TextBlock.pillLabel">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="Border.narrow TextBlock.envSummary">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="Border.narrow ComboBox.pill">
+            <Setter Property="MaxWidth" Value="150" />
         </Style>
 
         <!-- Detail pane rows. A relationship row navigates to the other end of the relationship; a
@@ -230,38 +325,69 @@
 
         </StackPanel>
 
-        <!-- Toolbar -->
-        <Border Grid.Row="1" IsVisible="{Binding HasWorkspace}"
-                Padding="12,8" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource SubtleBorderBrush}">
-            <!-- Two equal star columns either side of an Auto one, so the workspace name sits in the
-                 middle of the toolbar rather than merely between its neighbours. -->
-            <Grid ColumnDefinitions="*,Auto,*">
-                <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding EnvironmentSummary}" Classes="label" Margin="0,0,8,0"
-                               TextTrimming="CharacterEllipsis" />
+        <!-- Top bar. The workspace it is pointed at, then the three choices every command depends
+             on as a breadcrumb: startup project, migrations project, DbContext. They used to be a
+             320px panel down the left, which spent that width on questions answered once per
+             session. Name-only styling lives in Window.Styles so the narrow-window class can reach
+             the captions. -->
+        <Border Grid.Row="1" Name="TopBar" IsVisible="{Binding HasWorkspace}"
+                Padding="12,7" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource SubtleBorderBrush}">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding WorkspaceName}" FontWeight="SemiBold"
+                               FontSize="{DynamicResource AppFontSizeLarge}" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" MaxWidth="220"
+                               ToolTip.Tip="{Binding WorkspacePath}" />
+                    <Border Width="1" Margin="2,0,2,0" Background="{DynamicResource SubtleBorderBrush}" />
                 </StackPanel>
 
-                <TextBlock Grid.Column="1" Text="{Binding WorkspaceName}" FontWeight="SemiBold"
-                           FontSize="{DynamicResource AppFontSizeLarge}" VerticalAlignment="Center"
-                           TextTrimming="CharacterEllipsis" Margin="8,0"
-                           ToolTip.Tip="{Binding WorkspacePath}" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <TextBlock Text="Startup" Classes="pillLabel" />
+                    <ComboBox Classes="pill" ItemsSource="{Binding Projects}"
+                              SelectedItem="{Binding StartupProject}"
+                              DisplayMemberBinding="{Binding Name}"
+                              ToolTip.Tip="Built and loaded by EF. Must reference Microsoft.EntityFrameworkCore.Design." />
+                    <Path Classes="crumb" Data="{StaticResource chevron_right}" />
+                    <TextBlock Text="Migrations" Classes="pillLabel" />
+                    <ComboBox Classes="pill" ItemsSource="{Binding Projects}"
+                              SelectedItem="{Binding MigrationsProject}"
+                              DisplayMemberBinding="{Binding Name}"
+                              ToolTip.Tip="Where migration files live." />
+                    <Path Classes="crumb" Data="{StaticResource chevron_right}" />
+                    <TextBlock Text="DbContext" Classes="pillLabel" />
+                    <ComboBox Classes="pill" ItemsSource="{Binding Contexts}"
+                              SelectedItem="{Binding SelectedContext}"
+                              DisplayMemberBinding="{Binding Name}" />
+                    <!-- Same warning the panel carried: a list that could not be refreshed must not
+                         pass itself off as current. -->
+                    <Border Classes="caution" CornerRadius="3" Padding="6,2" VerticalAlignment="Center"
+                            IsVisible="{Binding ShowsStaleContexts}"
+                            ToolTip.Tip="This list could not be refreshed and may be out of date.">
+                        <TextBlock Text="May be out of date" FontSize="{DynamicResource AppFontSizeTiny}" />
+                    </Border>
+                </StackPanel>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8"
-                            HorizontalAlignment="Right">
-					<!-- Open Workspace Folder -->
-					<Button Command="{Binding ShowWorkspaceFolderCommand}"
-		                    Padding="10,6" MinWidth="36"
-		                    ToolTip.Tip="{Binding WorkspacePath, StringFormat='Open {0} in the file browser'}">
-						<PathIcon Data="{StaticResource folder_regular}" Width="16" Height="16" />
-					</Button>
-					<!-- Open Settings -->
+                            HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding EnvironmentSummary}" Classes="envSummary hint"
+                               VerticalAlignment="Center" MaxWidth="260"
+                               TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                    <!-- Only while something is running: a permanent Cancel is a button that does
+                         nothing most of the time. -->
+                    <Button Content="Cancel" Command="{Binding Session.CancelCommand}"
+                            IsVisible="{Binding Session.IsRunning}" />
+                    <Button Content="Refresh contexts" Command="{Binding RefreshContextsCommand}" />
+                    <Button Command="{Binding ShowWorkspaceFolderCommand}"
+                            Padding="10,6" MinWidth="36"
+                            ToolTip.Tip="{Binding WorkspacePath, StringFormat='Open {0} in the file browser'}">
+                        <PathIcon Data="{StaticResource folder_regular}" Width="16" Height="16" />
+                    </Button>
                     <Button Command="{Binding OpenSettingsCommand}"
                             Padding="10,6" MinWidth="36"
                             ToolTip.Tip="Settings (Ctrl+,): theme, colours, font size, dotnet-ef and app updates.">
                         <PathIcon Data="{StaticResource settings_regular}" Width="16" Height="16" />
                     </Button>
-                    <Button Content="Refresh contexts" Command="{Binding RefreshContextsCommand}" />
-                    <Button Content="Cancel" Command="{Binding Session.CancelCommand}" />
                     <Button Content="Close workspace" Command="{Binding CloseWorkspaceCommand}" />
                 </StackPanel>
             </Grid>
@@ -342,21 +468,68 @@
         </Border>
 
         <!-- Workspace -->
-        <!-- The settings column collapses to a rail rather than to nothing, so there is always
-             something to aim at to get it back. Auto sizes column 0 to whichever of the two is
-             showing. -->
-        <Grid Grid.Row="2" IsVisible="{Binding HasWorkspace}" ColumnDefinitions="Auto,*">
+        <!-- Rail, then the options panel, then the work surface. The three project and context
+             pickers moved to the top bar; what is left in the panel is the command options, and
+             those move into a Run options popover in the next pass. -->
+        <Grid Grid.Row="2" IsVisible="{Binding HasWorkspace}" ColumnDefinitions="Auto,Auto,*">
 
-            <!-- Collapsed: rail. -->
-            <Border Grid.Column="0" Width="28" IsVisible="{Binding !LeftPanelExpanded}"
+            <!-- Navigation rail. SelectedIndex is the same index Alt+1..4 and SelectTabCommand
+                 already use, so the rail and the accelerators cannot disagree. -->
+            <Border Grid.Column="0" BorderThickness="0,0,1,0" BorderBrush="{DynamicResource SubtleBorderBrush}">
+                <ListBox Classes="rail" Width="62" SelectedIndex="{Binding SelectedTabIndex}">
+                    <ListBoxItem ToolTip.Tip="Migrations (Alt+1)">
+                        <Grid ColumnDefinitions="Auto,*">
+                            <Border Grid.Column="0" Classes="railMark" Width="3" Margin="-8,0,0,0"
+                                    CornerRadius="0,2,2,0" Background="{DynamicResource AppAccentBrush}" />
+                            <StackPanel Grid.Column="1" Spacing="2">
+                                <Path Classes="railIcon" Data="{StaticResource nav_migrations}" />
+                                <TextBlock Classes="railLabel" Text="Migrations" />
+                            </StackPanel>
+                        </Grid>
+                    </ListBoxItem>
+                    <ListBoxItem ToolTip.Tip="Script (Alt+2)">
+                        <Grid ColumnDefinitions="Auto,*">
+                            <Border Grid.Column="0" Classes="railMark" Width="3" Margin="-8,0,0,0"
+                                    CornerRadius="0,2,2,0" Background="{DynamicResource AppAccentBrush}" />
+                            <StackPanel Grid.Column="1" Spacing="2">
+                                <Path Classes="railIcon" Data="{StaticResource nav_script}" />
+                                <TextBlock Classes="railLabel" Text="Script" />
+                            </StackPanel>
+                        </Grid>
+                    </ListBoxItem>
+                    <ListBoxItem ToolTip.Tip="Diagrams (Alt+3)">
+                        <Grid ColumnDefinitions="Auto,*">
+                            <Border Grid.Column="0" Classes="railMark" Width="3" Margin="-8,0,0,0"
+                                    CornerRadius="0,2,2,0" Background="{DynamicResource AppAccentBrush}" />
+                            <StackPanel Grid.Column="1" Spacing="2">
+                                <Path Classes="railIcon" Data="{StaticResource nav_diagrams}" />
+                                <TextBlock Classes="railLabel" Text="Diagrams" />
+                            </StackPanel>
+                        </Grid>
+                    </ListBoxItem>
+                    <ListBoxItem ToolTip.Tip="Tools (Alt+4)">
+                        <Grid ColumnDefinitions="Auto,*">
+                            <Border Grid.Column="0" Classes="railMark" Width="3" Margin="-8,0,0,0"
+                                    CornerRadius="0,2,2,0" Background="{DynamicResource AppAccentBrush}" />
+                            <StackPanel Grid.Column="1" Spacing="2">
+                                <Path Classes="railIcon" Data="{StaticResource nav_tools}" />
+                                <TextBlock Classes="railLabel" Text="Tools" />
+                            </StackPanel>
+                        </Grid>
+                    </ListBoxItem>
+                </ListBox>
+            </Border>
+
+            <!-- Collapsed: strip. -->
+            <Border Grid.Column="1" Width="28" IsVisible="{Binding !LeftPanelExpanded}"
                     BorderThickness="0,0,1,0" BorderBrush="{DynamicResource SubtleBorderBrush}">
                 <Button Classes="paneToggle" Content="&#xBB;" VerticalAlignment="Top" Margin="0,10,0,0"
                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                         Command="{Binding ToggleLeftPanelCommand}"
-                        ToolTip.Tip="Show the settings panel (Ctrl+B)" />
+                        ToolTip.Tip="Show the options panel (Ctrl+B)" />
             </Border>
 
-            <Grid Grid.Column="0" RowDefinitions="Auto,*" IsVisible="{Binding LeftPanelExpanded}" Width="320">
+            <Grid Grid.Column="1" RowDefinitions="Auto,*" IsVisible="{Binding LeftPanelExpanded}" Width="300">
 
                 <!-- Full-width hit area, glyph still on the right: the whole strip above the panel
                      is the target, not a 20px chevron. -->
@@ -364,34 +537,10 @@
                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Right"
                         Padding="6,4,10,4" Margin="0,8,0,0"
                         Command="{Binding ToggleLeftPanelCommand}"
-                        ToolTip.Tip="Hide the settings panel (Ctrl+B)" />
+                        ToolTip.Tip="Hide the options panel (Ctrl+B)" />
 
                 <ScrollViewer Grid.Row="1" Padding="12,0,12,12">
                     <StackPanel>
-                        <TextBlock Text="Startup project" Classes="label" />
-                        <ComboBox ItemsSource="{Binding Projects}"
-                                  SelectedItem="{Binding StartupProject}"
-                                  DisplayMemberBinding="{Binding Name}"
-                                  HorizontalAlignment="Stretch" />
-                        <TextBlock Classes="hint"
-                                   Text="Built and loaded by EF. Must reference Microsoft.EntityFrameworkCore.Design." />
-
-                        <TextBlock Text="Migrations project" Classes="label" />
-                        <ComboBox ItemsSource="{Binding Projects}"
-                                  SelectedItem="{Binding MigrationsProject}"
-                                  DisplayMemberBinding="{Binding Name}"
-                                  HorizontalAlignment="Stretch" />
-                        <TextBlock Classes="hint" Text="Where migration files live." />
-
-                        <TextBlock Text="DbContext" Classes="label" />
-                        <ComboBox ItemsSource="{Binding Contexts}"
-                                  SelectedItem="{Binding SelectedContext}"
-                                  DisplayMemberBinding="{Binding Name}"
-                                  HorizontalAlignment="Stretch" />
-                        <TextBlock Classes="hint caution" Margin="0,4,0,0"
-                                   IsVisible="{Binding ShowsStaleContexts}"
-                                   Text="This list could not be refreshed and may be out of date." />
-
                         <TextBlock Text="Context discovery" Classes="label" />
                         <ComboBox ItemsSource="{Binding DiscoveryModes}"
                                   SelectedItem="{Binding DiscoveryMode}"
@@ -429,9 +578,9 @@
             </Grid>
 
             <!-- Tabs above, console below, draggable divider between. -->
-            <Grid Name="MainPane" Grid.Column="1" RowDefinitions="*,Auto,200" Margin="0,12,12,0">
+            <Grid Name="MainPane" Grid.Column="2" RowDefinitions="*,Auto,200" Margin="0,12,12,0">
 
-                <TabControl Grid.Row="0" SelectedIndex="{Binding SelectedTabIndex}">
+                <TabControl Grid.Row="0" Classes="railed" SelectedIndex="{Binding SelectedTabIndex}">
                     <TabItem Header="Migrations" ToolTip.Tip="Alt+1">
                         <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="0,8,0,0">
 
