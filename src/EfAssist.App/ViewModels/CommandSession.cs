@@ -290,6 +290,10 @@ public partial class CommandSession : ObservableObject
         if (run.Failed)
         {
             HasUnreadFailure = true;
+
+            // The pane opens itself on a failure, so the card it opened for is already showing its
+            // guidance rather than needing a click to reveal it.
+            run.IsExpanded = true;
         }
 
         OnPropertyChanged(nameof(LastRun));

@@ -136,6 +136,38 @@
             <Setter Property="Opacity" Value="1" />
             <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
+        <!-- Rail footer buttons: same shape as a rail item, no selection. -->
+        <Style Selector="Button.railAction">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0,7" />
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="CornerRadius" Value="0,4,4,0" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Margin" Value="0,0,3,0" />
+        </Style>
+        <Style Selector="Button.railAction /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.railAction:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource PanelBackgroundBrush}" />
+        </Style>
+        <Style Selector="Button.railAction Path.railIcon">
+            <Setter Property="Stroke" Value="{Binding $parent[Button].Foreground}" />
+            <Setter Property="StrokeThickness" Value="1.6" />
+            <Setter Property="Opacity" Value="0.75" />
+            <Setter Property="Width" Value="20" />
+            <Setter Property="Height" Value="20" />
+            <Setter Property="Stretch" Value="Uniform" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.railAction TextBlock.railLabel">
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="Opacity" Value="0.75" />
+        </Style>
+
         <!-- Stroke follows the item's own foreground rather than a named Fluent brush, so it stays
              right in both variants and under a custom foreground without another resource to keep
              in step. -->
@@ -257,25 +289,28 @@
             <Setter Property="Padding" Value="10,0" />
         </Style>
 
-        <!-- The folded output strip. Chromeless: it is a line of text that happens to be clickable,
-             not another button competing with the screen's own actions. -->
-        <Style Selector="ToggleButton.outputStrip">
+        <!-- The folded output strip, and an Activity card's header. Chromeless: a line of text
+             that happens to be clickable, not another button competing with the screen's own
+             actions. A Button rather than a ToggleButton on purpose — Fluent gives a checked
+             ToggleButton the accent fill and a foreground to contrast with it, which made the
+             strip's own text change colour when the pane opened. -->
+        <Style Selector="Button.rowToggle">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Padding" Value="4,5" />
             <Setter Property="MinHeight" Value="0" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
         </Style>
-        <Style Selector="ToggleButton.outputStrip /template/ ContentPresenter">
+        <Style Selector="Button.rowToggle /template/ ContentPresenter">
             <Setter Property="Background" Value="Transparent" />
         </Style>
-        <Style Selector="ToggleButton.outputStrip:pointerover /template/ ContentPresenter">
+        <Style Selector="Button.rowToggle:pointerover /template/ ContentPresenter">
             <Setter Property="Background" Value="{DynamicResource PanelBackgroundBrush}" />
         </Style>
-        <Style Selector="ToggleButton.outputStrip:checked /template/ ContentPresenter">
-            <Setter Property="Background" Value="Transparent" />
-        </Style>
 
-        <!-- One chevron, rotated: pointing right while folded, down while open. -->
+        <!-- One chevron, rotated: pointing right while folded, down while open. The class is bound to
+             the folded state at the usage site. -->
         <Style Selector="Path.stripChevron">
             <Setter Property="Stroke" Value="{DynamicResource OutputMutedBrush}" />
             <Setter Property="StrokeThickness" Value="1.6" />
@@ -284,8 +319,47 @@
             <Setter Property="Stretch" Value="Uniform" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
-        <Style Selector="ToggleButton.outputStrip:checked Path.stripChevron">
+        <Style Selector="Path.stripChevron.open">
             <Setter Property="RenderTransform" Value="rotate(90deg)" />
+        </Style>
+
+        <!-- Segmented switch. Radio buttons rather than toggles, so one side is always selected and
+             clicking the selected side cannot turn both off, with the circle templated away. The
+             selected segment is marked by an accent underline rather than an accent fill: a fill
+             needs a foreground chosen to contrast with whatever accent the user has configured. -->
+        <Style Selector="RadioButton.segment">
+            <Setter Property="Padding" Value="14,4" />
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Panel Background="{TemplateBinding Background}">
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          Padding="{TemplateBinding Padding}"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        <Border Name="Underline" Height="2" VerticalAlignment="Bottom"
+                                IsVisible="False"
+                                Background="{DynamicResource AppAccentBrush}" />
+                    </Panel>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="RadioButton.segment:pointerover">
+            <Setter Property="Background" Value="{DynamicResource PanelBackgroundBrush}" />
+        </Style>
+        <Style Selector="RadioButton.segment:checked">
+            <Setter Property="Background" Value="{DynamicResource PanelBackgroundBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="RadioButton.segment:checked /template/ Border#Underline">
+            <Setter Property="IsVisible" Value="True" />
+        </Style>
+        <!-- The frame around the group, so the two segments read as one control. -->
+        <Style Selector="Border.segments">
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource SubtleBorderBrush}" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="ClipToBounds" Value="True" />
         </Style>
 
         <!-- An Activity card. Raised off the pane's wash, and washed red when the command it
@@ -477,11 +551,6 @@
                             ToolTip.Tip="{Binding WorkspacePath, StringFormat='Open {0} in the file browser'}">
                         <PathIcon Data="{StaticResource folder_regular}" Width="16" Height="16" />
                     </Button>
-                    <Button Command="{Binding OpenSettingsCommand}"
-                            Padding="10,6" MinWidth="36"
-                            ToolTip.Tip="Settings (Ctrl+,): theme, colours, font size, dotnet-ef and app updates.">
-                        <PathIcon Data="{StaticResource settings_regular}" Width="16" Height="16" />
-                    </Button>
                     <Button Content="?" Padding="12,6" MinWidth="36"
                             Command="{Binding ShowShortcutsCommand}"
                             ToolTip.Tip="Keyboard shortcuts (F1, or Alt+/)" />
@@ -571,7 +640,8 @@
             <!-- Navigation rail. SelectedIndex is the same index Alt+1..4 and SelectTabCommand
                  already use, so the rail and the accelerators cannot disagree. -->
             <Border Grid.Column="0" BorderThickness="0,0,1,0" BorderBrush="{DynamicResource SubtleBorderBrush}">
-                <ListBox Classes="rail" Width="62" SelectedIndex="{Binding SelectedTabIndex}">
+                <Grid RowDefinitions="*,Auto" Width="62">
+                <ListBox Grid.Row="0" Classes="rail" SelectedIndex="{Binding SelectedTabIndex}">
                     <ListBoxItem ToolTip.Tip="Migrations (Alt+1)">
                         <Grid ColumnDefinitions="Auto,*">
                             <Border Grid.Column="0" Classes="railMark" Width="3" Margin="-8,0,0,0"
@@ -613,6 +683,28 @@
                         </Grid>
                     </ListBoxItem>
                 </ListBox>
+
+                <!-- App-level actions, at the far end of the rail from the screens: leaving this
+                     workspace, and everything that is not about it. The gear used to be in the top
+                     bar, which is otherwise entirely about this workspace. -->
+                <StackPanel Grid.Row="1" Spacing="2" Margin="0,6,0,6">
+                    <Border Height="1" Margin="8,0,8,4" Background="{DynamicResource SubtleBorderBrush}" />
+                    <Button Classes="railAction" Command="{Binding CloseWorkspaceCommand}"
+                            ToolTip.Tip="Close this workspace and go back to the start screen">
+                        <StackPanel Spacing="2">
+                            <Path Classes="railIcon" Data="{StaticResource nav_home}" />
+                            <TextBlock Classes="railLabel" Text="Home" />
+                        </StackPanel>
+                    </Button>
+                    <Button Classes="railAction" Command="{Binding OpenSettingsCommand}"
+                            ToolTip.Tip="Settings (Ctrl+,): theme, colours, font size, dotnet-ef and app updates.">
+                        <StackPanel Spacing="2">
+                            <Path Classes="railIcon" Data="{StaticResource nav_settings}" />
+                            <TextBlock Classes="railLabel" Text="Settings" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+                </Grid>
             </Border>
 
             <!-- Tabs above, console below, draggable divider between. -->
@@ -1430,12 +1522,12 @@
                     <!-- The strip. The whole thing is the hit target for folding and unfolding, with
                          the controls worth having without unfolding beside it. -->
                     <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
-                        <ToggleButton Grid.Column="0" Classes="outputStrip"
-                                      IsChecked="{Binding OutputExpanded}"
-                                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                                      ToolTip.Tip="Show or hide the output panel">
+                        <Button Grid.Column="0" Classes="rowToggle"
+                                Command="{Binding ToggleOutputCommand}"
+                                ToolTip.Tip="Show or hide the output panel">
                             <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                <Path Classes="stripChevron" Data="{StaticResource chevron_right}" />
+                                <Path Classes="stripChevron" Classes.open="{Binding OutputExpanded}"
+                                      Data="{StaticResource chevron_right}" />
                                 <TextBlock Text="Output" FontWeight="SemiBold" VerticalAlignment="Center" />
 
                                 <!-- What ran last, in the strip rather than only in the pane: this is
@@ -1455,7 +1547,7 @@
                                 <ProgressBar IsIndeterminate="True" Width="110" VerticalAlignment="Center"
                                              IsVisible="{Binding Session.IsRunning}" />
                             </StackPanel>
-                        </ToggleButton>
+                        </Button>
 
                         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
                                     VerticalAlignment="Center">
@@ -1474,11 +1566,16 @@
                           Margin="0,6,0,0">
 
                         <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="0,0,0,6">
-                            <!-- One bound radio is enough: the group unchecks the other, so choosing
-                                 Raw output turns ShowActivity off. -->
-                            <RadioButton GroupName="OutputView" Content="Activity"
-                                         IsChecked="{Binding ShowActivity}" />
-                            <RadioButton GroupName="OutputView" Content="Raw output" />
+                            <!-- Both halves are bound, so arriving at the console from somewhere
+                                 else — "Show in raw output" — moves the switch with it. -->
+                            <Border Classes="segments">
+                                <StackPanel Orientation="Horizontal">
+                                    <RadioButton Classes="segment" GroupName="OutputView" Content="Activity"
+                                                 IsChecked="{Binding ShowActivity}" />
+                                    <RadioButton Classes="segment" GroupName="OutputView" Content="Raw output"
+                                                 IsChecked="{Binding ShowRawOutput}" />
+                                </StackPanel>
+                            </Border>
                             <Border Classes="caution" CornerRadius="10" Padding="8,1"
                                     VerticalAlignment="Center"
                                     IsVisible="{Binding Session.HasUnreadFailure}">
@@ -1503,66 +1600,84 @@
                                             <DataTemplate x:DataType="vm:CommandRun">
                                                 <Border Classes="runCard"
                                                         Classes.failed="{Binding Failed}"
-                                                        Margin="0,0,0,6" Padding="10,8" CornerRadius="4"
+                                                        Margin="0,0,0,6" CornerRadius="4"
                                                         BorderThickness="1">
-                                                    <StackPanel Spacing="6">
-                                                        <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
-                                                            <!-- Outcome as a glyph as well as words: a
-                                                                 list of cards is scanned, not read. -->
-                                                            <TextBlock Grid.Column="0" Text="&#x2713;"
-                                                                       IsVisible="{Binding Succeeded}"
-                                                                       Foreground="{DynamicResource StateAppliedBrush}"
-                                                                       FontWeight="Bold" Margin="0,0,8,0" />
-                                                            <TextBlock Grid.Column="0" Text="&#x2715;"
-                                                                       IsVisible="{Binding Failed}"
-                                                                       Classes="danger" FontWeight="Bold"
-                                                                       Margin="0,0,8,0" />
-                                                            <TextBlock Grid.Column="0" Text="&#x2013;"
-                                                                       IsVisible="{Binding Cancelled}"
-                                                                       Foreground="{DynamicResource OutputMutedBrush}"
-                                                                       FontWeight="Bold" Margin="0,0,8,0" />
-                                                            <TextBlock Grid.Column="1" Text="{Binding Label}"
-                                                                       FontWeight="SemiBold" />
-                                                            <TextBlock Grid.Column="2" Text="{Binding CommandLine}"
-                                                                       Margin="8,0,8,0" Opacity="0.7"
-                                                                       FontFamily="Consolas,Menlo,monospace"
-                                                                       FontSize="{DynamicResource AppFontSizeMono}"
-                                                                       VerticalAlignment="Center"
-                                                                       TextTrimming="CharacterEllipsis" />
-                                                            <TextBlock Grid.Column="3" Text="{Binding OutcomeSummary}"
-                                                                       FontSize="{DynamicResource AppFontSizeSmall}"
-                                                                       VerticalAlignment="Center"
-                                                                       Classes.danger="{Binding Failed}" />
-                                                            <TextBlock Grid.Column="4" Classes="hint"
-                                                                       Margin="8,0,0,0" VerticalAlignment="Center"
-                                                                       Text="{Binding StartedAt, StringFormat='{}{0:HH:mm}'}" />
-                                                        </Grid>
+                                                    <StackPanel>
 
-                                                        <!-- The guidance, attached to the command that
-                                                             caused it rather than to the console. -->
-                                                        <StackPanel Spacing="2" IsVisible="{Binding Failed}">
-                                                            <TextBlock Text="{Binding Problem}"
-                                                                       FontWeight="SemiBold" TextWrapping="Wrap"
-                                                                       IsVisible="{Binding Problem, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                                                            <TextBlock Text="{Binding Diagnosis.Guidance}"
-                                                                       TextWrapping="Wrap" Opacity="0.85"
-                                                                       FontSize="{DynamicResource AppFontSizeSmall}"
-                                                                       IsVisible="{Binding Diagnosis, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                                                        </StackPanel>
+                                                        <!-- Collapsed, a run is this line and nothing
+                                                             else. The whole line is the hit target. -->
+                                                        <Button Classes="rowToggle" Padding="8,6"
+                                                                Command="{Binding ToggleExpandedCommand}"
+                                                                ToolTip.Tip="Show or hide this command's detail">
+                                                            <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto">
+                                                                <Path Grid.Column="0" Classes="stripChevron"
+                                                                      Classes.open="{Binding IsExpanded}"
+                                                                      Margin="0,0,8,0"
+                                                                      Data="{StaticResource chevron_right}" />
 
-                                                        <StackPanel Orientation="Horizontal" Spacing="6">
-                                                            <Button Content="Show in raw output"
-                                                                    Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).ShowInRawOutputCommand}"
-                                                                    CommandParameter="{Binding}"
-                                                                    ToolTip.Tip="Jump to this command's first line in the console." />
-                                                            <Button Content="Run again"
-                                                                    IsVisible="{Binding CanRerun}"
-                                                                    Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).RerunCommand}"
-                                                                    CommandParameter="{Binding}"
-                                                                    ToolTip.Tip="Run the same command again, with the same options." />
-                                                            <TextBlock Classes="hint" VerticalAlignment="Center"
-                                                                       IsVisible="{Binding Destructive}"
-                                                                       Text="Writes to the database — repeat it from the screen that asks first." />
+                                                                <!-- Outcome as a glyph as well as words:
+                                                                     a list of cards is scanned, not read. -->
+                                                                <TextBlock Grid.Column="1" Text="&#x2713;"
+                                                                           IsVisible="{Binding Succeeded}"
+                                                                           Foreground="{DynamicResource StateAppliedBrush}"
+                                                                           FontWeight="Bold" Margin="0,0,8,0" />
+                                                                <TextBlock Grid.Column="1" Text="&#x2715;"
+                                                                           IsVisible="{Binding Failed}"
+                                                                           Classes="danger" FontWeight="Bold"
+                                                                           Margin="0,0,8,0" />
+                                                                <TextBlock Grid.Column="1" Text="&#x2013;"
+                                                                           IsVisible="{Binding Cancelled}"
+                                                                           Foreground="{DynamicResource OutputMutedBrush}"
+                                                                           FontWeight="Bold" Margin="0,0,8,0" />
+
+                                                                <TextBlock Grid.Column="2" Text="{Binding Label}"
+                                                                           FontWeight="SemiBold"
+                                                                           VerticalAlignment="Center" />
+                                                                <TextBlock Grid.Column="3" Text="{Binding CommandLine}"
+                                                                           Margin="8,0,8,0" Opacity="0.7"
+                                                                           FontFamily="Consolas,Menlo,monospace"
+                                                                           FontSize="{DynamicResource AppFontSizeMono}"
+                                                                           VerticalAlignment="Center"
+                                                                           TextTrimming="CharacterEllipsis" />
+                                                                <TextBlock Grid.Column="4" Text="{Binding OutcomeSummary}"
+                                                                           FontSize="{DynamicResource AppFontSizeSmall}"
+                                                                           VerticalAlignment="Center"
+                                                                           Classes.danger="{Binding Failed}" />
+                                                                <TextBlock Grid.Column="5" Classes="hint"
+                                                                           Margin="8,0,0,0" VerticalAlignment="Center"
+                                                                           Text="{Binding StartedAt, StringFormat='{}{0:HH:mm}'}" />
+                                                            </Grid>
+                                                        </Button>
+
+                                                        <!-- Expanded: the guidance, and what can be done
+                                                             about it. -->
+                                                        <StackPanel IsVisible="{Binding IsExpanded}"
+                                                                    Margin="10,0,10,10" Spacing="8">
+                                                            <StackPanel Spacing="2" IsVisible="{Binding Failed}">
+                                                                <TextBlock Text="{Binding Problem}"
+                                                                           FontWeight="SemiBold" TextWrapping="Wrap"
+                                                                           IsVisible="{Binding Problem, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                                                                <TextBlock Text="{Binding Diagnosis.Guidance}"
+                                                                           TextWrapping="Wrap" Opacity="0.85"
+                                                                           FontSize="{DynamicResource AppFontSizeSmall}"
+                                                                           IsVisible="{Binding Diagnosis, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                                                            </StackPanel>
+
+                                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                                <Button Content="Show in raw output"
+                                                                        Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).ShowInRawOutputCommand}"
+                                                                        CommandParameter="{Binding}"
+                                                                        ToolTip.Tip="Jump to this command's first line in the console." />
+                                                                <Button Content="Run again"
+                                                                        IsVisible="{Binding CanRerun}"
+                                                                        Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).RerunCommand}"
+                                                                        CommandParameter="{Binding}"
+                                                                        ToolTip.Tip="Run the same command again, with the same options." />
+                                                                <TextBlock Classes="hint" VerticalAlignment="Center"
+                                                                           MaxWidth="380" TextWrapping="Wrap"
+                                                                           IsVisible="{Binding Destructive}"
+                                                                           Text="Writes to the database — repeat it from the screen that asks first." />
+                                                            </StackPanel>
                                                         </StackPanel>
                                                     </StackPanel>
                                                 </Border>

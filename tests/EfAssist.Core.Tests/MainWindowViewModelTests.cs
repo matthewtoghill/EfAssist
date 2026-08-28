@@ -812,4 +812,57 @@ public class MainWindowViewModelTests : IDisposable
         Assert.Equal(0, viewModel.ActiveRunOptionCount);
         Assert.False(viewModel.HasActiveRunOptions);
     }
+
+    [Fact]
+    public void The_output_view_switch_moves_however_the_view_is_changed()
+    {
+        var viewModel = NewViewModel(new RoutingRunner());
+        var scrolledTo = new List<int>();
+        viewModel.ScrollOutputToLine = scrolledTo.Add;
+
+        Assert.True(viewModel.ShowActivity);
+        Assert.False(viewModel.ShowRawOutput);
+
+        // Both halves of the segmented switch are bound, so both have to move together — with only
+        // one bound, arriving at the console from elsewhere left neither side selected.
+        var changes = new List<string?>();
+        viewModel.PropertyChanged += (_, e) => changes.Add(e.PropertyName);
+
+        viewModel.ShowRawOutput = true;
+        Assert.False(viewModel.ShowActivity);
+        Assert.Contains(nameof(MainWindowViewModel.ShowRawOutput), changes);
+
+        viewModel.ShowActivity = true;
+        Assert.False(viewModel.ShowRawOutput);
+
+        // Show in raw output is one of those other ways in, and it scrolls to the run's first line.
+        var run = new CommandRun
+        {
+            Label = "Listing migrations",
+            Outcome = CommandOutcome.Succeeded,
+            Duration = TimeSpan.FromSeconds(1),
+            StartedAt = DateTimeOffset.Now,
+            FirstOutputLine = 7,
+        };
+
+        viewModel.ShowInRawOutputCommand.Execute(run);
+
+        Assert.False(viewModel.ShowActivity);
+        Assert.True(viewModel.ShowRawOutput);
+        Assert.True(viewModel.OutputExpanded);
+        Assert.Equal([7], scrolledTo);
+    }
+
+    [Fact]
+    public void The_output_strip_folds_and_unfolds()
+    {
+        var viewModel = NewViewModel(new RoutingRunner());
+        var expanded = viewModel.OutputExpanded;
+
+        viewModel.ToggleOutputCommand.Execute(null);
+        Assert.Equal(!expanded, viewModel.OutputExpanded);
+
+        viewModel.ToggleOutputCommand.Execute(null);
+        Assert.Equal(expanded, viewModel.OutputExpanded);
+    }
 }

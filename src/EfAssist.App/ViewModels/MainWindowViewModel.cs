@@ -1167,11 +1167,32 @@ public partial class MainWindowViewModel : ObservableObject
 
     partial void OnShowActivityChanged(bool value)
     {
+        OnPropertyChanged(nameof(ShowRawOutput));
+
         if (value)
         {
             Session.MarkActivityRead();
         }
     }
+
+    /// <summary>
+    /// The other half of the same choice. Exists so both segments of the switch are bound: with only
+    /// the Activity half bound, moving to the console from anywhere else — "Show in raw output", for
+    /// instance — left the switch showing neither side selected.
+    /// </summary>
+    public bool ShowRawOutput
+    {
+        get => !ShowActivity;
+        set => ShowActivity = !value;
+    }
+
+    /// <summary>
+    /// Folds the output pane. A command rather than a ToggleButton binding: Fluent gives a checked
+    /// ToggleButton the accent fill and a foreground to contrast with it, which made the strip's own
+    /// text change colour when the pane opened.
+    /// </summary>
+    [RelayCommand]
+    private void ToggleOutput() => OutputExpanded = !OutputExpanded;
 
     /// <summary>Set by the view: scrolls the console to a line, for "Show in raw output".</summary>
     public Action<int>? ScrollOutputToLine { get; set; }

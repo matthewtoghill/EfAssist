@@ -17,7 +17,7 @@ Last updated: 2026-08-28.
 | D3–D4 — Model diagrams: the tab, interaction, persistence | **Done** |
 | D5–D6 — Model diagrams: export, settings, docs | **Done** |
 
-Current state: `dotnet test EfAssist.slnx` → **626 passed, 0 failed**, about 70 seconds. The app launches, opens a real solution or folder, lists migrations with their applied state, can add, apply, roll back, remove and drop, generates SQL scripts into a syntax-highlighted viewer, draws the model as an interactive entity-relationship or class diagram that survives a restart and exports to JSON, SVG, PNG, PDF and Mermaid, and explains the common EF failures in plain language without hiding the raw output.
+Current state: `dotnet test EfAssist.slnx` → **629 passed, 0 failed**, about 70 seconds. The app launches, opens a real solution or folder, lists migrations with their applied state, can add, apply, roll back, remove and drop, generates SQL scripts into a syntax-highlighted viewer, draws the model as an interactive entity-relationship or class diagram that survives a restart and exports to JSON, SVG, PNG, PDF and Mermaid, and explains the common EF failures in plain language without hiding the raw output.
 
 The diagrams work is complete through D6, plus per-migration diagrams and diffing: the snapshot picker draws the model as of any migration from its `.Designer.cs`, and marks what that migration added, removed and changed against the one before it. The three remaining follow-ups — MSAGL layout, cross-context diagrams and diagram editing — are parked in `ROADMAP.md` with reasons.
 
@@ -1501,7 +1501,7 @@ starting.
 
 ### Verified
 
-- `dotnet build EfAssist.slnx` and `dotnet test EfAssist.slnx` green at every phase boundary: 626
+- `dotnet build EfAssist.slnx` and `dotnet test EfAssist.slnx` green at every phase boundary: 629
   passed, 0 failed.
 - New tests: run recording (outcome, exit code, line index, cap, cancelled versus failed, local work,
   clearing the console clearing the history), the run-option count including Offline arriving from
@@ -1519,6 +1519,61 @@ starting.
   and the whole thing in the dark variant and at other font sizes.
 - Dead settings kept for round-tripping: `LeftPanelExpanded`, `MigrationActionsExpanded`,
   `DiagramOptionsExpanded`. They load and save; nothing reads them.
+
+---
+
+## Layout pass review round 1
+
+First round of feedback on the built layout. Five items, all in the output pane and the rail.
+
+### The output view switch is a segmented control
+
+Two radio buttons with the circle templated away, inside one framed row, so they read as one
+control. Radio buttons rather than toggle buttons on purpose: one side is always selected, and
+clicking the selected side cannot turn both off.
+
+The selected segment is marked with an accent underline and a panel-tinted fill rather than an
+accent fill. A fill needs a foreground chosen to contrast with whatever accent the user has
+configured — Fluent derives one (`ChromeWhite`), but it is not reachable by a name this app can rely
+on, and hard-coding white breaks on a pale accent.
+
+### The strip's text no longer changes colour when the pane opens
+
+The strip was a `ToggleButton` bound to `OutputExpanded`. Fluent gives a checked `ToggleButton` the
+accent fill and a foreground to contrast with it; the style suppressed the fill but not the
+foreground, so "Output" flipped colour on expand. It is now a plain `Button` with a
+`ToggleOutputCommand`, which has no checked state to restyle. The chevron rotates through a
+`Classes.open` binding instead of the `:checked` pseudo-class.
+
+### Moving to the console from elsewhere moves the switch
+
+Only the Activity half was bound, so "Show in raw output" left both segments unselected.
+`ShowRawOutput` is the bound inverse of `ShowActivity`, and each raises the other's change, so the
+switch follows the view however the view was changed.
+
+### Activity cards collapse
+
+A run is one line — chevron, outcome glyph, label, command line, outcome, time — and expands to its
+guidance and its actions. `CommandRun` became an `ObservableObject` with `IsExpanded` and a
+`ToggleExpandedCommand`; the whole header line is the hit target. A failure arrives expanded, since
+the pane opens itself for one, and expanding a card never collapses another. The red wash and the
+outcome glyphs were already there and are unchanged.
+
+### The rail has a footer
+
+Home and Settings at the bottom of the rail, below a divider: leaving this workspace, and everything
+that is not about it. The gear left the top bar, which is otherwise entirely about the open
+workspace. Home is `CloseWorkspaceCommand` — the start screen is where the recent list lives, so
+"back to the start" and "close this workspace" are the same action.
+
+### Verified
+
+- 629 passed, 0 failed. New tests: a failure arrives expanded while a success stays collapsed and
+  expanding one card leaves the other alone; `ShowRawOutput` mirrors `ShowActivity` both ways and
+  `ShowInRawOutput` moves both plus scrolls to the recorded line; the strip's fold command.
+- The app launches cleanly. As before, nothing has been looked at on screen — the segmented
+  control's metrics, the rail footer at 62px wide and the collapsed card line are all worth a look
+  in both variants.
 
 ---
 

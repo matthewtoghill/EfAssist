@@ -232,4 +232,28 @@ public class CommandSessionTests
         Assert.Null(session.LastRun);
         Assert.False(session.HasUnreadFailure);
     }
+
+    [Fact]
+    public async Task A_failure_arrives_expanded_and_everything_else_collapsed()
+    {
+        var fail = false;
+        var session = Build(new ScriptedRunner(() => fail ? Failure("Build failed.") : Success()));
+
+        await session.RunAsync(["ef", "migrations", "list"], "Listing migrations");
+        Assert.False(session.Runs[0].IsExpanded);
+
+        fail = true;
+        await session.RunAsync(["ef", "database", "update"], "Applying migrations");
+
+        // The pane opens itself on a failure, so the card it opened for is already showing its
+        // guidance; the successful run behind it stays a single line.
+        Assert.True(session.Runs[0].IsExpanded);
+        Assert.False(session.Runs[1].IsExpanded);
+
+        session.Runs[1].ToggleExpandedCommand.Execute(null);
+        Assert.True(session.Runs[1].IsExpanded);
+
+        // Opening one card does not close another.
+        Assert.True(session.Runs[0].IsExpanded);
+    }
 }

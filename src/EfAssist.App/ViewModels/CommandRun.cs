@@ -1,5 +1,7 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using EfAssist.Core;
 
 namespace EfAssist.App.ViewModels;
@@ -33,8 +35,19 @@ public enum CommandOutcome
 /// redact. <c>ROADMAP.md</c> records the trigger for revisiting that.
 /// </para>
 /// </remarks>
-public sealed record CommandRun
+public sealed partial class CommandRun : ObservableObject
 {
+    /// <summary>
+    /// Whether the card is showing its detail and its actions. Collapsed, a run is one line; the
+    /// list is scanned far more often than any one entry is read. A failure opens itself — it is the
+    /// reason the pane opened at all, and its guidance is the thing worth reading.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isExpanded;
+
+    [RelayCommand]
+    private void ToggleExpanded() => IsExpanded = !IsExpanded;
+
     /// <summary>What the app called it — "List migrations", "Apply migrations".</summary>
     public required string Label { get; init; }
 
