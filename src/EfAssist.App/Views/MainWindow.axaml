@@ -1535,11 +1535,11 @@
                                             <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto"
                                                   ClipToBounds="True">
                                                 <TextBlock Grid.Row="0" Grid.Column="0" Text="folder" Classes="lbl" Width="90" />
-                                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding WorkspacePath}"
+                                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding WorkspaceFolderPath}"
                                                            FontFamily="Consolas,Menlo,monospace"
                                                            FontSize="{DynamicResource AppFontSizeMono}"
                                                            TextTrimming="CharacterEllipsis" Opacity="0.8"
-                                                           ToolTip.Tip="{Binding WorkspacePath}" />
+                                                           ToolTip.Tip="{Binding WorkspaceFolderPath}" />
 
                                                 <TextBlock Grid.Row="1" Grid.Column="0" Text="solution" Classes="lbl" Width="90" Margin="0,4,0,0" />
                                                 <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,4,0,0"

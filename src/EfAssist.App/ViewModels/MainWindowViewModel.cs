@@ -541,6 +541,10 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
+    /// <summary>The folder that holds the solution (or workspace path), for display — never a
+    /// path ending in a .sln/.slnx file name.</summary>
+    public string? WorkspaceFolderPath => WorkspacePath is null ? null : WorkingDirectory;
+
     /// <summary>Called once the window is up, so the tooling check does not delay first paint.</summary>
     public Task InitialiseAsync() => CheckToolingAsync(AppContext.BaseDirectory);
 
@@ -1075,6 +1079,7 @@ public partial class MainWindowViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(WindowTitle));
         OnPropertyChanged(nameof(WorkspaceName));
+        OnPropertyChanged(nameof(WorkspaceFolderPath));
     }
 
     partial void OnSelectedTabIndexChanged(int value)
