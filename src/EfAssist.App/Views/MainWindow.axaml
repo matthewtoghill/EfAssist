@@ -456,6 +456,13 @@
                     <ComboBox Classes="pill" ItemsSource="{Binding Contexts}"
                               SelectedItem="{Binding SelectedContext}"
                               DisplayMemberBinding="{Binding Name}" />
+                    <!-- Icon only, and beside the list it refreshes rather than off in the action
+                         group: the caption cost more width than the top bar has to spare. -->
+                    <Button Command="{Binding RefreshContextsCommand}"
+                            Padding="8,6" MinWidth="36" VerticalAlignment="Center"
+                            ToolTip.Tip="Refresh contexts">
+                        <PathIcon Data="{StaticResource refresh_regular}" Width="15" Height="15" />
+                    </Button>
                     <!-- Same warning the panel carried: a list that could not be refreshed must not
                          pass itself off as current. -->
                     <Border Classes="caution" CornerRadius="3" Padding="6,2" VerticalAlignment="Center"
@@ -538,7 +545,6 @@
                             </Flyout>
                         </Button.Flyout>
                     </Button>
-                    <Button Content="Refresh contexts" Command="{Binding RefreshContextsCommand}" />
                     <Button Command="{Binding ShowWorkspaceFolderCommand}"
                             Padding="10,6" MinWidth="36"
                             ToolTip.Tip="{Binding WorkspacePath, StringFormat='Open {0} in the file browser'}">
