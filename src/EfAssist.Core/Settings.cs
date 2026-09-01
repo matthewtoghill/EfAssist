@@ -188,32 +188,10 @@ public sealed class DisplaySettings
     public bool ShowLineNumbers { get; set; } = true;
 
     /// <summary>
-    /// Dead since the layout pass: the action panel it controlled is gone. Adding a migration is a
-    /// flyout on the Migrations header, a migration's own actions are in the detail pane beside it,
-    /// and the whole-database ones are in the Update database menu. Kept so a settings file written
-    /// by an earlier version still round-trips.
-    /// </summary>
-    public bool MigrationActionsExpanded { get; set; } = true;
-
-    /// <summary>
-    /// Dead since the layout pass: the panel it controlled is gone, its pickers are in the top bar
-    /// and its switches are in the Run options popover. Kept so a settings file written by an
-    /// earlier version still round-trips rather than losing the rest of its display block.
-    /// </summary>
-    public bool LeftPanelExpanded { get; set; } = true;
-
-    /// <summary>
     /// Show the output console expanded. On by default; collapsing it folds the console down to its
     /// header bar and gives the height back to whichever tab is open.
     /// </summary>
     public bool OutputExpanded { get; set; } = true;
-
-    /// <summary>
-    /// Dead since the layout pass: the view options are a flyout on the Diagrams control row rather
-    /// than an expander that spent screen height staying open. Kept so an older settings file still
-    /// round-trips.
-    /// </summary>
-    public bool DiagramOptionsExpanded { get; set; }
 
     /// <summary>
     /// Which corner of the diagram surface the diff legend sits in. App-wide rather than per

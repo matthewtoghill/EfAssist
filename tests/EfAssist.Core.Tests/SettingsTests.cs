@@ -147,12 +147,10 @@ public class SettingsTests : IDisposable
         // On, because that is how both viewers behaved before it was a choice. False is bool's
         // default, so this only holds while the property initialiser does.
         Assert.True(settings.Display.ShowLineNumbers);
-        Assert.True(settings.Display.MigrationActionsExpanded);
         Assert.False(settings.Display.Window.Maximised);
         Assert.Null(settings.Display.Window.Width);
 
         settings.Display.ShowLineNumbers = false;
-        settings.Display.MigrationActionsExpanded = false;
         settings.Display.Window.Maximised = true;
         settings.Display.Window.Width = 1400;
         settings.Display.Window.Height = 900;
@@ -162,7 +160,6 @@ public class SettingsTests : IDisposable
 
         var reloaded = SettingsStore.Load(SettingsPath).Display;
         Assert.False(reloaded.ShowLineNumbers);
-        Assert.False(reloaded.MigrationActionsExpanded);
         Assert.True(reloaded.Window.Maximised);
         Assert.Equal(1400, reloaded.Window.Width);
         Assert.Equal(900, reloaded.Window.Height);
