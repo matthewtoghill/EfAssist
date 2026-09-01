@@ -258,11 +258,13 @@ public partial class MainWindow : Window
     /// <summary>
     /// Adds or removes the top bar's "narrow" class, which drops the picker captions and the
     /// environment summary. The threshold is where the full bar stops fitting at the shipped font
-    /// size; the pickers themselves never hide, since they are the point of the bar.
+    /// size — the summary and the Run options button reach the pickers well before the captions
+    /// alone stop fitting, so it fires early; the pickers themselves never hide, since they are the
+    /// point of the bar.
     /// </summary>
     private void ApplyTopBarDensity(double width)
     {
-        const double NarrowBelow = 1180;
+        const double NarrowBelow = 1450;
 
         if (width < NarrowBelow)
         {
