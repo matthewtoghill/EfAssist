@@ -740,17 +740,6 @@
 
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"
                                             VerticalAlignment="Bottom">
-                                    <Button Content="Refresh list" Command="{Binding Migrations.RefreshCommand}" />
-                                    <!-- Icon only: the arrow shows which way the list currently runs. -->
-                                    <Button Command="{Binding Migrations.ToggleSortOrderCommand}"
-                                            Content="{Binding Migrations.SortGlyph}"
-                                            ToolTip.Tip="{Binding Migrations.SortTooltip}"
-                                            FontSize="{DynamicResource AppFontSizeLarge}" Padding="10,4,10,5" MinWidth="36"
-                                            VerticalContentAlignment="Center"
-                                            HorizontalContentAlignment="Center" />
-
-                                    <Border Width="1" Height="26" Background="{DynamicResource SubtleBorderBrush}" />
-
                                     <!-- Everything that writes to the database, in one menu. Each of
                                          these confirms first and names its target. -->
                                     <Button Content="Update database">
@@ -801,7 +790,14 @@
 
                             <!-- List on the left, the selected migration's detail on the right, with
                                  a draggable divider between them. -->
-                            <Grid Grid.Row="2" ColumnDefinitions="2*,Auto,3*">
+                            <!-- The list column has a floor: dragged much narrower than this the
+                                 filter box and its buttons stop being usable. -->
+                            <Grid Grid.Row="2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="2*" MinWidth="320" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="3*" />
+                                </Grid.ColumnDefinitions>
 
                             <Border Grid.Column="0" BorderThickness="1" BorderBrush="{DynamicResource SubtleBorderBrush}">
                                 <Grid RowDefinitions="Auto,*">
@@ -809,14 +805,38 @@
                                     <!-- Filter. Display only: it narrows what is listed and never what
                                          a command runs, which is why the summary above says how many
                                          of how many are showing. -->
-                                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="6,6,6,6">
+                                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" Margin="6,6,6,6">
                                         <TextBox Grid.Column="0" Text="{Binding Migrations.Filter}"
-                                                 PlaceholderText="Filter by name or id" />
-                                        <Button Grid.Column="1" Content="&#x2715;" Margin="6,0,0,0"
-                                                Padding="8,0" MinWidth="0"
-                                                IsVisible="{Binding Migrations.IsFiltered}"
-                                                Command="{Binding Migrations.ClearFilterCommand}"
-                                                ToolTip.Tip="Clear the filter" />
+                                                 PlaceholderText="Filter by name or id">
+                                            <!-- Clear sits inside the box rather than beside it: the row
+                                                 now carries the list's own actions too, and a button that
+                                                 appears and disappears would shunt them sideways. -->
+                                            <TextBox.InnerRightContent>
+                                                <Button Content="&#x2715;" Padding="6,0" MinWidth="0"
+                                                        Margin="0,0,4,0" Background="Transparent"
+                                                        BorderThickness="0"
+                                                        FontSize="{DynamicResource AppFontSizeTiny}"
+                                                        IsVisible="{Binding Migrations.IsFiltered}"
+                                                        Command="{Binding Migrations.ClearFilterCommand}"
+                                                        ToolTip.Tip="Clear the filter" />
+                                            </TextBox.InnerRightContent>
+                                        </TextBox>
+
+                                        <!-- Refresh and sort belong to this list, so they sit on it rather
+                                             than in the screen's action group. Icon only, for the width. -->
+                                        <Button Grid.Column="1" Command="{Binding Migrations.RefreshCommand}"
+                                                Margin="6,0,0,0" Padding="8,6" MinWidth="36"
+                                                ToolTip.Tip="Refresh the migration list">
+                                            <PathIcon Data="{StaticResource refresh_regular}" Width="15" Height="15" />
+                                        </Button>
+                                        <!-- Icon only: the arrow shows which way the list currently runs. -->
+                                        <Button Grid.Column="2" Command="{Binding Migrations.ToggleSortOrderCommand}"
+                                                Content="{Binding Migrations.SortGlyph}"
+                                                ToolTip.Tip="{Binding Migrations.SortTooltip}"
+                                                Margin="6,0,0,0"
+                                                FontSize="{DynamicResource AppFontSizeLarge}" Padding="8,4" MinWidth="36"
+                                                VerticalContentAlignment="Center"
+                                                HorizontalContentAlignment="Center" />
                                     </Grid>
 
                                     <Grid Grid.Row="1">
