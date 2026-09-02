@@ -291,7 +291,7 @@ public partial class MigrationsViewModel : ObservableObject
 
         NewMigrationName = "";
         _session.StatusMessage = $"Added migration '{name}'.";
-        await LoadAsync(noBuildFirst: false);
+        await LoadAsync(noBuildFirst: false, forceBuild: true);
     }
 
     private bool CanAdd() => IsReady && NewMigrationName.Trim().Length > 0 && !HasNewMigrationNameError;
@@ -339,7 +339,7 @@ public partial class MigrationsViewModel : ObservableObject
         }
 
         _session.StatusMessage = $"Removed migration '{last.Name}'.";
-        await LoadAsync(noBuildFirst: false);
+        await LoadAsync(noBuildFirst: false, forceBuild: true);
     }
 
     private bool CanRemove() => IsReady && LastMigration is not null;
@@ -685,7 +685,12 @@ public partial class MigrationsViewModel : ObservableObject
         return await ConfirmAsync(request);
     }
 
-    private async Task LoadAsync(bool noBuildFirst)
+    /// <param name="forceBuild">
+    /// Ignores the Skip build option for this listing. After add or remove the migration files on
+    /// disk no longer match the last build, so <c>--no-build</c> would list the old set and appear
+    /// to say the command did nothing.
+    /// </param>
+    private async Task LoadAsync(bool noBuildFirst, bool forceBuild = false)
     {
         var target = _target();
         if (target is null)
@@ -698,7 +703,8 @@ public partial class MigrationsViewModel : ObservableObject
 
         // Only override the Skip build checkbox when this mode specifically demands --no-build.
         var attempt = await _session.RunAsync(
-            EfArgs.MigrationsList(target with { NoBuild = noBuildFirst || target.NoBuild }, Offline),
+            EfArgs.MigrationsList(
+                target with { NoBuild = !forceBuild && (noBuildFirst || target.NoBuild) }, Offline),
             "Listing migrations");
 
         if (attempt is null)

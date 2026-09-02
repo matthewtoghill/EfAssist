@@ -401,6 +401,20 @@ public class MigrationsViewModelTests
     }
 
     [Fact]
+    public async Task The_list_after_a_remove_is_rebuilt_even_when_skip_build_is_on()
+    {
+        // With --no-build the listing comes from the previous build, which still contains the
+        // migration that was just deleted — the user would be told it is still there.
+        var (tab, runner, _, _) = Build(target: Target with { NoBuild = true });
+        await tab.RefreshCommand.ExecuteAsync(null);
+        Assert.Contains("--no-build", LastCall(runner, "migrations list"));
+
+        await tab.RemoveCommand.ExecuteAsync(null);
+
+        Assert.DoesNotContain("--no-build", LastCall(runner, "migrations list"));
+    }
+
+    [Fact]
     public async Task Declining_the_confirmation_removes_nothing()
     {
         var (tab, runner, confirm, _) = Build(confirmed: false);
