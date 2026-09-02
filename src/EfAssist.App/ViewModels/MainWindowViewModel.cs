@@ -1231,7 +1231,7 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Selects a tab by index, for the Alt+1..4 accelerators. The parameter arrives as a string
+    /// Selects a tab by index, for the Ctrl+1..4 accelerators. The parameter arrives as a string
     /// because that is what a KeyBinding's CommandParameter is; anything unparseable is ignored
     /// rather than throwing at a keystroke.
     /// </summary>
@@ -1354,7 +1354,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     /// <summary>
     /// Opens the shortcut sheet. The app had no shortcut reference anywhere until this: Ctrl+, and
-    /// Alt+1..4 were discoverable from a tooltip or the source and nowhere else.
+    /// Ctrl+1..4 were discoverable from a tooltip or the source and nowhere else.
     /// </summary>
     [RelayCommand]
     private async Task ShowShortcuts()

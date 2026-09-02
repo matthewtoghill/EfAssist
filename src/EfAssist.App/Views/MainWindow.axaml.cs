@@ -57,6 +57,9 @@ public partial class MainWindow : Window
 
         WireDiagramSurface();
 
+        // Hold Alt or Ctrl and the buttons those gestures reach label themselves.
+        ShortcutHint.Attach(this);
+
         // A definition holds literal colours, so a theme switch needs a different one. This fires
         // for a System user whose OS flips too, which a Theme-property handler would miss.
         SqlEditor.ActualThemeVariantChanged += (_, _) => ApplySqlHighlighting();

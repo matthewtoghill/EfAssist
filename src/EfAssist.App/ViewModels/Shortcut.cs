@@ -23,15 +23,15 @@ public static class Shortcuts
     public static IReadOnlyList<ShortcutGroup> Groups { get; } =
     [
         new ShortcutGroup("Getting around", [
-            new Shortcut("Alt+1", "Migrations"),
-            new Shortcut("Alt+2", "Script"),
-            new Shortcut("Alt+3", "Diagrams"),
-            new Shortcut("Alt+4", "Tools"),
-            new Shortcut("F1 or Alt+/", "This list"),
+            new Shortcut("Ctrl+1", "Migrations"),
+            new Shortcut("Ctrl+2", "Script"),
+            new Shortcut("Ctrl+3", "Diagrams"),
+            new Shortcut("Ctrl+4", "Tools"),
+            new Shortcut("F1 or Ctrl+/", "This list"),
         ]),
 
         new ShortcutGroup("Panels", [
-            new Shortcut("Ctrl+`", "Show or hide the output panel"),
+            new Shortcut("Ctrl+'", "Show or hide the output panel"),
             new Shortcut("Ctrl+,", "Settings: theme, colours, font size, dotnet-ef and app updates"),
         ]),
 

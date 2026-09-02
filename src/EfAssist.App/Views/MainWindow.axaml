@@ -22,15 +22,18 @@
 
     <Window.KeyBindings>
         <KeyBinding Gesture="Ctrl+OemComma" Command="{Binding OpenSettingsCommand}" />
-        <!-- F1 as well as Alt+/: the slash key is not in the same place on every layout, and help is
-             what F1 is for. -->
+        <!-- Every gesture is on Ctrl, including the screens. Ctrl+, and Ctrl+` are conventions
+             worth more than the tidiness of splitting navigation onto Alt would have been, and
+             Ctrl+1..n for "go to view n" is what a browser does, so one held key reveals the lot.
+             F1 as well as Ctrl+/: the slash key is not in the same place on every layout, and help
+             is what F1 is for. -->
         <KeyBinding Gesture="Ctrl+OemTilde" Command="{Binding ToggleOutputCommand}" />
         <KeyBinding Gesture="F1" Command="{Binding ShowShortcutsCommand}" />
-        <KeyBinding Gesture="Alt+OemQuestion" Command="{Binding ShowShortcutsCommand}" />
-        <KeyBinding Gesture="Alt+D1" Command="{Binding SelectTabCommand}" CommandParameter="0" />
-        <KeyBinding Gesture="Alt+D2" Command="{Binding SelectTabCommand}" CommandParameter="1" />
-        <KeyBinding Gesture="Alt+D3" Command="{Binding SelectTabCommand}" CommandParameter="2" />
-        <KeyBinding Gesture="Alt+D4" Command="{Binding SelectTabCommand}" CommandParameter="3" />
+        <KeyBinding Gesture="Ctrl+OemQuestion" Command="{Binding ShowShortcutsCommand}" />
+        <KeyBinding Gesture="Ctrl+D1" Command="{Binding SelectTabCommand}" CommandParameter="0" />
+        <KeyBinding Gesture="Ctrl+D2" Command="{Binding SelectTabCommand}" CommandParameter="1" />
+        <KeyBinding Gesture="Ctrl+D3" Command="{Binding SelectTabCommand}" CommandParameter="2" />
+        <KeyBinding Gesture="Ctrl+D4" Command="{Binding SelectTabCommand}" CommandParameter="3" />
     </Window.KeyBindings>
 
     <Window.Styles>
@@ -114,7 +117,7 @@
 
         <!-- Navigation rail. A ListBox rather than four buttons: selection visuals, keyboard
              navigation and the bound SelectedIndex all come for free, and the index is exactly what
-             the tab host and the Alt+1..4 accelerators already speak. -->
+             the tab host and the Ctrl+1..4 accelerators already speak. -->
         <Style Selector="ListBox.rail">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
@@ -552,7 +555,8 @@
                     </Button>
                     <Button Content="?" Padding="12,6" MinWidth="36"
                             Command="{Binding ShowShortcutsCommand}"
-                            ToolTip.Tip="Keyboard shortcuts (F1, or Alt+/)" />
+                            views:ShortcutHint.Gesture="Ctrl+/"
+                            ToolTip.Tip="Keyboard shortcuts (F1, or Ctrl+/)" />
                 </StackPanel>
             </Grid>
         </Border>
@@ -568,6 +572,7 @@
                     <Button Content="Open folder…" Command="{Binding OpenFolderCommand}" />
                     <Button Command="{Binding OpenSettingsCommand}"
                             Padding="10,6" MinWidth="36"
+                            views:ShortcutHint.Gesture="Ctrl+,"
                             ToolTip.Tip="Settings (Ctrl+,): theme, colours, font size, dotnet-ef and app updates.">
                         <PathIcon Data="{StaticResource settings_regular}" Width="16" Height="16" />
                     </Button>
@@ -636,12 +641,12 @@
              beside them. -->
         <Grid Grid.Row="2" IsVisible="{Binding HasWorkspace}" ColumnDefinitions="Auto,*">
 
-            <!-- Navigation rail. SelectedIndex is the same index Alt+1..4 and SelectTabCommand
+            <!-- Navigation rail. SelectedIndex is the same index Ctrl+1..4 and SelectTabCommand
                  already use, so the rail and the accelerators cannot disagree. -->
             <Border Grid.Column="0" BorderThickness="0,0,1,0" BorderBrush="{DynamicResource SubtleBorderBrush}">
                 <Grid RowDefinitions="*,Auto" Width="62">
                 <ListBox Grid.Row="0" Classes="rail" SelectedIndex="{Binding RailIndex}">
-                    <ListBoxItem ToolTip.Tip="Migrations (Alt+1)">
+                    <ListBoxItem ToolTip.Tip="Migrations (Ctrl+1)" views:ShortcutHint.Gesture="Ctrl+1">
                         <Grid ColumnDefinitions="Auto,*">
                             <Border Grid.Column="0" Classes="railMark" Width="3" Margin="-8,0,0,0"
                                     CornerRadius="0,2,2,0" Background="{DynamicResource AppAccentBrush}" />
@@ -651,7 +656,7 @@
                             </StackPanel>
                         </Grid>
                     </ListBoxItem>
-                    <ListBoxItem ToolTip.Tip="Script (Alt+2)">
+                    <ListBoxItem ToolTip.Tip="Script (Ctrl+2)" views:ShortcutHint.Gesture="Ctrl+2">
                         <Grid ColumnDefinitions="Auto,*">
                             <Border Grid.Column="0" Classes="railMark" Width="3" Margin="-8,0,0,0"
                                     CornerRadius="0,2,2,0" Background="{DynamicResource AppAccentBrush}" />
@@ -661,7 +666,7 @@
                             </StackPanel>
                         </Grid>
                     </ListBoxItem>
-                    <ListBoxItem ToolTip.Tip="Diagrams (Alt+3)">
+                    <ListBoxItem ToolTip.Tip="Diagrams (Ctrl+3)" views:ShortcutHint.Gesture="Ctrl+3">
                         <Grid ColumnDefinitions="Auto,*">
                             <Border Grid.Column="0" Classes="railMark" Width="3" Margin="-8,0,0,0"
                                     CornerRadius="0,2,2,0" Background="{DynamicResource AppAccentBrush}" />
@@ -671,7 +676,7 @@
                             </StackPanel>
                         </Grid>
                     </ListBoxItem>
-                    <ListBoxItem ToolTip.Tip="Tools (Alt+4)">
+                    <ListBoxItem ToolTip.Tip="Tools (Ctrl+4)" views:ShortcutHint.Gesture="Ctrl+4">
                         <Grid ColumnDefinitions="Auto,*">
                             <Border Grid.Column="0" Classes="railMark" Width="3" Margin="-8,0,0,0"
                                     CornerRadius="0,2,2,0" Background="{DynamicResource AppAccentBrush}" />
@@ -696,6 +701,7 @@
                         </StackPanel>
                     </Button>
                     <Button Classes="railAction" Command="{Binding OpenSettingsCommand}"
+                            views:ShortcutHint.Gesture="Ctrl+,"
                             ToolTip.Tip="Settings (Ctrl+,): theme, colours, font size, dotnet-ef and app updates.">
                         <StackPanel Spacing="2">
                             <Path Classes="railIcon" Data="{StaticResource nav_settings}" />
@@ -1656,11 +1662,18 @@
                     <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
                         <Button Grid.Column="0" Classes="rowToggle"
                                 Command="{Binding ToggleOutputCommand}"
-                                ToolTip.Tip="Show or hide the output panel">
+                                ToolTip.Tip="Show or hide the output panel (Ctrl+')">
                             <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                                 <Path Classes="stripChevron" Classes.open="{Binding OutputExpanded}"
                                       Data="{StaticResource chevron_right}" />
                                 <TextBlock Text="Output" FontWeight="SemiBold" VerticalAlignment="Center" />
+
+                                <!-- The toggle spans the strip, so a badge on its far corner would
+                                     be nowhere near the word it belongs to, and one on the word
+                                     itself covers the letters. This anchors it to the gap after
+                                     "Output" instead: no width of its own, nothing to hide. -->
+                                <Border Width="0" views:ShortcutHint.Gesture="Ctrl+'"
+                                        views:ShortcutHint.Align="Left" />
 
                                 <!-- What ran last, in the strip rather than only in the pane: this is
                                      the line that makes opening the pane unnecessary most of the time. -->
