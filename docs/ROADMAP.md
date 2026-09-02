@@ -210,27 +210,40 @@ Generate a compiled model, which cuts EF's startup cost on a large model.
   own regenerating it after every migration rather than doing it by hand.
 - **Cost:** hours for the verb itself. The staleness story is the part that needs thought.
 
-### Filter box on the migrations list
-Type to narrow the list to matching migration names.
+### Filter box on the migrations list — done
+Type to narrow the list to matching migration names: **done**.
 
-- **Why parked:** the list is short on most projects, and it is sorted, so scrolling finds things. The
-  detail pane already has Ctrl+F for searching *inside* a migration, which is the harder need.
-- **Revisit when:** a project has enough migrations that finding one by eye is tedious. Several
-  hundred is where this stops being a preference.
-- **Cost:** small — the Diagrams tab already does exactly this in `DiagramsViewModel.RefreshMatches`,
-  and `Migrations` is a view over `_ordered` already, so filtering it changes no other behaviour.
-  Whatever ships should inherit that method's known limit: a substring scan on every keystroke.
+- **Current state:** a filter box above the list, with a clear button inside it that appears only
+  while `Migrations.IsFiltered`. `MigrationsViewModel.Filter` rebuilds the displayed list on every
+  keystroke and matches on both name and id, so a remembered name and a pasted timestamp each find
+  their row. Display only: it never changes what a command runs, and `Summary` reads "n of m
+  migrations · filtered" while it is set, so a narrowed list cannot be mistaken for the whole one.
+  It kept the known limit it was costed with — a substring scan per keystroke.
+- **What changed the mind:** it came along with the layout pass, sharing its row with the list's own
+  refresh and sort buttons, so it cost less than pricing it alone had suggested.
+- **Cost:** as estimated — small.
 
-### Keyboard shortcut reference
-Somewhere in the app that lists the shortcuts.
+### Keyboard shortcut reference — done
+Somewhere in the app that lists the shortcuts: **done**, twice over — a reference sheet, and badges on
+the buttons themselves.
 
-- **Current state:** `Ctrl+,` opens settings, `Ctrl+B` collapses the left panel, `Alt+1`–`Alt+4`
-  select a tab, and Ctrl+F searches inside an editor. Only the `Alt` ones advertise themselves, as a
-  tooltip on each tab header; the rest are discoverable from the source and nowhere else.
-- **Why parked:** there are four to learn, and the app is usable without knowing any of them.
-- **Revisit when:** the list grows past what a tooltip can carry, or someone asks what the shortcuts
-  are — which is the actual signal that they are undiscoverable.
-- **Cost:** an hour for a section in the settings modal. A `?` overlay is a day and buys little more.
+- **Current state:** every gesture is on `Ctrl`. `Ctrl+1`–`Ctrl+4` select a screen, `Ctrl+,` opens
+  settings, ``Ctrl+` `` folds the output panel, `Ctrl+/` (or `F1`) opens the sheet, and `Ctrl+F`/`F3`
+  search inside an editor. They were split across `Alt` for navigation and `Ctrl` for commands, which
+  is the Windows convention, but `Ctrl+,` and ``Ctrl+` `` are worth more as conventions than the split
+  was, and `Ctrl+1..n` for "go to view n" is what a browser does — so one held key now reveals the
+  lot. The sheet is `ShortcutsWindow` rendered from `EfAssist.App.ViewModels.Shortcuts`, which is the
+  single list a new binding has to be added to. On top of that, holding `Ctrl` for 400ms badges every
+  button that gesture reaches (`Views/ShortcutHint.cs`, an attached property plus an `AdornerLayer`
+  badge), the way Windows labels access keys.
+- **What changed the mind:** someone asked what the shortcuts were, which was the recorded trigger.
+  The tooltips answered it only once the mouse was already on the button, which is the wrong end of
+  the problem for a keyboard shortcut.
+- **Cost:** as estimated for the sheet. The badges were an afternoon, most of it spent on two
+  Avalonia traps worth knowing: an adorner is measured and clipped to the bounds it adorns, so a
+  badge needs a `StackPanel` wrapper and `IsClipEnabled` set on the adorner rather than the adorned
+  control; and a key that something else has handled never reaches a plain routed handler, so an
+  observer of shortcuts has to register with `handledEventsToo`.
 
 ### A one-click copy of the command line
 A button that copies just the `dotnet ef …` that ran.
