@@ -150,6 +150,19 @@ public sealed class WindowSettings
     public int? Y { get; set; }
 }
 
+/// <summary>Which corner of the diagram surface an overlay sits in.</summary>
+public enum SurfaceCorner
+{
+    /// <summary>Default, and first so <c>default(SurfaceCorner)</c> matches it.</summary>
+    TopLeft,
+
+    TopRight,
+
+    BottomLeft,
+
+    BottomRight,
+}
+
 /// <summary>Preferences that are the same wherever the app is pointed.</summary>
 public sealed class DisplaySettings
 {
@@ -175,28 +188,17 @@ public sealed class DisplaySettings
     public bool ShowLineNumbers { get; set; } = true;
 
     /// <summary>
-    /// Show the Migrations tab's action panel expanded. On by default; collapsing it gives the
-    /// height back to the migrations list and the detail pane.
-    /// </summary>
-    public bool MigrationActionsExpanded { get; set; } = true;
-
-    /// <summary>
-    /// Show the workspace settings panel down the left expanded. On by default; collapsing it folds
-    /// the panel down to a rail and gives the width back to whichever tab is open.
-    /// </summary>
-    public bool LeftPanelExpanded { get; set; } = true;
-
-    /// <summary>
     /// Show the output console expanded. On by default; collapsing it folds the console down to its
     /// header bar and gives the height back to whichever tab is open.
     /// </summary>
     public bool OutputExpanded { get; set; } = true;
 
     /// <summary>
-    /// Show the Diagrams tab's view options expanded. Off by default: the surface wants the height,
-    /// and the defaults are the useful ones.
+    /// Which corner of the diagram surface the diff legend sits in. App-wide rather than per
+    /// workspace: where a reader likes the key is a habit about reading diagrams, not a fact about
+    /// one solution.
     /// </summary>
-    public bool DiagramOptionsExpanded { get; set; }
+    public SurfaceCorner DiagramLegendCorner { get; set; } = SurfaceCorner.TopLeft;
 
     /// <summary>
     /// Show the Diagrams tab's entity detail pane. On by default — it is where the metadata a node

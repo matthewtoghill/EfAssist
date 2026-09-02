@@ -1,0 +1,63 @@
+﻿<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EfAssist.App.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="460" d:DesignHeight="620"
+        x:Class="EfAssist.App.Views.ShortcutsWindow"
+        Title="Keyboard shortcuts"
+        Width="460"
+        FontSize="{DynamicResource AppFontSize}"
+        SizeToContent="Height" MaxHeight="900"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+
+    <Window.Styles>
+        <Style Selector="TextBlock.gesture">
+            <Setter Property="FontFamily" Value="Consolas,Menlo,monospace" />
+            <Setter Property="FontSize" Value="{DynamicResource AppFontSizeMono}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="TextBlock.groupTitle">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,0,0,4" />
+        </Style>
+    </Window.Styles>
+
+    <Grid RowDefinitions="*,Auto" Margin="20">
+        <ScrollViewer Grid.Row="0">
+            <!-- Rendered from EfAssist.App.ViewModels.Shortcuts, which is the single list. -->
+            <ItemsControl Name="Groups">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ShortcutGroup">
+                        <StackPanel Margin="0,0,0,16">
+                            <TextBlock Text="{Binding Title}" Classes="groupTitle" />
+                            <ItemsControl ItemsSource="{Binding Shortcuts}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:Shortcut">
+                                        <Grid ColumnDefinitions="130,*" Margin="0,0,0,3">
+                                            <Border Grid.Column="0" CornerRadius="3" Padding="6,2"
+                                                    HorizontalAlignment="Left" VerticalAlignment="Center"
+                                                    Background="{DynamicResource PanelBackgroundBrush}"
+                                                    BorderThickness="1"
+                                                    BorderBrush="{DynamicResource SubtleBorderBrush}">
+                                                <TextBlock Text="{Binding Gesture}" Classes="gesture" />
+                                            </Border>
+                                            <TextBlock Grid.Column="1" Text="{Binding Description}"
+                                                       TextWrapping="Wrap" VerticalAlignment="Center"
+                                                       Margin="10,0,0,0" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+            <Button Name="CloseButton" Content="Close" IsCancel="True" IsDefault="True" MinWidth="90" />
+        </StackPanel>
+    </Grid>
+</Window>

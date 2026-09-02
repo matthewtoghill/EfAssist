@@ -1,4 +1,4 @@
-using EfAssist.Core;
+﻿using EfAssist.Core;
 
 namespace EfAssist.App.ViewModels;
 
@@ -10,7 +10,13 @@ namespace EfAssist.App.ViewModels;
 /// order, not the display order, so reversing the sort renumbers nothing — the first migration is
 /// always 1 whether it is at the top or the bottom.
 /// </param>
-public sealed record MigrationRow(int Index, MigrationInfo Info)
+/// <param name="IsDatabaseHead">
+/// This is the newest applied migration — where the database actually is. Drawn as a marker between
+/// the rows, so applied and pending are read as a position in the list rather than by comparing
+/// badges. False for every row when applied state is unknown, which is what Offline leaves it as:
+/// the app cannot point at a head it did not ask the database about.
+/// </param>
+public sealed record MigrationRow(int Index, MigrationInfo Info, bool IsDatabaseHead = false)
 {
     public string Id => Info.Id;
 

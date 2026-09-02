@@ -1,4 +1,4 @@
-using EfAssist.App.ViewModels;
+﻿using EfAssist.App.ViewModels;
 using EfAssist.Core;
 
 namespace EfAssist.Core.Tests;
@@ -109,7 +109,8 @@ public class ScriptViewModelTests : IDisposable
         List<MigrationInfo>? migrations = null,
         bool confirmed = true,
         string? outputFolder = null,
-        string? savePath = null)
+        string? savePath = null,
+        Func<string?>? selectedMigration = null)
     {
         var runner = new FakeEf();
         var session = new CommandSession(runner) { PostToUiThread = action => action() };
@@ -124,7 +125,8 @@ public class ScriptViewModelTests : IDisposable
             {
                 idempotent.MarkUnsupported();
                 idempotent.Requested = false;
-            })
+            },
+            selectedMigration: selectedMigration ?? (() => null))
         {
             ConfirmAsync = request =>
             {
@@ -546,5 +548,51 @@ public class ScriptViewModelTests : IDisposable
         await tab.GenerateCommand.ExecuteAsync(null);
 
         Assert.False(tab.IsStale);
+    }
+
+    [Fact]
+    public async Task FromSelected_scripts_from_the_selected_migration_to_the_latest()
+    {
+        var (tab, runner, _, _) = Build(
+            Rows(("InitialCreate", true), ("AddBlogUrl", true), ("AddPostTags", false)),
+            outputFolder: _root,
+            selectedMigration: () => "AddBlogUrl");
+        tab.Range = ScriptRange.FromSelected;
+
+        await tab.GenerateCommand.ExecuteAsync(null);
+
+        // One positional argument: FROM. No TO means "as far as the migrations go".
+        Assert.Equal(["AddBlogUrl"], Positional(ScriptCall(runner)));
+        Assert.Null(tab.RangeWarning);
+    }
+
+    [Fact]
+    public async Task FromSelected_with_nothing_selected_refuses_rather_than_scripting_everything()
+    {
+        var (tab, runner, _, _) = Build(outputFolder: _root, selectedMigration: () => null);
+        tab.Range = ScriptRange.FromSelected;
+
+        Assert.True(tab.HasRangeWarning);
+        Assert.Contains("No migration is selected", tab.RangeWarning);
+
+        await tab.GenerateCommand.ExecuteAsync(null);
+
+        // An empty range reads to EF as "everything", which is a far bigger script than the one
+        // that was asked for.
+        Assert.False(Scripted(runner));
+    }
+
+    [Fact]
+    public async Task The_viewer_says_what_the_generated_file_is()
+    {
+        var (tab, _, _, _) = Build(outputFolder: _root);
+        Assert.Null(tab.SqlSummary);
+
+        await tab.GenerateCommand.ExecuteAsync(null);
+
+        Assert.NotNull(tab.GeneratedAt);
+        Assert.Contains("lines", tab.SqlSummary);
+        Assert.Contains("characters", tab.SqlSummary);
+        Assert.DoesNotContain("idempotent", tab.SqlSummary);
     }
 }

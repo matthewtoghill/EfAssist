@@ -9,6 +9,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input.Platform;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using AvaloniaEdit.Document;
 using AvaloniaEdit.Search;
 using EfAssist.App.ViewModels;
@@ -48,7 +49,23 @@ public partial class MainWindow : Window
         // Subscribed here rather than in DataContextChanged, which can fire more than once.
         Closing += OnClosing;
 
+        // The top bar carries three pickers, the environment summary and five buttons, which do not
+        // all fit at the 900px minimum width. There is no container query, so the one class the
+        // styles key off is set here on resize.
+        SizeChanged += (_, e) => ApplyTopBarDensity(e.NewSize.Width);
+        ApplyTopBarDensity(Width);
+
         WireDiagramSurface();
+
+        // Hold Alt or Ctrl and the buttons those gestures reach label themselves.
+        ShortcutHint.Attach(this);
+
+        // Ctrl+N is only worth having if it lands on the name box. The flyout's content is not in a
+        // visual tree until it opens, so this is the first moment the box can take focus.
+        if (AddMigrationButton.Flyout is { } addMigration)
+        {
+            addMigration.Opened += (_, _) => NewMigrationNameBox.Focus();
+        }
 
         // A definition holds literal colours, so a theme switch needs a different one. This fires
         // for a System user whose OS flips too, which a Theme-property handler would miss.
@@ -74,6 +91,8 @@ public partial class MainWindow : Window
             viewModel.ConfirmAsync = ConfirmAsync;
             viewModel.ShowErrorAsync = ShowErrorAsync;
             viewModel.ShowSettingsAsync = ShowSettingsAsync;
+            viewModel.ShowShortcutsAsync = ShowShortcutsAsync;
+            viewModel.ShowAddMigration = ShowAddMigration;
             viewModel.RestartRequested = Restart;
             viewModel.Script.PickSaveFileAsync = PickSaveFileAsync;
             viewModel.Script.PickFolderAsync = PickFolderAsync;
@@ -92,6 +111,7 @@ public partial class MainWindow : Window
             viewModel.Diagrams.FitToWindow = DiagramView.FitToWindow;
 
             viewModel.Session.Output.CollectionChanged += ScrollOutputToEnd;
+            viewModel.ScrollOutputToLine = ScrollOutputToLine;
 
             // The expander folds its own content, but the row it sits in still has to give the
             // height back — a fixed row would leave the fold showing as empty space.
@@ -246,6 +266,26 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// Adds or removes the top bar's "narrow" class, which drops the picker captions and the
+    /// environment summary. The threshold is where the full bar stops fitting at the shipped font
+    /// size — the summary and the Run options button reach the pickers well before the captions
+    /// alone stop fitting, so it fires early; the pickers themselves never hide, since they are the
+    /// point of the bar.
+    /// </summary>
+    private void ApplyTopBarDensity(double width)
+    {
+        const double NarrowBelow = 1450;
+
+        if (width < NarrowBelow)
+        {
+            TopBar.Classes.Add("narrow");
+            return;
+        }
+
+        TopBar.Classes.Remove("narrow");
+    }
+
     private void ApplyOutputHeight(bool expanded)
     {
         var row = MainPane.RowDefinitions[2];
@@ -259,6 +299,34 @@ public partial class MainWindow : Window
         // Remember what the splitter left it at before collapsing to the header bar.
         _outputHeight = row.Height;
         row.Height = GridLength.Auto;
+    }
+
+    /// <summary>
+    /// Brings one console line into view, for an Activity card's "Show in raw output". The console is
+    /// an ItemsControl inside a ScrollViewer, so every line is realised and can be asked to show
+    /// itself; a line index past the end means the console was cleared since the run, and scrolling
+    /// to the top is the honest answer.
+    /// </summary>
+    private void ScrollOutputToLine(int index)
+    {
+        // The pane has only just been shown, so its children do not exist yet this frame.
+        Dispatcher.UIThread.Post(() =>
+        {
+            var lines = OutputItems.ItemsPanelRoot?.Children;
+
+            if (lines is null || lines.Count == 0)
+            {
+                return;
+            }
+
+            if (index < 0 || index >= lines.Count)
+            {
+                OutputScroller.ScrollToHome();
+                return;
+            }
+
+            lines[index].BringIntoView();
+        }, DispatcherPriority.Loaded);
     }
 
     private void ScrollOutputToEnd(object? sender, NotifyCollectionChangedEventArgs e)
@@ -348,6 +416,21 @@ public partial class MainWindow : Window
     /// </summary>
     private Task ShowSettingsAsync() =>
         new SettingsWindow { DataContext = DataContext }.ShowDialog(this);
+
+    private Task ShowShortcutsAsync() => new ShortcutsWindow().ShowDialog(this);
+
+    /// <summary>
+    /// Opens the Add migration flyout, for Ctrl+N. Posted rather than called straight through: the
+    /// Migrations screen may have become visible only a moment ago, and a flyout cannot work out
+    /// where to sit against a button that has not been laid out yet.
+    /// </summary>
+    private void ShowAddMigration()
+    {
+        if (AddMigrationButton.Flyout is { } flyout)
+        {
+            Dispatcher.UIThread.Post(() => flyout.ShowAt(AddMigrationButton));
+        }
+    }
 
     /// <summary>
     /// Relaunches the app so a colour change takes effect. Started before shutting down, because the

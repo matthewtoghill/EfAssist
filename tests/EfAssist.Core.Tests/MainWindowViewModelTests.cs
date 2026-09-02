@@ -1,4 +1,4 @@
-using System.Collections.Specialized;
+﻿using System.Collections.Specialized;
 using EfAssist.App.ViewModels;
 using EfAssist.Core;
 
@@ -654,6 +654,28 @@ public class MainWindowViewModelTests : IDisposable
         // The one place the assets-file shape is checked against a real restore rather than
         // hand-written JSON. The command above built the sample, so there is one to read.
         Assert.Contains("EF Core ", viewModel.EnvironmentSummary);
+
+        // The Tools screen labels the same three facts separately, so they have to be real values
+        // rather than the placeholders a workspace with nothing probed shows.
+        Assert.NotEqual("not installed", viewModel.EfToolVersionText);
+        Assert.NotEqual("unknown", viewModel.EfToolVersionText);
+        Assert.NotEqual("unknown", viewModel.EfCoreVersionText);
+        Assert.NotEqual("unknown", viewModel.SdkVersionText);
+    }
+
+    [Fact]
+    public void The_environment_versions_say_so_before_anything_has_been_probed()
+    {
+        var viewModel = NewViewModel(new RoutingRunner());
+
+        Assert.Equal("not installed", viewModel.EfToolVersionText);
+        Assert.Equal("unknown", viewModel.EfCoreVersionText);
+        Assert.Equal("unknown", viewModel.SdkVersionText);
+
+        // The scripts line on the same screen: a folder, or the fact that there is not one.
+        Assert.Equal("asked each time", viewModel.Script.OutputFolderSummary);
+        viewModel.Script.OutputFolder = @"C:\Repos\Contoso\scripts";
+        Assert.Equal(@"C:\Repos\Contoso\scripts", viewModel.Script.OutputFolderSummary);
     }
 
     private static string RepositoryRoot()
@@ -779,5 +801,146 @@ public class MainWindowViewModelTests : IDisposable
 
         Assert.False(viewModel.ContextsStale);
         Assert.False(viewModel.Session.HasDiagnosis);
+    }
+
+    [Fact]
+    public void Run_option_count_tracks_the_three_switches_wherever_they_live()
+    {
+        var viewModel = NewViewModel(new RoutingRunner());
+
+        Assert.Equal(0, viewModel.ActiveRunOptionCount);
+        Assert.False(viewModel.HasActiveRunOptions);
+
+        var changes = new List<string?>();
+        viewModel.PropertyChanged += (_, e) => changes.Add(e.PropertyName);
+
+        viewModel.NoBuild = true;
+        viewModel.Idempotent = true;
+
+        // Offline lives on the migrations list, not on the shell, and still has to be counted.
+        viewModel.Migrations.Offline = true;
+
+        Assert.Equal(3, viewModel.ActiveRunOptionCount);
+        Assert.True(viewModel.HasActiveRunOptions);
+
+        // The badge is bound, so every switch has to raise the change - including the one that
+        // arrives from another view model.
+        Assert.Equal(3, changes.Count(name => name == nameof(MainWindowViewModel.ActiveRunOptionCount)));
+
+        viewModel.NoBuild = false;
+        viewModel.Idempotent = false;
+        viewModel.Migrations.Offline = false;
+
+        Assert.Equal(0, viewModel.ActiveRunOptionCount);
+        Assert.False(viewModel.HasActiveRunOptions);
+    }
+
+    [Fact]
+    public void The_output_view_switch_moves_however_the_view_is_changed()
+    {
+        var viewModel = NewViewModel(new RoutingRunner());
+        var scrolledTo = new List<int>();
+        viewModel.ScrollOutputToLine = scrolledTo.Add;
+
+        Assert.True(viewModel.ShowActivity);
+        Assert.False(viewModel.ShowRawOutput);
+
+        // Both halves of the segmented switch are bound, so both have to move together — with only
+        // one bound, arriving at the console from elsewhere left neither side selected.
+        var changes = new List<string?>();
+        viewModel.PropertyChanged += (_, e) => changes.Add(e.PropertyName);
+
+        viewModel.ShowRawOutput = true;
+        Assert.False(viewModel.ShowActivity);
+        Assert.Contains(nameof(MainWindowViewModel.ShowRawOutput), changes);
+
+        viewModel.ShowActivity = true;
+        Assert.False(viewModel.ShowRawOutput);
+
+        // Show in raw output is one of those other ways in, and it scrolls to the run's first line.
+        var run = new CommandRun
+        {
+            Label = "Listing migrations",
+            Outcome = CommandOutcome.Succeeded,
+            Duration = TimeSpan.FromSeconds(1),
+            StartedAt = DateTimeOffset.Now,
+            FirstOutputLine = 7,
+        };
+
+        viewModel.ShowInRawOutputCommand.Execute(run);
+
+        Assert.False(viewModel.ShowActivity);
+        Assert.True(viewModel.ShowRawOutput);
+        Assert.True(viewModel.OutputExpanded);
+        Assert.Equal([7], scrolledTo);
+    }
+
+    [Fact]
+    public void The_output_strip_folds_and_unfolds()
+    {
+        var viewModel = NewViewModel(new RoutingRunner());
+        var expanded = viewModel.OutputExpanded;
+
+        viewModel.ToggleOutputCommand.Execute(null);
+        Assert.Equal(!expanded, viewModel.OutputExpanded);
+
+        viewModel.ToggleOutputCommand.Execute(null);
+        Assert.Equal(expanded, viewModel.OutputExpanded);
+    }
+
+    [Fact]
+    public async Task A_workspace_always_opens_on_the_migrations_screen()
+    {
+        var solution = CreateSolution();
+        var runner = new RoutingRunner();
+        var viewModel = NewViewModel(runner);
+
+        viewModel.SelectedTabIndex = (int)SelectedTab.Diagrams;
+
+        await OpenAsync(viewModel, solution);
+
+        Assert.Equal(SelectedTab.Migrations, viewModel.CurrentTab);
+    }
+
+    [Fact]
+    public void The_rail_cannot_leave_the_app_with_no_screen_selected()
+    {
+        var viewModel = NewViewModel(new RoutingRunner());
+        viewModel.SelectedTabIndex = (int)SelectedTab.Script;
+
+        var changes = new List<string?>();
+        viewModel.PropertyChanged += (_, e) => changes.Add(e.PropertyName);
+
+        // A ListBox starts at -1 and a two-way binding can write that back before it reads this
+        // side, which left the content area empty.
+        viewModel.RailIndex = -1;
+
+        Assert.Equal(SelectedTab.Script, viewModel.CurrentTab);
+        Assert.Equal((int)SelectedTab.Script, viewModel.RailIndex);
+
+        // And the rail has to be told to read this side again, or it sits at -1 with nothing
+        // highlighted even though a screen is showing.
+        Assert.Contains(nameof(MainWindowViewModel.RailIndex), changes);
+
+        viewModel.RailIndex = (int)SelectedTab.Tools;
+        Assert.Equal(SelectedTab.Tools, viewModel.CurrentTab);
+    }
+
+    [Fact]
+    public void Exactly_one_screen_is_ever_showing()
+    {
+        var viewModel = NewViewModel(new RoutingRunner());
+
+        // The rail replaced the tab strip, so which screen is visible is a property of this class
+        // rather than a control's selection — that is what stopped the content area coming up blank.
+        Assert.Equal(
+            [true, false, false, false],
+            new[] { viewModel.ShowMigrations, viewModel.ShowScript, viewModel.ShowDiagrams, viewModel.ShowTools });
+
+        viewModel.SelectedTabIndex = (int)SelectedTab.Diagrams;
+
+        Assert.Equal(
+            [false, false, true, false],
+            new[] { viewModel.ShowMigrations, viewModel.ShowScript, viewModel.ShowDiagrams, viewModel.ShowTools });
     }
 }

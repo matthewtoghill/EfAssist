@@ -85,6 +85,21 @@ public partial class MigrationsViewModel : ObservableObject
     [ObservableProperty]
     private DiscoveryMode _refreshMode = DiscoveryMode.Cached;
 
+    /// <summary>
+    /// Narrows the displayed list. Matches on name and on id, so both a remembered name and a
+    /// pasted timestamp find their row. Display only: it never changes what a command runs, and the
+    /// summary says how many of how many are showing while it is set.
+    /// </summary>
+    [ObservableProperty]
+    private string _filter = "";
+
+    partial void OnFilterChanged(string value) => RebuildDisplay();
+
+    public bool IsFiltered => Filter.Trim().Length > 0;
+
+    [RelayCommand]
+    private void ClearFilter() => Filter = "";
+
     /// <summary>Newest at the top. Display only — see <see cref="_ordered"/>.</summary>
     [ObservableProperty]
     private bool _sortNewestFirst;
@@ -158,7 +173,15 @@ public partial class MigrationsViewModel : ObservableObject
 
     public int PendingCount => _ordered.Count(m => m.State == MigrationState.Pending);
 
-    public string Summary => _ordered.Count == 0
+    /// <summary>
+    /// What the list is showing. While filtering it leads with how many rows survived, because the
+    /// counts behind it describe every migration rather than the ones on screen.
+    /// </summary>
+    public string Summary => IsFiltered && _ordered.Count > 0
+        ? $"{Migrations.Count} of {_ordered.Count} migrations · filtered"
+        : UnfilteredSummary;
+
+    private string UnfilteredSummary => _ordered.Count == 0
         ? "No migrations."
         : $"{_ordered.Count} migrations · {AppliedCount} applied · {PendingCount} pending";
 
@@ -301,7 +324,8 @@ public partial class MigrationsViewModel : ObservableObject
         IsStale = true;
         var result = await _session.RunAsync(
             EfArgs.MigrationsRemove(target, ForceRemove),
-            $"Removing migration '{last.Name}'");
+            $"Removing migration '{last.Name}'",
+            destructive: true);
 
         if (result is null)
         {
@@ -378,7 +402,10 @@ public partial class MigrationsViewModel : ObservableObject
         }
 
         IsStale = true;
-        var result = await _session.RunAsync(EfArgs.DatabaseDrop(target), $"Dropping database '{name}'");
+        var result = await _session.RunAsync(
+            EfArgs.DatabaseDrop(target),
+            $"Dropping database '{name}'",
+            destructive: true);
         if (result is null)
         {
             return;
@@ -431,7 +458,10 @@ public partial class MigrationsViewModel : ObservableObject
         };
 
         IsStale = true;
-        var result = await _session.RunAsync(EfArgs.DatabaseUpdate(target, targetMigration), label);
+        var result = await _session.RunAsync(
+            EfArgs.DatabaseUpdate(target, targetMigration),
+            label,
+            destructive: true);
         if (result is null)
         {
             return;
@@ -757,9 +787,22 @@ public partial class MigrationsViewModel : ObservableObject
     {
         var selectedId = SelectedMigration?.Id;
 
-        // Number from the chronological list first, then order for display, so the numbers describe
-        // the sequence migrations are applied in rather than wherever a row happens to sit.
-        var rows = _ordered.Select((migration, index) => new MigrationRow(index + 1, migration));
+        // Where the database is: the newest applied migration. Nothing is marked when any row's
+        // state is unknown — Offline lists names without asking the database, and a marker drawn
+        // from a guess is worse than no marker.
+        var headName = _ordered.Any(m => m.State == MigrationState.Unknown)
+            ? null
+            : _ordered.LastOrDefault(m => m.State == MigrationState.Applied)?.Name;
+
+        // Number from the chronological list first, then filter and order for display, so the
+        // numbers describe the sequence migrations are applied in rather than wherever a row
+        // happens to sit — or which rows a filter left showing.
+        var rows = _ordered
+            .Select((migration, index) => new MigrationRow(
+                index + 1,
+                migration,
+                IsDatabaseHead: headName is not null && migration.Name == headName))
+            .Where(Matches);
 
         Migrations.Clear();
         foreach (var row in SortNewestFirst ? rows.Reverse() : rows)
@@ -771,8 +814,16 @@ public partial class MigrationsViewModel : ObservableObject
         NotifyListChanged();
     }
 
+    /// <summary>Whether a row survives the filter. Empty filter matches everything.</summary>
+    private bool Matches(MigrationRow row) =>
+        !IsFiltered
+        || row.Name.Contains(Filter.Trim(), StringComparison.OrdinalIgnoreCase)
+        || row.Id.Contains(Filter.Trim(), StringComparison.OrdinalIgnoreCase);
+
     private void NotifyListChanged()
     {
+        OnPropertyChanged(nameof(IsFiltered));
+        OnPropertyChanged(nameof(SelectedIsLast));
         OnPropertyChanged(nameof(HasMigrations));
         OnPropertyChanged(nameof(ShowsStaleWarning));
         OnPropertyChanged(nameof(LastMigration));
@@ -821,8 +872,19 @@ public partial class MigrationsViewModel : ObservableObject
     partial void OnSelectedMigrationChanged(MigrationRow? value)
     {
         UpdateToSelectedCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(SelectedIsLast));
         Detail.Show(value);
     }
+
+    /// <summary>
+    /// Whether the selected migration is the one <c>migrations remove</c> would take. EF only ever
+    /// removes the last migration, so a Remove button offered on any other row would be a lie about
+    /// what it does — the button is hidden instead of removing something else.
+    /// </summary>
+    public bool SelectedIsLast =>
+        SelectedMigration is not null
+        && LastMigration is not null
+        && SelectedMigration.Name == LastMigration.Name;
 
     partial void OnNewMigrationNameChanged(string value)
     {

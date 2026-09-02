@@ -116,29 +116,33 @@ Let the app opt in to GitHub pre-releases, so a beta can be tried without publis
 - **Revisit when:** there is someone to beta-test for.
 - **Cost:** hours for the flag, most of the work is the downgrade path.
 
-### UI/UX and layout pass — partly done, the full pass still parked
-General review of layout, spacing, information density and visual polish across both screens. A run of
-density and navigation changes has landed; the open-ended polish pass has not.
+### UI/UX and layout pass — done
+Built as the Option A layout, on `feat/app-layout-redesign`. See `docs/LAYOUT-REDESIGN-PLAN.md` for
+the plan and `docs/PROGRESS.md` § Layout pass for what landed and what was decided along the way.
 
-- **Current state (done):** the left workspace panel collapses to a 28px rail with a reopen button, and
-  the state persists (`DisplaySettings.LeftPanelExpanded`, `Ctrl+B`). The output panel and the migration
-  actions group collapse the same way, each with its own persisted flag. Tab navigation has `Alt+1`–`Alt+4`
-  accelerators, advertised as a tooltip on each tab header, driven by `SelectTabCommand` — which ignores an
-  unparseable parameter rather than throwing at a keystroke. "Open folder" buttons reveal the open
-  workspace's folder and any recent entry's folder in the OS file browser without opening the workspace
-  (`ShowWorkspaceFolderCommand` / `ShowRecentFolderCommand`). The main toolbar was re-laid-out around the
-  workspace name (`WorkspaceName`, which keeps a folder's whole name and drops a solution file's
-  extension), and the button set moved to icons. Earlier passes added row numbers on the migrations list
-  and a visible grab handle on the output splitter.
-- **Not done:** the cross-cutting pass itself — a deliberate review of spacing, alignment and information
-  density across both screens, rather than the individual complaints fixed as they were noticed. Window
-  size and position persist, but the Migrations tab splitter position does not (see `PROGRESS.md`
-  § Deliberate shortcuts). There is no keyboard-shortcut reference anywhere in the app; `Ctrl+,`,
-  `Ctrl+B` and `Alt+1`–`4` are discoverable only from a tooltip or the source.
-- **Revisit when:** there's a specific list of layout/UX complaints to work through, or a design pass is
-  scheduled. The one-off route has worked so far, which is an argument for continuing it rather than
-  scheduling the big pass.
-- **Cost:** unknown until scoped — likely several small changes rather than one big one.
+- **What changed:** the 320px options panel is gone — its pickers are a breadcrumb in the top bar and
+  its switches are a Run options popover with a count badge; the tab strip is a 62px icon rail; the
+  200px console folded to a one-line strip that opens onto Activity (one card per command, with the
+  diagnosis attached to the run that caused it) or the raw console; each screen gained a header with
+  one primary action; the Migrations actions expander was replaced by per-migration actions in the
+  detail pane, a filter, and a "Database is here" marker; whole-database actions moved to Tools,
+  which is now four cards; the Diagrams toolbar was regrouped and zoom moved onto the surface; and
+  `F1` opens a shortcut sheet, which the app had no equivalent of.
+- **Still open:** the Migrations splitter position is still not persisted (see `PROGRESS.md`
+  § Deliberate shortcuts), and no one has looked at the new screens in the dark variant or at a
+  non-default font size yet.
+
+### Activity across restarts
+Keep the per-command Activity list — command, outcome, duration, diagnosis — after the app closes,
+instead of only for the session.
+
+- **Why parked:** EF output carries server names and connection strings, so persisting it means
+  deciding what to redact, where to put a size cap, and what to do with a history whose console
+  lines no longer exist. In memory it is free and cannot leak.
+- **Revisit when:** someone wants yesterday's failure back, or the same failure has to be compared
+  across two runs of the app.
+- **Cost:** a schema addition beside the workspace settings, a redaction pass, a cap, and a load
+  path — the recording itself already exists.
 
 ### App icon — done
 `Assets/app-logo.ico` replaced the Avalonia template default. It is referenced from three places, and each one covers a different surface:
@@ -206,27 +210,40 @@ Generate a compiled model, which cuts EF's startup cost on a large model.
   own regenerating it after every migration rather than doing it by hand.
 - **Cost:** hours for the verb itself. The staleness story is the part that needs thought.
 
-### Filter box on the migrations list
-Type to narrow the list to matching migration names.
+### Filter box on the migrations list — done
+Type to narrow the list to matching migration names: **done**.
 
-- **Why parked:** the list is short on most projects, and it is sorted, so scrolling finds things. The
-  detail pane already has Ctrl+F for searching *inside* a migration, which is the harder need.
-- **Revisit when:** a project has enough migrations that finding one by eye is tedious. Several
-  hundred is where this stops being a preference.
-- **Cost:** small — the Diagrams tab already does exactly this in `DiagramsViewModel.RefreshMatches`,
-  and `Migrations` is a view over `_ordered` already, so filtering it changes no other behaviour.
-  Whatever ships should inherit that method's known limit: a substring scan on every keystroke.
+- **Current state:** a filter box above the list, with a clear button inside it that appears only
+  while `Migrations.IsFiltered`. `MigrationsViewModel.Filter` rebuilds the displayed list on every
+  keystroke and matches on both name and id, so a remembered name and a pasted timestamp each find
+  their row. Display only: it never changes what a command runs, and `Summary` reads "n of m
+  migrations · filtered" while it is set, so a narrowed list cannot be mistaken for the whole one.
+  It kept the known limit it was costed with — a substring scan per keystroke.
+- **What changed the mind:** it came along with the layout pass, sharing its row with the list's own
+  refresh and sort buttons, so it cost less than pricing it alone had suggested.
+- **Cost:** as estimated — small.
 
-### Keyboard shortcut reference
-Somewhere in the app that lists the shortcuts.
+### Keyboard shortcut reference — done
+Somewhere in the app that lists the shortcuts: **done**, twice over — a reference sheet, and badges on
+the buttons themselves.
 
-- **Current state:** `Ctrl+,` opens settings, `Ctrl+B` collapses the left panel, `Alt+1`–`Alt+4`
-  select a tab, and Ctrl+F searches inside an editor. Only the `Alt` ones advertise themselves, as a
-  tooltip on each tab header; the rest are discoverable from the source and nowhere else.
-- **Why parked:** there are four to learn, and the app is usable without knowing any of them.
-- **Revisit when:** the list grows past what a tooltip can carry, or someone asks what the shortcuts
-  are — which is the actual signal that they are undiscoverable.
-- **Cost:** an hour for a section in the settings modal. A `?` overlay is a day and buys little more.
+- **Current state:** every gesture is on `Ctrl`. `Ctrl+1`–`Ctrl+4` select a screen, `Ctrl+,` opens
+  settings, ``Ctrl+` `` folds the output panel, `Ctrl+/` (or `F1`) opens the sheet, and `Ctrl+F`/`F3`
+  search inside an editor. They were split across `Alt` for navigation and `Ctrl` for commands, which
+  is the Windows convention, but `Ctrl+,` and ``Ctrl+` `` are worth more as conventions than the split
+  was, and `Ctrl+1..n` for "go to view n" is what a browser does — so one held key now reveals the
+  lot. The sheet is `ShortcutsWindow` rendered from `EfAssist.App.ViewModels.Shortcuts`, which is the
+  single list a new binding has to be added to. On top of that, holding `Ctrl` for 400ms badges every
+  button that gesture reaches (`Views/ShortcutHint.cs`, an attached property plus an `AdornerLayer`
+  badge), the way Windows labels access keys.
+- **What changed the mind:** someone asked what the shortcuts were, which was the recorded trigger.
+  The tooltips answered it only once the mouse was already on the button, which is the wrong end of
+  the problem for a keyboard shortcut.
+- **Cost:** as estimated for the sheet. The badges were an afternoon, most of it spent on two
+  Avalonia traps worth knowing: an adorner is measured and clipped to the bounds it adorns, so a
+  badge needs a `StackPanel` wrapper and `IsClipEnabled` set on the adorner rather than the adorned
+  control; and a key that something else has handled never reaches a plain routed handler, so an
+  observer of shortcuts has to register with `handledEventsToo`.
 
 ### A one-click copy of the command line
 A button that copies just the `dotnet ef …` that ran.

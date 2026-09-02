@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -18,6 +18,12 @@ public enum ScriptRange
 
     /// <summary>From the last applied migration to the latest — the deployment case.</summary>
     Pending,
+
+    /// <summary>
+    /// From whichever migration is selected on the Migrations screen to the latest. The range you
+    /// want after reading a migration and asking "what would it take to get from there to now".
+    /// </summary>
+    FromSelected,
 
     /// <summary>Whatever the two pickers say.</summary>
     Custom,
@@ -50,6 +56,12 @@ public partial class ScriptViewModel : ObservableObject
     /// <summary>Called when a provider probe finds the ticked option is not actually usable.</summary>
     private readonly Action _onIdempotentUnsupported;
 
+    /// <summary>
+    /// The migration selected on the Migrations screen, for <see cref="ScriptRange.FromSelected"/>.
+    /// Read fresh rather than pushed, so the range always means the current selection.
+    /// </summary>
+    private readonly Func<string?> _selectedMigration;
+
     /// <summary>Provider details per context name, so the probe runs once rather than per visit.</summary>
     private readonly Dictionary<string, DbContextDetails> _providerCache = new(StringComparer.Ordinal);
 
@@ -64,7 +76,8 @@ public partial class ScriptViewModel : ObservableObject
         Func<IReadOnlyList<MigrationInfo>> migrations,
         Action persist,
         Func<bool>? idempotentRequested = null,
-        Action? onIdempotentUnsupported = null)
+        Action? onIdempotentUnsupported = null,
+        Func<string?>? selectedMigration = null)
     {
         _session = session;
         _target = target;
@@ -72,6 +85,7 @@ public partial class ScriptViewModel : ObservableObject
         _persist = persist;
         _idempotentRequested = idempotentRequested ?? (() => false);
         _onIdempotentUnsupported = onIdempotentUnsupported ?? (() => { });
+        _selectedMigration = selectedMigration ?? (() => null);
 
         _session.PropertyChanged += (_, e) =>
         {
@@ -146,6 +160,10 @@ public partial class ScriptViewModel : ObservableObject
         ? $"Scripts are written to {OutputFolder.Trim()}."
         : "No folder is set, so you will be asked where to save each script.";
 
+    /// <summary>The same fact as a path, for the Tools screen's workspace list.</summary>
+    public string OutputFolderSummary =>
+        UsesConfiguredFolder ? OutputFolder.Trim() : "asked each time";
+
     // ---- Result ----
 
     [ObservableProperty]
@@ -168,15 +186,54 @@ public partial class ScriptViewModel : ObservableObject
 
     public bool ShowsStaleWarning => IsStale && HasSql;
 
+    /// <summary>When the SQL in the viewer was generated. Null before anything has been.</summary>
+    [ObservableProperty]
+    private DateTimeOffset? _generatedAt;
+
+    /// <summary>
+    /// What the file in the viewer actually is: when it was written, how big it is, and whether it
+    /// checks the history table. The viewer shows bytes rather than "statements": counting
+    /// statements means parsing SQL per provider, and a wrong count is worse than none.
+    /// </summary>
+    public string? SqlSummary
+    {
+        get
+        {
+            if (!HasSql)
+            {
+                return null;
+            }
+
+            var lines = Sql.AsSpan().Count('\n') + 1;
+            var kilobytes = Sql.Length / 1024d;
+            var size = kilobytes < 1 ? $"{Sql.Length:N0} characters" : $"{kilobytes:N1} KB";
+            var idempotent = _idempotentRequested() && CanUseIdempotent ? " · idempotent" : "";
+            var at = GeneratedAt is null ? "" : $"Generated {GeneratedAt:HH:mm} · ";
+
+            return $"{at}{lines:N0} lines · {size}{idempotent}";
+        }
+    }
+
     public bool IsReady => !_session.IsRunning && _target() is not null;
 
     public bool HasMigrations => _migrations().Count > 0;
 
-    /// <summary>Warns that a Pending range cannot be trusted when applied state was never fetched.</summary>
+    /// <summary>
+    /// Warns that a Pending range cannot be trusted when applied state was never fetched, or that a
+    /// FromSelected range has nothing to start from.
+    /// </summary>
     public string? RangeWarning
     {
         get
         {
+            if (Range == ScriptRange.FromSelected)
+            {
+                return _selectedMigration() is null
+                    ? "No migration is selected on the Migrations screen, so there is nothing to "
+                      + "script from. Pick one there, or choose another range."
+                    : null;
+            }
+
             if (Range != ScriptRange.Pending)
             {
                 return null;
@@ -290,6 +347,15 @@ public partial class ScriptViewModel : ObservableObject
             return;
         }
 
+        if (Range == ScriptRange.FromSelected && _selectedMigration() is null)
+        {
+            // Falling through would resolve to an empty range, which EF reads as "everything" —
+            // a script far larger than the one that was asked for.
+            _session.StatusMessage =
+                "Select a migration on the Migrations screen first, or choose another range.";
+            return;
+        }
+
         var (from, to) = ResolveRange();
 
         var path = await ResolveOutputPathAsync();
@@ -386,6 +452,10 @@ public partial class ScriptViewModel : ObservableObject
                     .LastOrDefault(m => m.State == MigrationState.Applied)?.Name;
                 return (lastApplied, null);
 
+            case ScriptRange.FromSelected:
+                // From the selected migration forward. Guarded before we get here — see GenerateAsync.
+                return (_selectedMigration(), null);
+
             case ScriptRange.Custom:
                 var from = SelectedFrom == FromBeginning ? null : SelectedFrom;
                 var to = SelectedTo == ToLatest ? null : SelectedTo;
@@ -453,6 +523,7 @@ public partial class ScriptViewModel : ObservableObject
         try
         {
             Sql = File.ReadAllText(path);
+            GeneratedAt = DateTimeOffset.Now;
             _session.StatusMessage = $"Wrote {Sql.Length:N0} characters to {path}.";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -582,6 +653,7 @@ public partial class ScriptViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(UsesConfiguredFolder));
         OnPropertyChanged(nameof(DestinationHint));
+        OnPropertyChanged(nameof(OutputFolderSummary));
         _persist();
     }
 
@@ -606,6 +678,7 @@ public partial class ScriptViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(HasSql));
         OnPropertyChanged(nameof(ShowsStaleWarning));
+        OnPropertyChanged(nameof(SqlSummary));
         CopySqlCommand.NotifyCanExecuteChanged();
     }
 }

@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Layout;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EfAssist.Core;
@@ -114,8 +115,8 @@ public partial class DiagramsViewModel : ObservableObject
         _persist = persist;
         _display = display;
 
-        _optionsExpanded = display.DiagramOptionsExpanded;
         _detailVisible = display.DiagramDetailVisible;
+        _legendCorner = display.DiagramLegendCorner;
         _kind = display.DefaultDiagramKind;
 
         _session.PropertyChanged += (_, e) =>
@@ -210,6 +211,90 @@ public partial class DiagramsViewModel : ObservableObject
 
     public bool ShowsDiff => DiffSummary is not null;
 
+    /// <summary>
+    /// The two halves of <see cref="DiffSummary"/>, for the legend on the surface: which migration is
+    /// being compared, and what it changed. One line each — the sentence is read once and the change
+    /// list is read repeatedly, and they were sharing a row.
+    /// </summary>
+    public string? DiffMigration => _comparison is null || _saved.MigrationId is null
+        ? null
+        : NameOf(_saved.MigrationId);
+
+    /// <summary>
+    /// Which corner the legend sits in. Moved by right-clicking it, and kept app-wide — see
+    /// <see cref="DisplaySettings.DiagramLegendCorner"/>. The zoom cluster keeps the bottom-right
+    /// corner it has always had; putting the legend there too is allowed, because it is the reader's
+    /// diagram and there are four corners and two overlays.
+    /// </summary>
+    [ObservableProperty]
+    private SurfaceCorner _legendCorner;
+
+    partial void OnLegendCornerChanged(SurfaceCorner value)
+    {
+        OnPropertyChanged(nameof(LegendHorizontalAlignment));
+        OnPropertyChanged(nameof(LegendVerticalAlignment));
+        OnPropertyChanged(nameof(LegendIsTopLeft));
+        OnPropertyChanged(nameof(LegendIsTopRight));
+        OnPropertyChanged(nameof(LegendIsBottomLeft));
+        OnPropertyChanged(nameof(LegendIsBottomRight));
+
+        if (_restoring)
+        {
+            return;
+        }
+
+        _display.DiagramLegendCorner = value;
+        _persist();
+    }
+
+    /// <summary>The corner as the two alignments the overlay actually needs.</summary>
+    public HorizontalAlignment LegendHorizontalAlignment =>
+        LegendCorner is SurfaceCorner.TopRight or SurfaceCorner.BottomRight
+            ? HorizontalAlignment.Right
+            : HorizontalAlignment.Left;
+
+    public VerticalAlignment LegendVerticalAlignment =>
+        LegendCorner is SurfaceCorner.BottomLeft or SurfaceCorner.BottomRight
+            ? VerticalAlignment.Bottom
+            : VerticalAlignment.Top;
+
+    // One per corner, so the context menu can show which one is current.
+    public bool LegendIsTopLeft => LegendCorner == SurfaceCorner.TopLeft;
+
+    public bool LegendIsTopRight => LegendCorner == SurfaceCorner.TopRight;
+
+    public bool LegendIsBottomLeft => LegendCorner == SurfaceCorner.BottomLeft;
+
+    public bool LegendIsBottomRight => LegendCorner == SurfaceCorner.BottomRight;
+
+    /// <summary>
+    /// Moves the legend. The parameter arrives as a string because that is what a MenuItem's
+    /// CommandParameter is; anything unparseable is ignored rather than throwing at a click.
+    /// </summary>
+    [RelayCommand]
+    private void SetLegendCorner(string? corner)
+    {
+        if (Enum.TryParse<SurfaceCorner>(corner, out var value))
+        {
+            LegendCorner = value;
+        }
+    }
+
+    public string? DiffChanges
+    {
+        get
+        {
+            if (_comparison is null || _saved.MigrationId is null)
+            {
+                return null;
+            }
+
+            return _comparison.Diff.Summary is { Length: > 0 } summary
+                ? summary
+                : "Makes no change to the model.";
+        }
+    }
+
     // ---- View selection ----
 
     public IReadOnlyList<DiagramKind> Kinds { get; } = Enum.GetValues<DiagramKind>();
@@ -236,9 +321,6 @@ public partial class DiagramsViewModel : ObservableObject
         : "Left to right";
 
     // ---- View options ----
-
-    [ObservableProperty]
-    private bool _optionsExpanded;
 
     public IReadOnlyList<PropertyDetail> PropertyDetails { get; } = Enum.GetValues<PropertyDetail>();
 
@@ -403,22 +485,30 @@ public partial class DiagramsViewModel : ObservableObject
 
         var migrations = _migrations();
 
-        SnapshotOptions.Clear();
-        SnapshotOptions.Add(CurrentModel);
-        for (var i = migrations.Count - 1; i >= 0; i--)
+        // The whole rebuild is guarded, not just the final assignment. Clearing the list under a
+        // ComboBox bound to SelectedItem makes it write null back, and that arrives here as a
+        // snapshot change like any other — which used to start a generation on workspace open,
+        // because this runs as soon as the migrations list has loaded.
+        SetWithoutRegenerating(() =>
         {
-            SnapshotOptions.Add(LabelFor(migrations[i].Name, i + 1));
-        }
+            SnapshotOptions.Clear();
+            SnapshotOptions.Add(CurrentModel);
+            for (var i = migrations.Count - 1; i >= 0; i--)
+            {
+                SnapshotOptions.Add(LabelFor(migrations[i].Name, i + 1));
+            }
 
-        // A saved diagram of a migration the list does not have — because it has not been loaded yet,
-        // or because the migration has since been removed — keeps its entry rather than silently
-        // becoming a diagram of something else. Unnumbered: there is no known position for it.
-        if (selected != CurrentModel && !SnapshotOptions.Contains(selected))
-        {
-            SnapshotOptions.Insert(1, selected);
-        }
+            // A saved diagram of a migration the list does not have — because it has not been loaded
+            // yet, or because the migration has since been removed — keeps its entry rather than
+            // silently becoming a diagram of something else. Unnumbered: there is no known position
+            // for it.
+            if (selected != CurrentModel && !SnapshotOptions.Contains(selected))
+            {
+                SnapshotOptions.Insert(1, selected);
+            }
 
-        SetWithoutRegenerating(() => SelectedSnapshot = selected);
+            SelectedSnapshot = selected;
+        });
 
         OnPropertyChanged(nameof(HasMigrations));
     }
@@ -699,6 +789,8 @@ public partial class DiagramsViewModel : ObservableObject
             : null;
 
         OnPropertyChanged(nameof(DiffSummary));
+        OnPropertyChanged(nameof(DiffMigration));
+        OnPropertyChanged(nameof(DiffChanges));
         OnPropertyChanged(nameof(ShowsDiff));
     }
 
@@ -1113,6 +1205,8 @@ public partial class DiagramsViewModel : ObservableObject
         _matches.Clear();
         OnPropertyChanged(nameof(SourceSummary));
         OnPropertyChanged(nameof(DiffSummary));
+        OnPropertyChanged(nameof(DiffMigration));
+        OnPropertyChanged(nameof(DiffChanges));
         OnPropertyChanged(nameof(ShowsDiff));
     }
 
@@ -1472,6 +1566,13 @@ public partial class DiagramsViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(IsMigrationSelected));
 
+        // Nothing selected is not a snapshot: a ComboBox whose list is being rebuilt writes null
+        // back, and there is nothing to draw for it.
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return;
+        }
+
         // Generated rather than offered: switching migration costs one file read, and flicking
         // through the history to watch the model grow is the whole point of the picker. The
         // Generate button stays for the case where nothing has been drawn yet.
@@ -1501,12 +1602,6 @@ public partial class DiagramsViewModel : ObservableObject
         ApplyComparison();
         Rebuild();
         Persist();
-    }
-
-    partial void OnOptionsExpandedChanged(bool value)
-    {
-        _display.DiagramOptionsExpanded = value;
-        _persist();
     }
 
     partial void OnPropertiesChanged(PropertyDetail value) => OptionChanged();

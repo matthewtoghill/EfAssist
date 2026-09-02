@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -82,6 +84,9 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     private ToolStatus? _toolStatus;
 
+    /// <summary>The project's resolved EF Core version, as of the last summary rebuild.</summary>
+    private string? _efCoreVersion;
+
     public MainWindowViewModel() : this(new EfRunner(), SettingsStore.Load())
     {
     }
@@ -100,9 +105,7 @@ public partial class MainWindowViewModel : ObservableObject
         _wrapOutput = settings.Display.WrapOutput;
         _wrapSql = settings.Display.WrapSql;
         _showLineNumbers = settings.Display.ShowLineNumbers;
-        _migrationActionsExpanded = settings.Display.MigrationActionsExpanded;
         _outputExpanded = settings.Display.OutputExpanded;
-        _leftPanelExpanded = settings.Display.LeftPanelExpanded;
         _defaultDiagramKind = settings.Display.DefaultDiagramKind;
         _openMaximised = settings.Display.Window.Maximised;
         Appearance = new SettingsViewModel(
@@ -128,7 +131,8 @@ public partial class MainWindowViewModel : ObservableObject
             () => Migrations.Ordered,
             Persist,
             idempotentRequested: () => Idempotent,
-            onIdempotentUnsupported: () => Idempotent = false);
+            onIdempotentUnsupported: () => Idempotent = false,
+            selectedMigration: () => Migrations.SelectedMigration?.Name);
         Migrations = new MigrationsViewModel(
             Session,
             BuildTargetForCommands,
@@ -137,6 +141,7 @@ public partial class MainWindowViewModel : ObservableObject
             idempotentRequested: () => Idempotent,
             canUseIdempotent: () => Script.CanUseIdempotent,
             ensureProviderKnownAsync: Script.EnsureProviderKnownAsync);
+        Migrations.PropertyChanged += OnMigrationsPropertyChanged;
         Tools = new ToolsViewModel(Session, BuildTargetForCommands);
         Diagrams = new DiagramsViewModel(
             Session,
@@ -146,6 +151,28 @@ public partial class MainWindowViewModel : ObservableObject
             Persist,
             settings.Display);
         Update = new UpdateViewModel(updater ?? new VelopackUpdater());
+
+        // A failure used to announce itself with a banner pinned above the console. The Activity
+        // list carries the same guidance attached to the command that caused it, so the pane opens
+        // on it instead — once, on the failure, rather than holding height open for every command.
+        Session.Runs.CollectionChanged += (_, e) =>
+        {
+            if (e.Action != NotifyCollectionChangedAction.Add)
+            {
+                return;
+            }
+
+            foreach (CommandRun run in e.NewItems!)
+            {
+                if (!run.Failed)
+                {
+                    continue;
+                }
+
+                ShowActivity = true;
+                OutputExpanded = true;
+            }
+        };
     }
 
     /// <summary>Runs commands and owns the output console. Shared by every tab.</summary>
@@ -178,6 +205,43 @@ public partial class MainWindowViewModel : ObservableObject
 
     /// <summary>The same thing, named. See <see cref="SelectedTab"/>.</summary>
     public SelectedTab CurrentTab => (SelectedTab)SelectedTabIndex;
+
+    /// <summary>
+    /// Which screen is showing. Four flags rather than a <c>TabControl</c>'s selection: the rail
+    /// replaced the tab strip, and the trick that hid the strip — invisible <c>TabItem</c>s — meant
+    /// asking a control to select a container it is entitled to refuse, which is what left the
+    /// content area blank when a workspace opened.
+    /// </summary>
+    public bool ShowMigrations => CurrentTab == SelectedTab.Migrations;
+
+    public bool ShowScript => CurrentTab == SelectedTab.Script;
+
+    public bool ShowDiagrams => CurrentTab == SelectedTab.Diagrams;
+
+    public bool ShowTools => CurrentTab == SelectedTab.Tools;
+
+    /// <summary>
+    /// What the navigation rail binds to. A <c>ListBox</c> starts with <c>SelectedIndex</c> at -1 and
+    /// a two-way binding can write that back before it has read this side, which left no screen
+    /// selected and an empty content area. "Nothing selected" is not a state this app has, so it is
+    /// ignored rather than propagated.
+    /// </summary>
+    public int RailIndex
+    {
+        get => SelectedTabIndex;
+        set
+        {
+            if (value >= 0)
+            {
+                SelectedTabIndex = value;
+                return;
+            }
+
+            // Ignoring it is not enough: the rail is left sitting at -1 with nothing highlighted, so
+            // it has to be told to read this side again.
+            OnPropertyChanged();
+        }
+    }
 
     // ---- Supplied by the view, which owns the TopLevel these need ----
 
@@ -228,6 +292,22 @@ public partial class MainWindowViewModel : ObservableObject
     private string? _environmentSummary;
 
     public static string InstallCommand => ToolStatus.InstallCommand;
+
+    /// <summary>
+    /// The parts of <see cref="EnvironmentSummary"/> on their own, because the Tools screen labels
+    /// each one instead of running them together on a single line.
+    /// </summary>
+    public string EfToolVersionText => _toolStatus is not { EfToolAvailable: true } status
+        ? "not installed"
+        : status.EfToolVersion ?? "unknown";
+
+    public string EfCoreVersionText => _efCoreVersion is null
+        ? "unknown"
+        : Preflight.ToolIsOlderThanProject(_toolStatus?.EfToolVersion, _efCoreVersion)
+            ? $"{_efCoreVersion} (newer than the tool)"
+            : _efCoreVersion;
+
+    public string SdkVersionText => _toolStatus?.SdkVersion ?? "unknown";
 
     public bool HasPreflightProblem => !string.IsNullOrEmpty(PreflightProblem);
 
@@ -334,27 +414,12 @@ public partial class MainWindowViewModel : ObservableObject
     private bool _showLineNumbers;
 
     /// <summary>
-    /// Whether the workspace settings panel down the left is open. App-wide and persisted, on the
-    /// same footing as <see cref="OutputExpanded"/>: the panel is shared by every tab, so folding it
-    /// away to a rail is a single choice rather than one per screen.
-    /// </summary>
-    [ObservableProperty]
-    private bool _leftPanelExpanded;
-
-    /// <summary>
     /// Whether the output console is open. App-wide and persisted, on the same footing as
-    /// <see cref="MigrationActionsExpanded"/>: the console is shared by every tab, so folding it
+    /// <see cref="WrapOutput"/>: the console is shared by every tab, so folding it
     /// away is a single choice rather than one per screen.
     /// </summary>
     [ObservableProperty]
     private bool _outputExpanded;
-
-    /// <summary>
-    /// Whether the Migrations tab's action panel is open. App-wide and persisted, so a user who
-    /// folds it away does not have to fold it again next launch.
-    /// </summary>
-    [ObservableProperty]
-    private bool _migrationActionsExpanded;
 
     /// <summary>
     /// Open the main window maximised. Also written when the window closes, so leaving it maximised
@@ -476,6 +541,10 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
+    /// <summary>The folder that holds the solution (or workspace path), for display — never a
+    /// path ending in a .sln/.slnx file name.</summary>
+    public string? WorkspaceFolderPath => WorkspacePath is null ? null : WorkingDirectory;
+
     /// <summary>Called once the window is up, so the tooling check does not delay first paint.</summary>
     public Task InitialiseAsync() => CheckToolingAsync(AppContext.BaseDirectory);
 
@@ -550,6 +619,14 @@ public partial class MainWindowViewModel : ObservableObject
 
 
 
+
+    /// <summary>
+    /// Reads the provider for the Tools card. Shares <see cref="ScriptViewModel"/>'s probe and cache,
+    /// and is a button rather than something the screen does on arrival because the probe builds the
+    /// startup project — visiting a screen should not start a build nobody asked for.
+    /// </summary>
+    [RelayCommand]
+    private Task CheckProviderAsync() => Script.EnsureProviderKnownAsync();
 
     [RelayCommand]
     private async Task CopyInstallCommandAsync()
@@ -640,6 +717,10 @@ public partial class MainWindowViewModel : ObservableObject
         Session.Reset();
         Session.WorkingDirectory = WorkingDirectory;
         HasWorkspace = true;
+
+        // Always the migrations list: it is what the app is for, and it is the only screen that says
+        // something useful before anything else has been asked for.
+        SelectedTabIndex = (int)SelectedTab.Migrations;
 
         // Key settings off the solution when there is one, so opening the folder and opening the
         // solution inside it are treated as the same workspace.
@@ -915,6 +996,10 @@ public partial class MainWindowViewModel : ObservableObject
         if (_toolStatus is not { } status)
         {
             EnvironmentSummary = null;
+            _efCoreVersion = null;
+            OnPropertyChanged(nameof(EfToolVersionText));
+            OnPropertyChanged(nameof(EfCoreVersionText));
+            OnPropertyChanged(nameof(SdkVersionText));
             return;
         }
 
@@ -924,6 +1009,11 @@ public partial class MainWindowViewModel : ObservableObject
         var projectVersion =
             (MigrationsProject is null ? null : Preflight.ProjectEfCoreVersion(MigrationsProject.Path))
             ?? (StartupProject is null ? null : Preflight.ProjectEfCoreVersion(StartupProject.Path));
+
+        _efCoreVersion = projectVersion;
+        OnPropertyChanged(nameof(EfToolVersionText));
+        OnPropertyChanged(nameof(EfCoreVersionText));
+        OnPropertyChanged(nameof(SdkVersionText));
 
         var parts = new List<string>(3);
 
@@ -989,11 +1079,17 @@ public partial class MainWindowViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(WindowTitle));
         OnPropertyChanged(nameof(WorkspaceName));
+        OnPropertyChanged(nameof(WorkspaceFolderPath));
     }
 
     partial void OnSelectedTabIndexChanged(int value)
     {
         OnPropertyChanged(nameof(CurrentTab));
+        OnPropertyChanged(nameof(RailIndex));
+        OnPropertyChanged(nameof(ShowMigrations));
+        OnPropertyChanged(nameof(ShowScript));
+        OnPropertyChanged(nameof(ShowDiagrams));
+        OnPropertyChanged(nameof(ShowTools));
 
         switch ((SelectedTab)value)
         {
@@ -1065,12 +1161,44 @@ public partial class MainWindowViewModel : ObservableObject
 
     partial void OnDiscoveryModeChanged(DiscoveryMode value) => Persist();
 
-    partial void OnNoBuildChanged(bool value) => Persist();
+    partial void OnNoBuildChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ActiveRunOptionCount));
+        OnPropertyChanged(nameof(HasActiveRunOptions));
+        Persist();
+    }
 
     partial void OnIdempotentChanged(bool value)
     {
         Script.NotifyIdempotentChanged();
+        OnPropertyChanged(nameof(ActiveRunOptionCount));
+        OnPropertyChanged(nameof(HasActiveRunOptions));
         Persist();
+    }
+
+    /// <summary>
+    /// How many of the three command switches are on. The popover that holds them is closed most of
+    /// the time, and a switch that changes what a command does must not be invisible while it is —
+    /// this is what the count badge on the button reads.
+    /// </summary>
+    public int ActiveRunOptionCount =>
+        (NoBuild ? 1 : 0) + (Migrations.Offline ? 1 : 0) + (Idempotent ? 1 : 0);
+
+    public bool HasActiveRunOptions => ActiveRunOptionCount > 0;
+
+    /// <summary>
+    /// Offline lives on the migrations list, so its changes arrive from there rather than from a
+    /// generated hook on this class.
+    /// </summary>
+    private void OnMigrationsPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(MigrationsViewModel.Offline))
+        {
+            return;
+        }
+
+        OnPropertyChanged(nameof(ActiveRunOptionCount));
+        OnPropertyChanged(nameof(HasActiveRunOptions));
     }
 
     partial void OnWrapOutputChanged(bool value)
@@ -1102,25 +1230,8 @@ public partial class MainWindowViewModel : ObservableObject
         SettingsStore.Save(_settings, _settingsPath);
     }
 
-    partial void OnMigrationActionsExpandedChanged(bool value)
-    {
-        // App-wide, same as WrapOutput.
-        _settings.Display.MigrationActionsExpanded = value;
-        SettingsStore.Save(_settings, _settingsPath);
-    }
-
-    partial void OnLeftPanelExpandedChanged(bool value)
-    {
-        // App-wide, same as WrapOutput.
-        _settings.Display.LeftPanelExpanded = value;
-        SettingsStore.Save(_settings, _settingsPath);
-    }
-
-    [RelayCommand]
-    private void ToggleLeftPanel() => LeftPanelExpanded = !LeftPanelExpanded;
-
     /// <summary>
-    /// Selects a tab by index, for the Alt+1..4 accelerators. The parameter arrives as a string
+    /// Selects a tab by index, for the Ctrl+1..4 accelerators. The parameter arrives as a string
     /// because that is what a KeyBinding's CommandParameter is; anything unparseable is ignored
     /// rather than throwing at a keystroke.
     /// </summary>
@@ -1131,6 +1242,134 @@ public partial class MainWindowViewModel : ObservableObject
         {
             SelectedTabIndex = value;
         }
+    }
+
+    /// <summary>
+    /// Runs whichever "Generate …" the screen on show offers: the SQL script on Script, the diagram
+    /// on Diagrams. One gesture for "build what this screen is for", dispatched here rather than as
+    /// four bindings, because only one of them can be the right one at a time. Migrations and Tools
+    /// have no generate step, so there it does nothing.
+    /// </summary>
+    [RelayCommand]
+    private void GenerateCurrent()
+    {
+        switch (CurrentTab)
+        {
+            case SelectedTab.Script:
+                Script.GenerateCommand.Execute(null);
+                break;
+            case SelectedTab.Diagrams:
+                Diagrams.GenerateCommand.Execute(null);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Supplied by the view: opens the Add migration flyout with the name box focused. The view owns
+    /// it because a flyout and the focus inside it are not state a view model can hold.
+    /// </summary>
+    public Action? ShowAddMigration { get; set; }
+
+    /// <summary>
+    /// Straight from anywhere in a workspace to naming a new migration. Switches to Migrations
+    /// first: the flyout hangs off that screen's primary action, and there is nothing to hang it on
+    /// while another screen is showing.
+    /// </summary>
+    [RelayCommand]
+    private void StartAddMigration()
+    {
+        if (!HasWorkspace)
+        {
+            return;
+        }
+
+        SelectedTabIndex = (int)SelectedTab.Migrations;
+        ShowAddMigration?.Invoke();
+    }
+
+    /// <summary>
+    /// Which view the output pane is showing: the per-command Activity list, or the raw console.
+    /// Two views of the same session rather than two panes — the console is still the whole
+    /// scrollback, and Activity is a way of navigating it.
+    /// </summary>
+    [ObservableProperty]
+    private bool _showActivity = true;
+
+    partial void OnShowActivityChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ShowRawOutput));
+
+        if (value)
+        {
+            Session.MarkActivityRead();
+        }
+    }
+
+    /// <summary>
+    /// The other half of the same choice. Exists so both segments of the switch are bound: with only
+    /// the Activity half bound, moving to the console from anywhere else — "Show in raw output", for
+    /// instance — left the switch showing neither side selected.
+    /// </summary>
+    public bool ShowRawOutput
+    {
+        get => !ShowActivity;
+        set => ShowActivity = !value;
+    }
+
+    /// <summary>
+    /// Folds the output pane. A command rather than a ToggleButton binding: Fluent gives a checked
+    /// ToggleButton the accent fill and a foreground to contrast with it, which made the strip's own
+    /// text change colour when the pane opened.
+    /// </summary>
+    [RelayCommand]
+    private void ToggleOutput() => OutputExpanded = !OutputExpanded;
+
+    /// <summary>Set by the view: scrolls the console to a line, for "Show in raw output".</summary>
+    public Action<int>? ScrollOutputToLine { get; set; }
+
+    /// <summary>
+    /// Jumps from an Activity card to that command's first line in the console. The join between the
+    /// two views: Activity navigates the output rather than replacing it.
+    /// </summary>
+    [RelayCommand]
+    private void ShowInRawOutput(CommandRun? run)
+    {
+        if (run is null)
+        {
+            return;
+        }
+
+        OutputExpanded = true;
+        ShowActivity = false;
+        ScrollOutputToLine?.Invoke(run.FirstOutputLine);
+    }
+
+    /// <summary>
+    /// Repeats a recorded command with the same arguments. Destructive runs are excluded — those
+    /// went through a confirmation showing the SQL, and re-running one from here would skip it.
+    /// </summary>
+    [RelayCommand]
+    private async Task RerunAsync(CommandRun? run)
+    {
+        if (run is null || !run.CanRerun || Session.IsRunning)
+        {
+            return;
+        }
+
+        await Session.RunAsync(run.Args, run.Label);
+    }
+
+    /// <summary>
+    /// Takes the migration selected on the Migrations screen over to the Script screen as the start
+    /// of a range. The two screens are about the same history, and this is the one hand-off between
+    /// them worth a button: reading a migration and then asking what it would take to get from there
+    /// to now.
+    /// </summary>
+    [RelayCommand]
+    private void ScriptFromSelected()
+    {
+        Script.Range = ScriptRange.FromSelected;
+        SelectedTabIndex = (int)SelectedTab.Script;
     }
 
     partial void OnOutputExpandedChanged(bool value)
@@ -1152,6 +1391,22 @@ public partial class MainWindowViewModel : ObservableObject
     /// Opens the settings modal. Supplied by the view, which owns the window it has to be modal to.
     /// </summary>
     public Func<Task>? ShowSettingsAsync { get; set; }
+
+    /// <summary>Supplied by the view: shows the keyboard shortcut reference.</summary>
+    public Func<Task>? ShowShortcutsAsync { get; set; }
+
+    /// <summary>
+    /// Opens the shortcut sheet. The app had no shortcut reference anywhere until this: Ctrl+, and
+    /// Ctrl+1..4 were discoverable from a tooltip or the source and nowhere else.
+    /// </summary>
+    [RelayCommand]
+    private async Task ShowShortcuts()
+    {
+        if (ShowShortcutsAsync is not null)
+        {
+            await ShowShortcutsAsync();
+        }
+    }
 
     [RelayCommand]
     private async Task OpenSettingsAsync()

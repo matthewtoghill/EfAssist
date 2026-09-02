@@ -2,7 +2,7 @@
 
 What is actually built and verified. `PLAN.md` is the agreed plan and spec; this is the record of implementation, and the only place implementation detail is written down.
 
-Last updated: 2026-08-25.
+Last updated: 2026-08-28.
 
 | Phase | Status |
 | --- | --- |
@@ -17,7 +17,7 @@ Last updated: 2026-08-25.
 | D3–D4 — Model diagrams: the tab, interaction, persistence | **Done** |
 | D5–D6 — Model diagrams: export, settings, docs | **Done** |
 
-Current state: `dotnet test EfAssist.slnx` → **576 passed, 0 failed**, about 70 seconds. The app launches, opens a real solution or folder, lists migrations with their applied state, can add, apply, roll back, remove and drop, generates SQL scripts into a syntax-highlighted viewer, draws the model as an interactive entity-relationship or class diagram that survives a restart and exports to JSON, SVG, PNG, PDF and Mermaid, and explains the common EF failures in plain language without hiding the raw output.
+Current state: `dotnet test EfAssist.slnx` → **635 passed, 0 failed**, about 70 seconds. The app launches, opens a real solution or folder, lists migrations with their applied state, can add, apply, roll back, remove and drop, generates SQL scripts into a syntax-highlighted viewer, draws the model as an interactive entity-relationship or class diagram that survives a restart and exports to JSON, SVG, PNG, PDF and Mermaid, and explains the common EF failures in plain language without hiding the raw output.
 
 The diagrams work is complete through D6, plus per-migration diagrams and diffing: the snapshot picker draws the model as of any migration from its `.Designer.cs`, and marks what that migration added, removed and changed against the one before it. The three remaining follow-ups — MSAGL layout, cross-context diagrams and diagram editing — are parked in `ROADMAP.md` with reasons.
 
@@ -1430,6 +1430,225 @@ Not verified on screen: the dialog and the preview window have not been exercise
 workspace. The app starts clean and the XAML compiles, and the bindings are checked by `x:DataType`,
 but there is no headless Avalonia harness in the test project, so "the button appears, generates, and
 the window shows highlighted SQL over the confirmation" is an outstanding manual check.
+
+---
+
+## Layout pass — Done
+
+The "UI/UX and layout pass" that `ROADMAP.md` had parked, built to the Option A design agreed on the
+design canvas. Nine commits on `feat/app-layout-redesign`, one per phase, each building and passing
+the tests. `docs/LAYOUT-REDESIGN-PLAN.md` holds the plan and the four decisions taken before
+starting.
+
+### Built
+
+- **Top bar** carries the workspace name and the three choices every command depends on — startup
+  project, migrations project, DbContext — as a breadcrumb. Below 1180px a `narrow` class set from
+  `MainWindow.axaml.cs` on resize drops the picker captions and the environment summary; the pickers
+  themselves never hide. Cancel appears only while a command is running.
+- **Navigation rail** (62px) replaces the tab strip: a `ListBox` bound to the same `SelectedTabIndex`
+  the `Alt+1`–`Alt+4` accelerators drive, so the two cannot disagree. The `TabControl` keeps every
+  `TabItem` and its content switching; only the header strip is hidden (`TabControl.railed`).
+- **Run options popover** holds `--no-build`, `--no-connect`, `--idempotent`, context discovery and
+  migration list refresh, with `ActiveRunOptionCount` as a badge on the button so a switch that
+  changes what a command does is never silently on. The 320px left panel, its `Ctrl+B` toggle and
+  `LeftPanelExpanded` are gone.
+- **Output** folds to one strip naming the last command, its outcome and duration, and how many have
+  run. Opened, it has two views: **Activity**, one card per command, and the raw console unchanged.
+  `CommandSession` records a `CommandRun` per `RunAsync`/`RunLocalAsync` — outcome, exit code,
+  duration, diagnosis, EF's first error line, and the index of the run's first console line, capped
+  at 50 and in memory only. "Show in raw output" scrolls the console to that line; "Run again"
+  repeats the command. The standing diagnosis banner is gone: the guidance is on the card, the pane
+  opens itself on Activity when something fails, and the status bar names the failure until it is
+  read.
+- **Migrations** gains a filter over name and id, a "Database is here" marker on the newest applied
+  migration, and per-migration actions in the detail pane (Apply up to here, Script from here,
+  Remove). The Actions expander and `MigrationActionsExpanded` are gone; adding a migration is a
+  flyout on the header's primary button.
+- **Script** asks its question as one band — which migrations, then where the file goes — and gains
+  `ScriptRange.FromSelected`, reachable from the Migrations screen. The viewer header says when the
+  file was generated, how many lines, how big, and whether it is idempotent.
+- **Diagrams** splits what gets drawn (header: snapshot, Mark changes, Export, Generate) from how it
+  is drawn (control row: view, flow, lock, re-layout, a View options flyout). Zoom and the diff
+  legend moved onto the surface. `DiagramOptionsExpanded` is gone.
+- **Tools** is four cards: pending model changes, environment, workspace, and whole-database actions
+  — which is where Revert all migrations and Drop database now live.
+- **Shortcut sheet** on `F1` and `Alt+/`, rendered from `EfAssist.App.ViewModels.Shortcuts`, which is
+  the single list. The app had no shortcut reference anywhere before this.
+
+### Decisions made while building
+
+- **Activity is session-only and in memory.** EF output carries server names and connection strings,
+  and persisting it would mean deciding what to redact. Parked in `ROADMAP.md` with a trigger.
+- **Destructive runs cannot be re-run from a card.** A database write went through a confirmation
+  showing the SQL; repeating it from history would skip it. Callers pass `destructive: true`, and
+  those cards show the command without the button.
+- **The database-head marker sits on the row, not between rows.** A divider would have to know the
+  sort order to mean the same thing in both; a marker on the newest applied migration does not. It
+  is absent entirely when applied state is unknown, which is what Offline leaves it as.
+- **Remove is offered only on the migration EF would actually take.** It always removes the most
+  recent one, so the button is hidden elsewhere rather than silently removing something else.
+- **Run options live in the top bar, not per screen.** The design drew them on each screen header;
+  they are workspace-scoped and saved with the workspace, so they sit with the workspace-scoped
+  pickers rather than being duplicated four times.
+- **The environment card carries facts, not a second set of update buttons.** Updating `dotnet-ef`
+  and checking for app updates stay in Settings, with one button on the card to get there.
+- **No statement count in the Script viewer header.** Counting statements means parsing SQL per
+  provider, and a wrong count is worse than none — lines and size instead.
+- **`AppAccentBrush`** was added to `App.axaml`: `SystemAccentColor` is a colour, not a brush, and
+  the rail and the selection stripe paint with the accent outside a Fluent control template.
+  `CardBackgroundBrush` was added per variant for anything raised off a panel wash.
+
+### Verified
+
+- `dotnet build EfAssist.slnx` and `dotnet test EfAssist.slnx` green at every phase boundary: 629
+  passed, 0 failed.
+- New tests: run recording (outcome, exit code, line index, cap, cancelled versus failed, local work,
+  clearing the console clearing the history), the run-option count including Offline arriving from
+  the migrations list, the migration filter and its numbering, the database-head marker under both
+  sort orders and with unknown state, `SelectedIsLast`, `ScriptRange.FromSelected` including the
+  refusal with nothing selected, and the Script viewer summary.
+- The app launches cleanly after every phase (XAML parses, no first-chance exceptions on startup).
+
+### Not verified yet
+
+- **Nothing on screen has been looked at.** The landing screen is what a headless launch shows;
+  every workspace screen needs a real solution open in front of a person. Worth a pass for: the rail
+  selection visuals and whether hiding `TabItem`s leaves anything odd, the flyouts' sizes, the narrow
+  top bar at 900px, the Activity cards at small heights, the diagram overlays over a real diagram,
+  and the whole thing in the dark variant and at other font sizes.
+- Dead settings kept for round-tripping: `LeftPanelExpanded`, `MigrationActionsExpanded`,
+  `DiagramOptionsExpanded`. They load and save; nothing reads them.
+
+---
+
+## Layout pass review round 1
+
+First round of feedback on the built layout. Five items, all in the output pane and the rail.
+
+### The output view switch is a segmented control
+
+Two radio buttons with the circle templated away, inside one framed row, so they read as one
+control. Radio buttons rather than toggle buttons on purpose: one side is always selected, and
+clicking the selected side cannot turn both off.
+
+The selected segment is marked with an accent underline and a panel-tinted fill rather than an
+accent fill. A fill needs a foreground chosen to contrast with whatever accent the user has
+configured — Fluent derives one (`ChromeWhite`), but it is not reachable by a name this app can rely
+on, and hard-coding white breaks on a pale accent.
+
+### The strip's text no longer changes colour when the pane opens
+
+The strip was a `ToggleButton` bound to `OutputExpanded`. Fluent gives a checked `ToggleButton` the
+accent fill and a foreground to contrast with it; the style suppressed the fill but not the
+foreground, so "Output" flipped colour on expand. It is now a plain `Button` with a
+`ToggleOutputCommand`, which has no checked state to restyle. The chevron rotates through a
+`Classes.open` binding instead of the `:checked` pseudo-class.
+
+### Moving to the console from elsewhere moves the switch
+
+Only the Activity half was bound, so "Show in raw output" left both segments unselected.
+`ShowRawOutput` is the bound inverse of `ShowActivity`, and each raises the other's change, so the
+switch follows the view however the view was changed.
+
+### Activity cards collapse
+
+A run is one line — chevron, outcome glyph, label, command line, outcome, time — and expands to its
+guidance and its actions. `CommandRun` became an `ObservableObject` with `IsExpanded` and a
+`ToggleExpandedCommand`; the whole header line is the hit target. A failure arrives expanded, since
+the pane opens itself for one, and expanding a card never collapses another. The red wash and the
+outcome glyphs were already there and are unchanged.
+
+### The rail has a footer
+
+Home and Settings at the bottom of the rail, below a divider: leaving this workspace, and everything
+that is not about it. The gear left the top bar, which is otherwise entirely about the open
+workspace. Home is `CloseWorkspaceCommand` — the start screen is where the recent list lives, so
+"back to the start" and "close this workspace" are the same action.
+
+### Round 2 tweaks
+
+- The Activity header row is stretched to the card's width. It was not, so the star column between
+  the command line and the outcome collapsed and the outcome and the time sat mid-row instead of at
+  the right edge.
+- The expanded detail gained 8px above it; it was flush against the header line, with the 10px below
+  it that it should have had on both sides.
+- `Ctrl+`` ` folds and unfolds the output pane — the gesture a terminal panel usually answers to, and
+  free here. It is on the shortcut sheet, which is the list.
+
+### Two bugs on opening a workspace
+
+Both reported as "sometimes opens onto a blank page, and Activity says it generated a diagram". Two
+unrelated causes, both fixed at the root:
+
+- **The blank page was the hidden `TabItem`s, and the rail on top of that.** The first attempt
+  guessed the rail alone: a `ListBox` starts with `SelectedIndex` at -1 and a two-way binding can
+  write that back, so `RailIndex` now ignores a negative index and raises its own change so the rail
+  is told to read the view model again rather than sitting at -1 with nothing highlighted. That was
+  real but not sufficient. The `TabControl` was also being asked to select a container that had been
+  hidden to get rid of the header strip, which it is entitled to refuse — leaving `SelectedContent`
+  null and the content area empty. There is no `TabControl` now: the four screens sit in one cell,
+  each visible on its own view-model flag, so which screen is showing cannot depend on a control's
+  selection logic.
+
+  Diagnosed with a throwaway headless probe rather than by reasoning: it opened the real window,
+  set a workspace open, and printed which screen headings the visual tree reported as visible. On
+  the previous commit that printed nothing visible with the rail at -1; it now prints exactly one
+  screen visible at every step. The probe was not kept — the two view-model tests it justified
+  were.
+- **The diagram generation was the snapshot picker.** `RefreshSnapshotOptions` runs as soon as a
+  workspace's migrations have loaded, and clearing the list under a ComboBox bound to `SelectedItem`
+  makes it write null back. That arrived as an ordinary snapshot change, and switching snapshot
+  generates by design — so opening a workspace drew a diagram nobody asked for, whenever the
+  Diagrams screen had been realised. The whole rebuild is now inside the guard, and an empty
+  selection is ignored wherever it comes from.
+- A workspace also now explicitly opens on Migrations rather than on whatever was showing before it.
+  Tab selection was never persisted; this makes it deliberate rather than incidental.
+
+The regression test for the second one asserts on `Session.IsRunning` immediately after the change:
+generation completes on a later turn, so an empty run list on its own passed whether or not a
+generation had been started. Checked by removing the guard and watching it fail.
+
+### The diff legend
+
+Three lines in reading order — which migration is being compared, what it changed, then what the
+colours mean — and it can sit in any of the four corners of the surface. Right-click it to move it;
+the corner is app-wide (`DisplaySettings.DiagramLegendCorner`), because where a reader likes the key
+is a habit about reading diagrams rather than a fact about one solution. The zoom cluster keeps the
+bottom-right corner it has always had, and the legend is allowed there too: it is the reader's
+diagram, and there are four corners and two overlays.
+
+### The Tools screen's two info cards
+
+The designs had these as labelled fact lists; the first pass shipped one run-together version line
+and a Settings button, which meant the versions could not be read at a glance and every action they
+suggest lived somewhere else.
+
+- **Environment** now labels `dotnet-ef`, `EF Core`, `SDK`, `Provider` and `EfAssist` separately.
+  The three versions come from the same `ToolStatus` that builds `EnvironmentSummary`, split into
+  `EfToolVersionText` / `EfCoreVersionText` / `SdkVersionText` so the one-line form used on the home
+  page and in the diagnostics header keeps working unchanged.
+- The provider is probed by `dotnet ef dbcontext info`, which builds the startup project, so nothing
+  probes it on arrival — refreshing contexts or the migrations list does not either. The card says
+  "not known yet" with a **Check** button beside it, sharing `ScriptViewModel`'s probe and cache, so
+  opening the Script screen or previewing a migration's SQL fills it in too. Visiting a screen
+  should not start a build nobody asked for; the same rule the spurious-diagram fix came from.
+- Its actions are the ones the card's own facts imply: **Update dotnet-ef**, **Copy install
+  command**, and a single update slot that shows **Check for updates** until a check finds one and
+  then becomes **Update EfAssist and restart**. The Settings button is gone — the rail has a
+  settings icon, and the card no longer needs to send people elsewhere for what it is about.
+- **Workspace** lists folder, solution, migrations project and scripts folder. The settings-file
+  line and its button stayed out: nobody needs to open that file by hand. `ScriptViewModel` gained
+  `OutputFolderSummary` — the same fact as `DestinationHint`, as a path rather than a sentence.
+
+### Verified
+
+- 635 passed, 0 failed. New tests: a failure arrives expanded while a success stays collapsed and
+  expanding one card leaves the other alone; `ShowRawOutput` mirrors `ShowActivity` both ways and
+  `ShowInRawOutput` moves both plus scrolls to the recorded line; the strip's fold command.
+- The app launches cleanly. As before, nothing has been looked at on screen — the segmented
+  control's metrics, the rail footer at 62px wide and the collapsed card line are all worth a look
+  in both variants.
 
 ---
 

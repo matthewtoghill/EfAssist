@@ -1,6 +1,7 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -45,6 +46,26 @@ public partial class CommandSession : ObservableObject
 
     public ObservableCollection<OutputLine> Output { get; } = [];
 
+    /// <summary>
+    /// What has run this session, newest first, capped. Every entry keeps its own outcome and
+    /// diagnosis, so a failure stays attached to the command that caused it instead of scrolling
+    /// away up the console. In memory only — see <see cref="CommandRun"/>.
+    /// </summary>
+    public ObservableCollection<CommandRun> Runs { get; } = [];
+
+    /// <summary>How many runs are kept. Beyond this the oldest is dropped.</summary>
+    public const int MaxRuns = 50;
+
+    /// <summary>The most recent run, which is what the folded output strip reports.</summary>
+    public CommandRun? LastRun => Runs.Count > 0 ? Runs[0] : null;
+
+    /// <summary>
+    /// A failure has been recorded that the user has not looked at yet. Cleared by
+    /// <see cref="MarkActivityRead"/> when the Activity list is opened.
+    /// </summary>
+    [ObservableProperty]
+    private bool _hasUnreadFailure;
+
     [ObservableProperty]
     private bool _isRunning;
 
@@ -64,7 +85,10 @@ public partial class CommandSession : ObservableObject
     /// Runs a command, streaming its output. Returns null when another command is already running or
     /// the user cancelled — in both cases the caller should do nothing further.
     /// </summary>
-    public async Task<EfResult?> RunAsync(IReadOnlyList<string> args, string label)
+    public async Task<EfResult?> RunAsync(
+        IReadOnlyList<string> args,
+        string label,
+        bool destructive = false)
     {
         if (IsRunning)
         {
@@ -75,6 +99,11 @@ public partial class CommandSession : ObservableObject
         Diagnosis = null;
         _cancellation = new CancellationTokenSource();
         StatusMessage = $"{label}…";
+
+        // Where this run's output starts, for the Activity card's "Show in raw output".
+        var firstLine = Output.Count;
+        var started = DateTimeOffset.Now;
+        var clock = Stopwatch.StartNew();
 
         // Echo the command verbatim so it can be reproduced in a terminal.
         Append(new OutputLine(OutputChannel.Info, "> dotnet " + string.Join(' ', args)));
@@ -89,12 +118,37 @@ public partial class CommandSession : ObservableObject
 
             LastResult = result;
             Diagnosis = EfDiagnostics.Diagnose(result);
+
+            Record(new CommandRun
+            {
+                Label = label,
+                Args = args,
+                Outcome = result.Success ? CommandOutcome.Succeeded : CommandOutcome.Failed,
+                ExitCode = result.ExitCode,
+                Duration = clock.Elapsed,
+                StartedAt = started,
+                Diagnosis = Diagnosis,
+                FailureLine = result.Success ? null : FirstLine(result.ErrorMessage),
+                FirstOutputLine = firstLine,
+                Destructive = destructive,
+            });
+
             return result;
         }
         catch (OperationCanceledException)
         {
             StatusMessage = $"{label} cancelled.";
             Append(new OutputLine(OutputChannel.Warn, $"{label} cancelled."));
+            Record(new CommandRun
+            {
+                Label = label,
+                Args = args,
+                Outcome = CommandOutcome.Cancelled,
+                Duration = clock.Elapsed,
+                StartedAt = started,
+                FirstOutputLine = firstLine,
+                Destructive = destructive,
+            });
             return null;
         }
         catch (Exception ex)
@@ -104,6 +158,17 @@ public partial class CommandSession : ObservableObject
             // claiming the command is still going.
             StatusMessage = $"{label} failed: {ex.Message}";
             Append(new OutputLine(OutputChannel.Error, ex.ToString()));
+            Record(new CommandRun
+            {
+                Label = label,
+                Args = args,
+                Outcome = CommandOutcome.Failed,
+                Duration = clock.Elapsed,
+                StartedAt = started,
+                FailureLine = ex.Message,
+                FirstOutputLine = firstLine,
+                Destructive = destructive,
+            });
             return null;
         }
         finally
@@ -151,20 +216,54 @@ public partial class CommandSession : ObservableObject
         _cancellation = new CancellationTokenSource();
         StatusMessage = $"{label}…";
 
+        var firstLine = Output.Count;
+        var started = DateTimeOffset.Now;
+        var clock = Stopwatch.StartNew();
+
         try
         {
-            return await work(_cancellation.Token);
+            var value = await work(_cancellation.Token);
+
+            // No Args: there is no command line to repeat, so the card shows the label alone and
+            // offers no "Run again".
+            Record(new CommandRun
+            {
+                Label = label,
+                Outcome = CommandOutcome.Succeeded,
+                Duration = clock.Elapsed,
+                StartedAt = started,
+                FirstOutputLine = firstLine,
+            });
+
+            return value;
         }
         catch (OperationCanceledException)
         {
             StatusMessage = $"{label} cancelled.";
             Append(new OutputLine(OutputChannel.Warn, $"{label} cancelled."));
+            Record(new CommandRun
+            {
+                Label = label,
+                Outcome = CommandOutcome.Cancelled,
+                Duration = clock.Elapsed,
+                StartedAt = started,
+                FirstOutputLine = firstLine,
+            });
             return default;
         }
         catch (Exception ex)
         {
             StatusMessage = $"{label} failed: {ex.Message}";
             Append(new OutputLine(OutputChannel.Error, ex.ToString()));
+            Record(new CommandRun
+            {
+                Label = label,
+                Outcome = CommandOutcome.Failed,
+                Duration = clock.Elapsed,
+                StartedAt = started,
+                FailureLine = ex.Message,
+                FirstOutputLine = firstLine,
+            });
             return default;
         }
         finally
@@ -175,6 +274,34 @@ public partial class CommandSession : ObservableObject
         }
     }
 
+    /// <summary>
+    /// Adds a run to the head of the list, dropping the oldest beyond <see cref="MaxRuns"/>. Marshalled
+    /// like output is: a command can finish on a runner thread.
+    /// </summary>
+    private void Record(CommandRun run) => PostToUiThread(() =>
+    {
+        Runs.Insert(0, run);
+
+        while (Runs.Count > MaxRuns)
+        {
+            Runs.RemoveAt(Runs.Count - 1);
+        }
+
+        if (run.Failed)
+        {
+            HasUnreadFailure = true;
+
+            // The pane opens itself on a failure, so the card it opened for is already showing its
+            // guidance rather than needing a click to reveal it.
+            run.IsExpanded = true;
+        }
+
+        OnPropertyChanged(nameof(LastRun));
+    });
+
+    /// <summary>Called when the Activity list is shown: the failure has been seen.</summary>
+    public void MarkActivityRead() => HasUnreadFailure = false;
+
     /// <summary>Reports a failure using EF's own message, which is already readable.</summary>
     public void ReportFailure(EfResult result, string fallback) =>
         StatusMessage = result.ErrorMessage.Length > 0 ? FirstLine(result.ErrorMessage) : fallback;
@@ -182,14 +309,14 @@ public partial class CommandSession : ObservableObject
     public void Reset()
     {
         Output.Clear();
+        // The recorded runs point into the console by line index, so they cannot outlive it.
+        Runs.Clear();
+        OnPropertyChanged(nameof(LastRun));
+        HasUnreadFailure = false;
         LastResult = null;
         Diagnosis = null;
         StatusMessage = "Ready.";
     }
-
-    /// <summary>Hides the guidance panel without touching the output it describes.</summary>
-    [RelayCommand]
-    private void DismissDiagnosis() => Diagnosis = null;
 
     [RelayCommand(CanExecute = nameof(IsRunning))]
     private void Cancel()
