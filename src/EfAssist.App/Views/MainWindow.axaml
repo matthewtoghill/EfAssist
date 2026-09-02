@@ -1237,7 +1237,20 @@
                                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6"
                                             VerticalAlignment="Center">
                                     <TextBox Text="{Binding Diagrams.Search}" MinWidth="170"
-                                             PlaceholderText="Search entities" />
+                                             PlaceholderText="Search entities">
+                                        <!-- Same clear affordance the migration filter has, and inside
+                                             the box for the same reason: the row beside it is a fixed
+                                             set of controls that must not shift as you type. -->
+                                        <TextBox.InnerRightContent>
+                                            <Button Content="&#x2715;" Padding="6,0" MinWidth="0"
+                                                    Margin="0,0,4,0" Background="Transparent"
+                                                    BorderThickness="0"
+                                                    FontSize="{DynamicResource AppFontSizeTiny}"
+                                                    IsVisible="{Binding Diagrams.IsSearching}"
+                                                    Command="{Binding Diagrams.ClearSearchCommand}"
+                                                    ToolTip.Tip="Clear the search" />
+                                        </TextBox.InnerRightContent>
+                                    </TextBox>
                                     <TextBlock Text="{Binding Diagrams.SearchSummary}" Classes="hint"
                                                VerticalAlignment="Center" MinWidth="58" />
                                     <Button Content="Next" Command="{Binding Diagrams.NextMatchCommand}" />
