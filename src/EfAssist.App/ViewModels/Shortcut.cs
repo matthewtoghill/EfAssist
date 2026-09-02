@@ -27,7 +27,18 @@ public static class Shortcuts
             new Shortcut("Ctrl+2", "Script"),
             new Shortcut("Ctrl+3", "Diagrams"),
             new Shortcut("Ctrl+4", "Tools"),
+            new Shortcut("Ctrl+W", "Home: close this workspace"),
+            new Shortcut("Ctrl+O", "Open a solution"),
+            new Shortcut("Ctrl+Shift+O", "Open a folder containing a solution"),
             new Shortcut("F1 or Ctrl+/", "This list"),
+        ]),
+
+        new ShortcutGroup("Actions", [
+            new Shortcut("Ctrl+N", "Add a migration, with the name box ready to type in"),
+            new Shortcut("Enter", "In the Add migration flyout: add it"),
+            new Shortcut("Ctrl+G", "Generate: the script on Script, the diagram on Diagrams"),
+            new Shortcut("F5", "Refresh the migration list"),
+            new Shortcut("Esc", "Stop the running command"),
         ]),
 
         new ShortcutGroup("Panels", [

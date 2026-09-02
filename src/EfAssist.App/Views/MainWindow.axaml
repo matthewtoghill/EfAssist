@@ -34,6 +34,19 @@
         <KeyBinding Gesture="Ctrl+D2" Command="{Binding SelectTabCommand}" CommandParameter="1" />
         <KeyBinding Gesture="Ctrl+D3" Command="{Binding SelectTabCommand}" CommandParameter="2" />
         <KeyBinding Gesture="Ctrl+D4" Command="{Binding SelectTabCommand}" CommandParameter="3" />
+        <!-- Ctrl+W closes the workspace rather than the window, because the workspace is the only
+             thing this app has open. Ctrl+0 would have sat better beside the screens, but the
+             diagram surface already uses it to reset zoom. -->
+        <KeyBinding Gesture="Ctrl+W" Command="{Binding CloseWorkspaceCommand}" />
+        <KeyBinding Gesture="Ctrl+N" Command="{Binding StartAddMigrationCommand}" />
+        <KeyBinding Gesture="Ctrl+O" Command="{Binding OpenSolutionCommand}" />
+        <KeyBinding Gesture="Ctrl+Shift+O" Command="{Binding OpenFolderCommand}" />
+        <KeyBinding Gesture="Ctrl+G" Command="{Binding GenerateCurrentCommand}" />
+        <!-- No modifier, so these two never wear a badge; the sheet and their tooltips are where
+             they are advertised. Both are inert unless there is something to act on: F5 needs a
+             workspace, and Cancel is gated on a command actually running. -->
+        <KeyBinding Gesture="F5" Command="{Binding Migrations.RefreshCommand}" />
+        <KeyBinding Gesture="Escape" Command="{Binding Session.CancelCommand}" />
     </Window.KeyBindings>
 
     <Window.Styles>
@@ -483,7 +496,8 @@
                     <!-- Only while something is running: a permanent Cancel is a button that does
                          nothing most of the time. -->
                     <Button Content="Cancel" Command="{Binding Session.CancelCommand}"
-                            IsVisible="{Binding Session.IsRunning}" />
+                            IsVisible="{Binding Session.IsRunning}"
+                            ToolTip.Tip="Stop the running command (Esc)" />
 
                     <!-- Run options. These are workspace-scoped switches, saved with the workspace,
                          so they sit beside the workspace-scoped pickers rather than being repeated
@@ -568,8 +582,12 @@
                 <TextBlock TextWrapping="Wrap" Opacity="0.8"
                            Text="Open a solution, or a folder containing one, to manage its Entity Framework Core migrations." />
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Button Content="Open solution…" Command="{Binding OpenSolutionCommand}" />
-                    <Button Content="Open folder…" Command="{Binding OpenFolderCommand}" />
+                    <Button Content="Open solution…" Command="{Binding OpenSolutionCommand}"
+                            views:ShortcutHint.Gesture="Ctrl+O"
+                            ToolTip.Tip="Open a solution (Ctrl+O)" />
+                    <Button Content="Open folder…" Command="{Binding OpenFolderCommand}"
+                            views:ShortcutHint.Gesture="Ctrl+Shift+O"
+                            ToolTip.Tip="Open a folder containing a solution (Ctrl+Shift+O)" />
                     <Button Command="{Binding OpenSettingsCommand}"
                             Padding="10,6" MinWidth="36"
                             views:ShortcutHint.Gesture="Ctrl+,"
@@ -694,7 +712,8 @@
                 <StackPanel Grid.Row="1" Spacing="2" Margin="0,6,0,6">
                     <Border Height="1" Margin="8,0,8,4" Background="{DynamicResource SubtleBorderBrush}" />
                     <Button Classes="railAction" Command="{Binding CloseWorkspaceCommand}"
-                            ToolTip.Tip="Close this workspace and go back to the start screen">
+                            views:ShortcutHint.Gesture="Ctrl+W"
+                            ToolTip.Tip="Close this workspace and go back to the start screen (Ctrl+W)">
                         <StackPanel Spacing="2">
                             <Path Classes="railIcon" Data="{StaticResource nav_home}" />
                             <TextBlock Classes="railLabel" Text="Home" />
@@ -764,21 +783,40 @@
                                     <!-- The screen's primary action. A flyout rather than a block of
                                          fields on the screen: naming a migration is a moment, not a
                                          permanent part of the layout. -->
-                                    <Button Classes="accent" Content="Add migration">
+                                    <Button Classes="accent" Content="Add migration"
+                                            Name="AddMigrationButton"
+                                            views:ShortcutHint.Gesture="Ctrl+N"
+                                            ToolTip.Tip="Add a migration (Ctrl+N)">
                                         <Button.Flyout>
                                             <Flyout Placement="BottomEdgeAlignedRight">
                                                 <StackPanel Width="320" Spacing="2">
                                                     <TextBlock Text="Add migration" FontWeight="SemiBold" />
                                                     <TextBlock Classes="hint" Margin="0,0,0,6"
                                                                Text="Writes source files into the migrations project. Touches no database." />
-                                                    <TextBox Text="{Binding Migrations.NewMigrationName}"
-                                                             PlaceholderText="MigrationName" />
+                                                    <!-- Enter adds, from either box: arriving here from
+                                                         Ctrl+N means both hands are on the keyboard.
+                                                         A KeyBinding rather than the Add button's
+                                                         IsDefault, which does not reach inside a
+                                                         flyout's popup. It does nothing while the name
+                                                         is empty or invalid, because a KeyBinding
+                                                         honours the command's CanExecute. -->
+                                                    <TextBox Name="NewMigrationNameBox"
+                                                             Text="{Binding Migrations.NewMigrationName}"
+                                                             PlaceholderText="MigrationName">
+                                                        <TextBox.KeyBindings>
+                                                            <KeyBinding Gesture="Enter" Command="{Binding Migrations.AddCommand}" />
+                                                        </TextBox.KeyBindings>
+                                                    </TextBox>
                                                     <TextBlock Text="{Binding Migrations.NewMigrationNameError}"
                                                                IsVisible="{Binding Migrations.HasNewMigrationNameError}"
                                                                Classes="danger" FontSize="{DynamicResource AppFontSizeTiny}"
                                                                TextWrapping="Wrap" Margin="0,4,0,0" />
                                                     <TextBox Text="{Binding Migrations.OutputDirectory}"
-                                                             PlaceholderText="Output folder (optional)" Margin="0,6,0,0" />
+                                                             PlaceholderText="Output folder (optional)" Margin="0,6,0,0">
+                                                        <TextBox.KeyBindings>
+                                                            <KeyBinding Gesture="Enter" Command="{Binding Migrations.AddCommand}" />
+                                                        </TextBox.KeyBindings>
+                                                    </TextBox>
                                                     <Button Content="Add" Classes="accent"
                                                             Command="{Binding Migrations.AddCommand}"
                                                             HorizontalAlignment="Stretch" Margin="0,8,0,0" />
@@ -832,7 +870,7 @@
                                              than in the screen's action group. Icon only, for the width. -->
                                         <Button Grid.Column="1" Command="{Binding Migrations.RefreshCommand}"
                                                 Margin="6,0,0,0" Padding="8,6" MinWidth="36"
-                                                ToolTip.Tip="Refresh the migration list">
+                                                ToolTip.Tip="Refresh the migration list (F5)">
                                             <PathIcon Data="{StaticResource refresh_regular}" Width="15" Height="15" />
                                         </Button>
                                         <!-- Icon only: the arrow shows which way the list currently runs. -->
@@ -1003,7 +1041,9 @@
                                                IsVisible="{Binding Script.ShowsStaleWarning}"
                                                Text="The SQL below is from an earlier run — the last attempt failed." />
                                     <Button Classes="accent" Content="Generate script"
-                                            Command="{Binding Script.GenerateCommand}" />
+                                            Command="{Binding Script.GenerateCommand}"
+                                            views:ShortcutHint.Gesture="Ctrl+G"
+                                            ToolTip.Tip="Generate the SQL script (Ctrl+G)" />
                                 </StackPanel>
                             </Grid>
 
@@ -1168,7 +1208,8 @@
 
                                     <Button Classes="accent" Content="Generate diagram"
                                             Command="{Binding Diagrams.GenerateCommand}"
-                                            ToolTip.Tip="Reads the model snapshot for this context. No build, no database." />
+                                            views:ShortcutHint.Gesture="Ctrl+G"
+                                            ToolTip.Tip="Reads the model snapshot for this context (Ctrl+G). No build, no database." />
                                 </StackPanel>
                             </Grid>
 

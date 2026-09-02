@@ -1245,6 +1245,49 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Runs whichever "Generate …" the screen on show offers: the SQL script on Script, the diagram
+    /// on Diagrams. One gesture for "build what this screen is for", dispatched here rather than as
+    /// four bindings, because only one of them can be the right one at a time. Migrations and Tools
+    /// have no generate step, so there it does nothing.
+    /// </summary>
+    [RelayCommand]
+    private void GenerateCurrent()
+    {
+        switch (CurrentTab)
+        {
+            case SelectedTab.Script:
+                Script.GenerateCommand.Execute(null);
+                break;
+            case SelectedTab.Diagrams:
+                Diagrams.GenerateCommand.Execute(null);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Supplied by the view: opens the Add migration flyout with the name box focused. The view owns
+    /// it because a flyout and the focus inside it are not state a view model can hold.
+    /// </summary>
+    public Action? ShowAddMigration { get; set; }
+
+    /// <summary>
+    /// Straight from anywhere in a workspace to naming a new migration. Switches to Migrations
+    /// first: the flyout hangs off that screen's primary action, and there is nothing to hang it on
+    /// while another screen is showing.
+    /// </summary>
+    [RelayCommand]
+    private void StartAddMigration()
+    {
+        if (!HasWorkspace)
+        {
+            return;
+        }
+
+        SelectedTabIndex = (int)SelectedTab.Migrations;
+        ShowAddMigration?.Invoke();
+    }
+
+    /// <summary>
     /// Which view the output pane is showing: the per-command Activity list, or the raw console.
     /// Two views of the same session rather than two panes — the console is still the whole
     /// scrollback, and Activity is a way of navigating it.

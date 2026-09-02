@@ -3,11 +3,12 @@
         xmlns:vm="using:EfAssist.App.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="460" d:DesignHeight="480"
+        mc:Ignorable="d" d:DesignWidth="460" d:DesignHeight="620"
         x:Class="EfAssist.App.Views.ShortcutsWindow"
         Title="Keyboard shortcuts"
-        Width="460" Height="480"
+        Width="460"
         FontSize="{DynamicResource AppFontSize}"
+        SizeToContent="Height" MaxHeight="900"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False">
 

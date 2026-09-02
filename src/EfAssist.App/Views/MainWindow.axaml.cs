@@ -60,6 +60,13 @@ public partial class MainWindow : Window
         // Hold Alt or Ctrl and the buttons those gestures reach label themselves.
         ShortcutHint.Attach(this);
 
+        // Ctrl+N is only worth having if it lands on the name box. The flyout's content is not in a
+        // visual tree until it opens, so this is the first moment the box can take focus.
+        if (AddMigrationButton.Flyout is { } addMigration)
+        {
+            addMigration.Opened += (_, _) => NewMigrationNameBox.Focus();
+        }
+
         // A definition holds literal colours, so a theme switch needs a different one. This fires
         // for a System user whose OS flips too, which a Theme-property handler would miss.
         SqlEditor.ActualThemeVariantChanged += (_, _) => ApplySqlHighlighting();
@@ -85,6 +92,7 @@ public partial class MainWindow : Window
             viewModel.ShowErrorAsync = ShowErrorAsync;
             viewModel.ShowSettingsAsync = ShowSettingsAsync;
             viewModel.ShowShortcutsAsync = ShowShortcutsAsync;
+            viewModel.ShowAddMigration = ShowAddMigration;
             viewModel.RestartRequested = Restart;
             viewModel.Script.PickSaveFileAsync = PickSaveFileAsync;
             viewModel.Script.PickFolderAsync = PickFolderAsync;
@@ -410,6 +418,19 @@ public partial class MainWindow : Window
         new SettingsWindow { DataContext = DataContext }.ShowDialog(this);
 
     private Task ShowShortcutsAsync() => new ShortcutsWindow().ShowDialog(this);
+
+    /// <summary>
+    /// Opens the Add migration flyout, for Ctrl+N. Posted rather than called straight through: the
+    /// Migrations screen may have become visible only a moment ago, and a flyout cannot work out
+    /// where to sit against a button that has not been laid out yet.
+    /// </summary>
+    private void ShowAddMigration()
+    {
+        if (AddMigrationButton.Flyout is { } flyout)
+        {
+            Dispatcher.UIThread.Post(() => flyout.ShowAt(AddMigrationButton));
+        }
+    }
 
     /// <summary>
     /// Relaunches the app so a colour change takes effect. Started before shutting down, because the
