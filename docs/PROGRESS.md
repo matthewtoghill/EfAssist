@@ -1652,6 +1652,84 @@ suggest lived somewhere else.
 
 ---
 
+## Settings screen rebuild — Done
+
+The settings modal was three tabs at 560×640, which was cramped and left the theme choice behind a
+dropdown. Four directions were mocked; the two-pane one was picked and built out.
+
+### Built
+
+- `SettingsWindow` is now a two-pane screen: a 224px category list beside the pane it selects, opening
+  at 1000×760 centred on the shell, resizable to 760×560, remembering its own size — not its position —
+  in `DisplaySettings.SettingsWindow` (its own block, so widening Settings does not move the main
+  window). Position is deliberately not remembered: it is a modal, and on a multi-monitor desk a
+  remembered position opened it away from the window it belongs to.
+  Eight categories: Theme, Text and layout, Code and console, Workspace defaults, Diagrams, Tools,
+  Shortcuts, Updates and about.
+- **Search** over every row. `Views/SettingsSearch.cs` is an attached property (`Terms`) plus a filter:
+  each row declares the words a person would type that are not already in its own text — `--no-build`,
+  `--no-connect`, "colour" — and the labels and hints are searched automatically. The window's
+  code-behind runs it, hides the rows that miss, hides the categories with nothing left, writes a match
+  count against each remaining category and "3 of 6 shown" beside the pane heading, and moves the
+  selection off a category the search has hidden. A category whose own name matches keeps all its rows:
+  searching "diagrams" should show the Diagrams pane, not an empty one.
+- **Theme** shows all nine palettes as a gallery of tiles, each painted in its own three colours over a
+  scrap of the real UI, so the question the tile answers is the real one — whether the accent is legible
+  on its own background. Selection is an accent edge, not a fill, for the same reason. `SettingsViewModel`
+  builds the tiles from `Theming.Sample` and rebuilds them when the half being edited changes.
+- **A contrast check** on the chosen trio: the WCAG ratio for text on background, graded AA/AAA/fail,
+  plus a note about the accent when it is under 3:1. Its own implementation rather than
+  `Theming.Luminance`, which is the cheap perceptual weighting used to pick black or white text; a pass
+  or fail claim has to use the real curve.
+- **Workspace defaults** (`AppSettings.WorkspaceDefaults`): discovery, migration refresh, offline,
+  idempotent, skip-build and the script output folder. Applied in exactly one place —
+  `AppSettings.For`, when a workspace has no file of its own — which is what keeps them a seed. An
+  existing workspace never sees them again, so changing a default cannot reach back into a solution
+  already set up. The pane says so, in the pane.
+- **`WrapOutput` and `SortNewestFirst`** were in `DisplaySettings` with no screen exposing them. They
+  are rows now, bound to the same properties the console strip and the sort button use.
+- **The shortcut sheet folded in.** `ShortcutsWindow` is deleted; `F1` and `Ctrl+/` open Settings on the
+  Shortcuts category, rendered from the same `Shortcuts.Groups`.
+- **Export, import and reset**, app-wide only. `SettingsStore.Export`/`Import`/`Reset` carry the
+  preferences and the workspace defaults; window geometry stays with the machine it was measured on, and
+  each workspace's own file — absolute project paths, a remembered migration list, a hand-arranged
+  diagram — stays put, because none of it means anything elsewhere. Reset also empties the recent list
+  and asks first.
+- `Border.card`, `Border.segments` and `RadioButton.segment` moved from `MainWindow.axaml` into
+  `App.axaml`, which is where the comment above the semantic classes already said shared styles live.
+
+### Decisions
+
+- **Search in the view, not the view model.** The rows are declared in XAML. A parallel list of them in
+  a view model would be a second copy to keep in step, and the first thing to rot would be exactly the
+  setting nobody could find. The cost is that the filtering walks the logical tree, which is also why
+  the panes are all in the tree and hidden rather than created on demand.
+- **Import and reset copy in place.** `SettingsStore.Overwrite` reflects over the settable properties
+  rather than assigning a new `DisplaySettings`: half a dozen view models are handed that instance at
+  construction and keep it, so replacing the object would leave them writing to a block nothing reads.
+  `SettingsViewModel.SettingsReplaced` then tells the shell to re-read the values its own properties
+  mirror.
+- **The window keeps its own size block** rather than sharing the main window's, and remembers size
+  only. Where the main window sits is the user's choice about the application; where a modal sits is
+  just where it was last dragged.
+- **One heading above the panes**, bound to the selected category, rather than eight copies of the same
+  two text blocks.
+
+### Verified
+
+- `dotnet test EfAssist.slnx` — see the run below. New tests: a new workspace starts from the defaults;
+  changing a default leaves an existing workspace alone; export/import carries the preferences but not
+  the window geometry; an import of something that is not a backup changes nothing; reset clears the
+  preferences, the defaults and the recent list while leaving workspace files alone.
+
+### Not verified yet
+
+- Nothing has been looked at on screen. The palette gallery's tile metrics, the row rhythm at the 760px
+  minimum width, the contrast badge in both variants and the search's behaviour when it hides the
+  selected category are all worth a look.
+
+---
+
 ## Deliberate shortcuts
 
 Tracked so they do not rot into "later means never". Each is marked with a `ponytail:` comment at the site.

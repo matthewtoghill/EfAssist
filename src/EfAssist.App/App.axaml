@@ -178,6 +178,59 @@
 
         <!-- Semantic classes, app-wide so both windows share them. Colour lives in the style, not at
              the usage site, which is what makes a theme switch a one-line change. -->
+        <!-- A card on a screen: one subject, its state and its actions together. -->
+        <Style Selector="Border.card">
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource SubtleBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="5" />
+            <Setter Property="Padding" Value="14" />
+        </Style>
+        <!-- A card whose actions are destructive says so with its edge, not only its words. -->
+        <Style Selector="Border.card.danger">
+            <Setter Property="BorderBrush" Value="{DynamicResource DiagnosisErrorBorderBrush}" />
+        </Style>
+
+
+        <!-- Segmented switch. Radio buttons rather than toggles, so one side is always selected and
+             clicking the selected side cannot turn both off, with the circle templated away. The
+             selected segment is marked by an accent underline rather than an accent fill: a fill
+             needs a foreground chosen to contrast with whatever accent the user has configured. -->
+        <Style Selector="RadioButton.segment">
+            <Setter Property="Padding" Value="14,4" />
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Panel Background="{TemplateBinding Background}">
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          Padding="{TemplateBinding Padding}"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        <Border Name="Underline" Height="2" VerticalAlignment="Bottom"
+                                IsVisible="False"
+                                Background="{DynamicResource AppAccentBrush}" />
+                    </Panel>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="RadioButton.segment:pointerover">
+            <Setter Property="Background" Value="{DynamicResource PanelBackgroundBrush}" />
+        </Style>
+        <Style Selector="RadioButton.segment:checked">
+            <Setter Property="Background" Value="{DynamicResource PanelBackgroundBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="RadioButton.segment:checked /template/ Border#Underline">
+            <Setter Property="IsVisible" Value="True" />
+        </Style>
+        <!-- The frame around the group, so the two segments read as one control. -->
+        <Style Selector="Border.segments">
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource SubtleBorderBrush}" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="ClipToBounds" Value="True" />
+        </Style>
+
         <Style Selector="Border.caution">
             <Setter Property="Background" Value="{DynamicResource CautionBackgroundBrush}" />
             <Setter Property="BorderBrush" Value="{DynamicResource CautionBorderBrush}" />

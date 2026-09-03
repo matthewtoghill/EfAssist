@@ -1,16 +1,17 @@
-<Window xmlns="https://github.com/avaloniaui"
+﻿<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:EfAssist.App.ViewModels"
         xmlns:core="using:EfAssist.Core"
         xmlns:app="using:EfAssist.App"
+        xmlns:views="using:EfAssist.App.Views"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="560" d:DesignHeight="640"
+        mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="760"
         x:Class="EfAssist.App.Views.SettingsWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="Settings"
-        Width="560" Height="640"
-        MinWidth="480" MinHeight="480"
+        Width="1000" Height="760"
+        MinWidth="760" MinHeight="560"
         FontSize="{DynamicResource AppFontSize}"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False">
@@ -20,334 +21,956 @@
     </Design.DataContext>
 
     <Window.Styles>
-        <Style Selector="TextBlock.label">
-            <Setter Property="Opacity" Value="0.7" />
-            <Setter Property="Margin" Value="0,10,0,2" />
-        </Style>
         <Style Selector="TextBlock.hint">
             <Setter Property="Opacity" Value="0.6" />
             <Setter Property="FontSize" Value="{DynamicResource AppFontSizeTiny}" />
             <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="MaxWidth" Value="520" />
+            <!-- Stretch plus a MaxWidth centres the block in the space it does not fill, which reads
+                 as an indent against the label above it. These are all left-aligned copy. -->
+            <Setter Property="HorizontalAlignment" Value="Left" />
+        </Style>
+        <!-- The exact dotnet-ef flag a row controls. Searchable, and the reason someone recognises
+             the setting they came looking for. -->
+        <Style Selector="TextBlock.flag">
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="Opacity" Value="0.55" />
+            <Setter Property="FontFamily" Value="Consolas,Menlo,monospace" />
+            <Setter Property="FontSize" Value="{DynamicResource AppFontSizeTiny}" />
         </Style>
         <Style Selector="TextBlock.group">
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Margin" Value="0,0,0,6" />
         </Style>
-        <!-- Every section is a labelled block with the same rhythm, so the sizes are set once. -->
-        <Style Selector="Border.section">
-            <Setter Property="BorderThickness" Value="1" />
+        <Style Selector="TextBlock.paneTitle">
+            <Setter Property="FontSize" Value="{DynamicResource AppFontSizeHeading}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <!-- One setting: its label, its explanation and its control. The row is what the search
+             hides, so a setting and its explanation always disappear together. -->
+        <Style Selector="Border.row">
+            <Setter Property="Padding" Value="0,11" />
+            <Setter Property="BorderThickness" Value="0,0,0,1" />
             <Setter Property="BorderBrush" Value="{DynamicResource SubtleBorderBrush}" />
-            <Setter Property="Background" Value="{DynamicResource PanelBackgroundBrush}" />
-            <Setter Property="Padding" Value="14,12" />
+        </Style>
+        <!-- The last row in a card has the card's own edge below it already. -->
+        <Style Selector="Border.row:nth-last-child(1)">
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <!-- Nor does a row whose only follower is conditional and currently absent: a divider with
+             nothing under it reads as a missing control. Bound as a class rather than set on the row,
+             because the search owns each row's IsVisible. -->
+        <Style Selector="Border.row.undivided">
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+
+        <!-- The category list. Static setters only: the row's own visibility is bound inside the
+             item template, where the item type is known. -->
+        <Style Selector="ListBox.categories">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="6,0" />
+        </Style>
+        <Style Selector="ListBox.categories ListBoxItem">
+            <Setter Property="Padding" Value="6,3" />
+            <Setter Property="MinHeight" Value="0" />
             <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+
+        <!-- The palette gallery. Selection is marked with an accent edge rather than a fill: the
+             tile's whole job is to show its own colours. -->
+        <Style Selector="ListBox.palettes">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+        <Style Selector="ListBox.palettes ListBoxItem">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0,0,10,10" />
+            <Setter Property="CornerRadius" Value="5" />
+        </Style>
+        <Style Selector="ListBox.palettes ListBoxItem Border#Tile">
+            <Setter Property="BorderBrush" Value="{DynamicResource SubtleBorderBrush}" />
+        </Style>
+        <!-- Selected: an accent ring inside the tile, an accent edge on it, a tick and a heavier
+             name. Nothing here changes the tile's size or its corner radius. -->
+        <Style Selector="ListBox.palettes ListBoxItem:selected Border#Tile">
+            <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}" />
+        </Style>
+        <Style Selector="ListBox.palettes ListBoxItem:selected Border#Ring">
+            <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}" />
+        </Style>
+        <Style Selector="ListBox.palettes ListBoxItem:selected Path#Tick">
+            <Setter Property="IsVisible" Value="True" />
+        </Style>
+        <Style Selector="ListBox.palettes ListBoxItem:selected TextBlock#PaletteName">
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <!-- Hover gets the edge but not the ring, so it reads as "this one next" rather than as
+             "this one now". -->
+        <Style Selector="ListBox.palettes ListBoxItem:pointerover Border#Tile">
+            <Setter Property="BorderBrush" Value="{DynamicResource SplitterGripBrush}" />
+        </Style>
+
+        <!-- The legibility check. Green when the pair clears AA, red when it does not: a claim about
+             readability has to be readable itself. -->
+        <Style Selector="Border.contrast">
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Padding" Value="9,7" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Background" Value="{DynamicResource DiagnosisErrorBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource DiagnosisErrorBorderBrush}" />
+        </Style>
+        <Style Selector="Border.contrast TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource DangerForegroundBrush}" />
+        </Style>
+        <Style Selector="Border.contrast.passes">
+            <Setter Property="Background" Value="{DynamicResource PanelBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource SubtleBorderBrush}" />
+        </Style>
+        <Style Selector="Border.contrast.passes TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource StateAppliedBrush}" />
+        </Style>
+
+        <!-- The restart notice carries its own bottom margin, so the heading under it drops its top
+             one rather than the two adding up to a gap twice the size of every other. -->
+        <Style Selector="StackPanel.underNotice">
+            <Setter Property="Margin" Value="18,0,18,12" />
+        </Style>
+
+        <!-- The count badge beside a category while a search is narrowing it. -->
+        <Style Selector="Border.badge">
+            <Setter Property="CornerRadius" Value="9" />
+            <Setter Property="Padding" Value="6,1" />
+            <Setter Property="Background" Value="{DynamicResource PanelBackgroundBrush}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
     </Window.Styles>
 
-    <Grid RowDefinitions="Auto,*,Auto" Margin="16">
+    <Grid RowDefinitions="Auto,*,Auto">
 
-        <!-- Above the tabs rather than inside Appearance, so switching tabs cannot hide the fact that
+        <!-- Above the panes rather than inside Theme, so switching category cannot hide the fact that
              a restart is owed. The colours are already saved; only the repaint is outstanding. -->
-        <Border Grid.Row="0" Classes="caution" CornerRadius="4" Padding="12,10" Margin="0,0,0,12"
+        <Border Grid.Row="0" Classes="caution" CornerRadius="4" Padding="12,10" Margin="12"
                 IsVisible="{Binding Appearance.NeedsRestart}">
             <Grid ColumnDefinitions="*,Auto">
                 <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="1">
                     <TextBlock Text="Restart to apply the new colours" FontWeight="SemiBold" />
-                    <TextBlock Classes="hint"
-                               Text="Saved already. Avalonia cannot repaint a running app's colours, so they take effect on the next start." />
+                    <!-- Why a restart is needed is a fact about the toolkit, and naming it tells the
+                         user nothing they can act on. What they can act on is both buttons. One line,
+                         so the notice stays the height of the buttons beside it. -->
+                    <TextBlock Classes="hint" MaxWidth="640"
+                               Text="Saved — changes take effect after an app restart." />
                 </StackPanel>
-                <Button Grid.Column="1" Content="Restart now" Classes="accent"
-                        VerticalAlignment="Center" Command="{Binding RestartCommand}"
-                        ToolTip.Tip="Unavailable while a command is running - a restart would kill it." />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Button Content="Undo theme changes"
+                            Command="{Binding Appearance.RevertColoursCommand}"
+                            ToolTip.Tip="Puts the variant, palette and colours back to what the app is running with, so nothing changes on the next start. Leaves every other setting alone." />
+                    <Button Content="Restart now" Classes="accent"
+                            Command="{Binding RestartCommand}"
+                            ToolTip.Tip="Unavailable while a command is running - a restart would kill it." />
+                </StackPanel>
             </Grid>
         </Border>
 
-        <TabControl Grid.Row="1">
+        <Grid Grid.Row="1" ColumnDefinitions="224,*">
 
-            <TabItem Header="Appearance">
-                <ScrollViewer>
-                    <StackPanel Spacing="12" Margin="0,10,0,0">
+            <!-- Categories -->
+            <Border Grid.Column="0" BorderThickness="0,0,1,0"
+                    BorderBrush="{DynamicResource SubtleBorderBrush}"
+                    Background="{DynamicResource PanelBackgroundBrush}">
+                <Grid RowDefinitions="Auto,*,Auto">
+                    <!-- Searches the labels, the explanations and the flags, across every category. -->
+                    <Grid Grid.Row="0" Margin="12,12,12,8" ColumnDefinitions="*,Auto">
+                        <TextBox Grid.Column="0" Grid.ColumnSpan="2" Name="SearchBox"
+                                 Text="{Binding Appearance.Query}"
+                                 PlaceholderText="Search settings" />
+                        <Button Grid.Column="1" Content="&#x2715;" Margin="0,0,4,0"
+                                Padding="6,2" MinWidth="0" Background="Transparent"
+                                BorderThickness="0" VerticalAlignment="Center"
+                                IsVisible="{Binding Appearance.IsSearching}"
+                                Command="{Binding Appearance.ClearQueryCommand}"
+                                ToolTip.Tip="Clear the search" />
+                    </Grid>
 
-                        <Border Classes="section">
-                            <StackPanel>
-                                <TextBlock Classes="group" Text="Theme" />
-
-                                <TextBlock Classes="label" Text="Variant" />
-                                <ComboBox ItemsSource="{Binding Appearance.Themes}"
-                                          SelectedItem="{Binding Appearance.Theme}"
-                                          HorizontalAlignment="Stretch" />
-                                <TextBlock Classes="hint"
-                                           Text="Applies immediately. System follows the operating system, including changes made while the app is running." />
-
-                                <TextBlock Classes="label" Text="Palette" />
-                                <ComboBox ItemsSource="{Binding Appearance.Presets}"
-                                          SelectedItem="{Binding Appearance.Preset}"
-                                          HorizontalAlignment="Stretch">
-                                    <!-- Product names, so the preset supplies its own label. -->
-                                    <ComboBox.ItemTemplate>
-                                        <DataTemplate x:DataType="core:ThemePreset">
-                                            <TextBlock Text="{Binding Converter={x:Static app:OutputConverters.PresetName}}" />
-                                        </DataTemplate>
-                                    </ComboBox.ItemTemplate>
-                                </ComboBox>
-                                <TextBlock Classes="hint"
-                                           Text="A starting point for the three colours below. Each palette has a light and a dark half, so a palette and System work together." />
-                            </StackPanel>
-                        </Border>
-
-                        <Border Classes="section">
-                            <StackPanel>
-                                <Grid ColumnDefinitions="*,Auto">
-                                    <TextBlock Grid.Column="0" Classes="group" Text="Colours" VerticalAlignment="Center" />
-                                    <!-- Two sets of colours, one per variant, so a System user can set both.
-									     This picks which set the pickers below are editing, not which is showing. -->
-                                    <ToggleSwitch Grid.Column="1"
-                                                  IsChecked="{Binding Appearance.EditingDark}"
-                                                  OffContent="Light" OnContent="Dark"
-                                                  ToolTip.Tip="Which variant's colours these pickers edit." />
+                    <ListBox Grid.Row="1" Classes="categories"
+                             ItemsSource="{Binding Appearance.Sections}"
+                             SelectedItem="{Binding Appearance.SelectedSection}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:SettingsSection">
+                                <Grid ColumnDefinitions="Auto,*,Auto" Margin="3,7" IsVisible="{Binding Matches}">
+                                    <TextBlock Grid.Column="0" Text="{Binding Title}" Grid.ColumnSpan="2"
+                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                    <Border Grid.Column="2" Classes="badge" IsVisible="{Binding ShowMatchCount}">
+                                        <TextBlock Text="{Binding MatchCount}"
+                                                   FontSize="{DynamicResource AppFontSizeTiny}" />
+                                    </Border>
                                 </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
 
-                                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" Margin="0,8,0,0">
-                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Background" VerticalAlignment="Center" Margin="0,0,12,6" />
-                                    <ColorPicker Grid.Row="0" Grid.Column="1" Margin="0,0,0,6"
-                                                 HorizontalAlignment="Left"
-                                                 Color="{Binding Appearance.Background}" />
+                    <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="15,10"
+                          IsVisible="{Binding !Appearance.IsSearching}">
+                        <TextBlock Grid.Column="0" Classes="flag" VerticalAlignment="Center"
+                                   Text="{Binding Update.CurrentVersion, StringFormat='v{0}'}" />
+                        <TextBlock Grid.Column="1" Classes="flag" VerticalAlignment="Center" Text="Ctrl+," />
+                    </Grid>
+                </Grid>
+            </Border>
 
-                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Accent" VerticalAlignment="Center" Margin="0,0,12,6" />
-                                    <ColorPicker Grid.Row="1" Grid.Column="1" Margin="0,0,0,6"
-                                                 HorizontalAlignment="Left"
-                                                 Color="{Binding Appearance.Accent}" />
+            <!-- Panes. One heading, bound to the selected category, above whichever pane is showing:
+                 eight copies of the same two text blocks would be eight chances to drift. -->
+            <Grid Grid.Column="1" RowDefinitions="Auto,*">
+                <StackPanel Grid.Row="0" Margin="18,16,18,12" Spacing="3"
+                            Classes.underNotice="{Binding Appearance.NeedsRestart}">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <TextBlock Classes="paneTitle" Text="{Binding Appearance.SelectedSection.Title}" />
+                        <TextBlock Classes="hint" VerticalAlignment="Bottom" MaxWidth="240"
+                                   Margin="0,0,0,4"
+                                   Text="{Binding Appearance.SelectedSection.CountLabel}" />
+                    </StackPanel>
+                    <TextBlock Classes="hint" MaxWidth="640"
+                               Text="{Binding Appearance.SelectedSection.Blurb}" />
+                </StackPanel>
 
-                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Text" VerticalAlignment="Center" Margin="0,0,12,0" />
-                                    <ColorPicker Grid.Row="2" Grid.Column="1"
-                                                 HorizontalAlignment="Left"
-                                                 Color="{Binding Appearance.Foreground}" />
-                                </Grid>
+                <ScrollViewer Grid.Row="1" Padding="18,0,18,18">
+                    <Panel>
 
-                                <TextBlock Classes="hint" Margin="0,8,0,0"
-                                           Text="Borders, panels, hover states and the accent's own lighter and darker shades are derived from these three. Errors and warnings keep their own colours so a failure always reads as one." />
+                        <!-- ==================== Theme ==================== -->
+                        <StackPanel Name="ThemePane" Spacing="14"
+                                    IsVisible="{Binding Appearance.Category, Converter={x:Static app:OutputConverters.Matches}, ConverterParameter=Theme}">
 
-                                <Button Content="Reset colours to palette defaults"
-                                        Margin="0,10,0,0"
-                                        HorizontalAlignment="Left"
-                                        IsEnabled="{Binding Appearance.HasOverrides}"
-                                        Command="{Binding Appearance.ResetColoursCommand}"
-                                        ToolTip.Tip="Affects only the variant selected above." />
-                            </StackPanel>
-                        </Border>
-
-                        <Border Classes="section">
-                            <StackPanel>
-                                <TextBlock Classes="group" Text="Preview" />
-
-                                <!-- Painted from plain brushes rather than theme resources: it has to show the
-								     palette being edited, which is not the one the window around it is using. -->
-                                <Border CornerRadius="4" BorderThickness="1" Padding="12"
-                                        Background="{Binding Appearance.Preview.Surface, Converter={x:Static app:OutputConverters.Brush}}"
-                                        BorderBrush="{Binding Appearance.Preview.Border, Converter={x:Static app:OutputConverters.Brush}}">
-                                    <StackPanel Spacing="8">
-                                        <TextBlock Text="AddBlogUrl" FontWeight="SemiBold"
-                                                   Foreground="{Binding Appearance.Preview.Text, Converter={x:Static app:OutputConverters.Brush}}" />
-                                        <TextBlock Text="20260818140952_AddBlogUrl"
-                                                   FontFamily="Consolas,Menlo,monospace"
-                                                   FontSize="{DynamicResource AppFontSizeMono}"
-                                                   Foreground="{Binding Appearance.Preview.MutedText, Converter={x:Static app:OutputConverters.Brush}}" />
-
-                                        <Border CornerRadius="3" BorderThickness="1" Padding="8"
-                                                Background="{Binding Appearance.Preview.Panel, Converter={x:Static app:OutputConverters.Brush}}"
-                                                BorderBrush="{Binding Appearance.Preview.Border, Converter={x:Static app:OutputConverters.Brush}}">
-                                            <TextBlock Text="Panels, lists and control fills"
-                                                       Foreground="{Binding Appearance.Preview.Text, Converter={x:Static app:OutputConverters.Brush}}" />
-                                        </Border>
-
-                                        <StackPanel Orientation="Horizontal" Spacing="8">
-                                            <Border CornerRadius="3" Padding="12,6"
-                                                    Background="{Binding Appearance.Preview.Accent, Converter={x:Static app:OutputConverters.Brush}}">
-                                                <TextBlock Text="Selected"
-                                                           Foreground="{Binding Appearance.Preview.OnAccent, Converter={x:Static app:OutputConverters.Brush}}" />
-                                            </Border>
-                                            <Border CornerRadius="3" BorderThickness="1" Padding="12,6"
-                                                    Background="{Binding Appearance.Preview.Panel, Converter={x:Static app:OutputConverters.Brush}}"
-                                                    BorderBrush="{Binding Appearance.Preview.Border, Converter={x:Static app:OutputConverters.Brush}}">
-                                                <TextBlock Text="Button"
-                                                           Foreground="{Binding Appearance.Preview.Text, Converter={x:Static app:OutputConverters.Brush}}" />
-                                            </Border>
-                                        </StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <Border Classes="segments" VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal">
+                                        <RadioButton Classes="segment" Content="System"
+                                                     IsChecked="{Binding Appearance.VariantIsSystem}" />
+                                        <RadioButton Classes="segment" Content="Light"
+                                                     IsChecked="{Binding Appearance.VariantIsLight}" />
+                                        <RadioButton Classes="segment" Content="Dark"
+                                                     IsChecked="{Binding Appearance.VariantIsDark}" />
                                     </StackPanel>
                                 </Border>
 
-                                <TextBlock Classes="hint" Margin="0,8,0,0"
-                                           Text="What the next start will look like, derived by the same rules the real theme uses." />
+                                <!-- Only System needs this: an explicit Light or Dark already says which
+                                     half the pickers below are editing. -->
+                                <ToggleSwitch IsChecked="{Binding Appearance.EditingDark}"
+                                              OffContent="Editing light" OnContent="Editing dark"
+                                              VerticalAlignment="Center"
+                                              IsVisible="{Binding Appearance.CanChooseHalf}"
+                                              ToolTip.Tip="Which variant's colours the gallery and the pickers show." />
+
+                                <TextBlock Classes="hint" VerticalAlignment="Center" MaxWidth="300"
+                                           Text="System follows the operating system, including a change made while the app is running." />
                             </StackPanel>
-                        </Border>
 
-                        <Border Classes="section">
-                            <StackPanel>
-                                <TextBlock Classes="group" Text="Font size" />
+                            <!-- Each tile is the palette applied to a scrap of the real UI rather than
+                                 three chips: what matters is whether the accent is legible on its own
+                                 background, which chips cannot show. -->
+                            <ListBox Classes="palettes"
+                                     ItemsSource="{Binding Appearance.Palettes}"
+                                     SelectedItem="{Binding Appearance.SelectedPalette}">
+                                <ListBox.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ListBox.ItemsPanel>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:PaletteChoice">
+                                        <Border Name="Tile" Width="188" CornerRadius="5" BorderThickness="1"
+                                                ClipToBounds="True">
+                                            <Panel>
+                                            <StackPanel>
+                                                <Border Padding="10,9"
+                                                        Background="{Binding Sample.Surface, Converter={x:Static app:OutputConverters.Brush}}">
+                                                <StackPanel Spacing="5">
+                                                    <Grid ColumnDefinitions="Auto,*,Auto">
+                                                        <TextBlock Grid.Column="0" Text="Aa" FontWeight="SemiBold"
+                                                                   Foreground="{Binding Sample.Text, Converter={x:Static app:OutputConverters.Brush}}" />
+                                                        <TextBlock Grid.Column="1" Text="migration" Margin="6,0,0,0"
+                                                                   VerticalAlignment="Center"
+                                                                   FontSize="{DynamicResource AppFontSizeTiny}"
+                                                                   Foreground="{Binding Sample.MutedText, Converter={x:Static app:OutputConverters.Brush}}" />
+                                                        <Border Grid.Column="2" CornerRadius="3" Padding="7,2"
+                                                                Background="{Binding Sample.Accent, Converter={x:Static app:OutputConverters.Brush}}">
+                                                            <TextBlock Text="Add"
+                                                                       FontSize="{DynamicResource AppFontSizeTiny}"
+                                                                       Foreground="{Binding Sample.OnAccent, Converter={x:Static app:OutputConverters.Brush}}" />
+                                                        </Border>
+                                                    </Grid>
+                                                    <Border Height="1"
+                                                            Background="{Binding Sample.Border, Converter={x:Static app:OutputConverters.Brush}}" />
+                                                    <Border CornerRadius="3" Padding="6,3"
+                                                            Background="{Binding Sample.Panel, Converter={x:Static app:OutputConverters.Brush}}">
+                                                        <TextBlock Text="20260818_AddBlogUrl"
+                                                                   FontFamily="Consolas,Menlo,monospace"
+                                                                   FontSize="{DynamicResource AppFontSizeTiny}"
+                                                                   Foreground="{Binding Sample.Text, Converter={x:Static app:OutputConverters.Brush}}" />
+                                                    </Border>
+                                                </StackPanel>
+                                                </Border>
+                                                <Border BorderThickness="0,1,0,0" Padding="10,6"
+                                                        BorderBrush="{DynamicResource SubtleBorderBrush}"
+                                                        Background="{DynamicResource CardBackgroundBrush}">
+                                                    <Grid ColumnDefinitions="*,Auto">
+                                                        <TextBlock Grid.Column="0" Name="PaletteName"
+                                                                   Text="{Binding Name}"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   VerticalAlignment="Center"
+                                                                   FontSize="{DynamicResource AppFontSizeSmall}" />
+                                                        <!-- Selection is not left to colour alone: a
+                                                             tick reads at a glance, and reads at all
+                                                             for someone who cannot pick the accent
+                                                             ring out from the tile's own palette. -->
+                                                        <Path Grid.Column="1" Name="Tick"
+                                                              Data="M1 5.5L4.5 9L11 1.5"
+                                                              Stroke="{DynamicResource AppAccentBrush}"
+                                                              StrokeThickness="1.8" Width="12" Height="10"
+                                                              Stretch="Uniform" VerticalAlignment="Center"
+                                                              IsVisible="False" />
+                                                    </Grid>
+                                                </Border>
+                                            </StackPanel>
+                                            <!-- The selected ring is an overlay inside the tile rather
+                                                 than a thicker edge on it: growing the border and
+                                                 pulling the tile out with a negative margin pushed its
+                                                 corners past the item's own clip, which is what
+                                                 squared them off. -->
+                                            <Border Name="Ring" CornerRadius="4" BorderThickness="2"
+                                                    BorderBrush="Transparent" IsHitTestVisible="False" />
+                                            </Panel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
 
-                                <Grid ColumnDefinitions="Auto,*,Auto">
-                                    <TextBlock Grid.Column="0" Text="Interface" VerticalAlignment="Center"
-                                               Margin="0,0,12,0" MinWidth="70" />
-                                    <Slider Grid.Column="1" VerticalAlignment="Center"
-                                            Minimum="{x:Static vm:SettingsViewModel.MinFontSize}"
-                                            Maximum="{x:Static vm:SettingsViewModel.MaxFontSize}"
-                                            TickFrequency="1" IsSnapToTickEnabled="True"
-                                            Value="{Binding Appearance.UiFontSize}" />
-                                    <TextBlock Grid.Column="2" VerticalAlignment="Center" MinWidth="28"
-                                               TextAlignment="Right"
-                                               Text="{Binding Appearance.UiFontSize, StringFormat='{}{0:0}'}" />
-                                </Grid>
+                            <Grid ColumnDefinitions="320,*">
 
-                                <Grid ColumnDefinitions="Auto,*,Auto">
-                                    <TextBlock Grid.Column="0" Text="Code" VerticalAlignment="Center"
-                                               Margin="0,0,12,0" MinWidth="70" />
-                                    <Slider Grid.Column="1" VerticalAlignment="Center"
-                                            Minimum="{x:Static vm:SettingsViewModel.MinFontSize}"
-                                            Maximum="{x:Static vm:SettingsViewModel.MaxFontSize}"
-                                            TickFrequency="1" IsSnapToTickEnabled="True"
-                                            Value="{Binding Appearance.EditorFontSize}" />
-                                    <TextBlock Grid.Column="2" VerticalAlignment="Center" MinWidth="28"
-                                               TextAlignment="Right"
-                                               Text="{Binding Appearance.EditorFontSize, StringFormat='{}{0:0}'}" />
-                                </Grid>
+                                <!-- Colours -->
+                                <Border Grid.Column="0" Classes="card" Margin="0,0,14,0" VerticalAlignment="Top">
+                                    <StackPanel Spacing="10">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <TextBlock Classes="group" Margin="0" Text="Colours" />
+                                            <TextBlock Classes="hint"
+                                                       Text="{Binding Appearance.EditingVariantName, StringFormat='{}{0} half'}" />
+                                        </StackPanel>
 
-                                <TextBlock Classes="hint"
-                                           Text="Code covers the migration source, the SQL preview and the output console." />
+                                        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto">
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Background"
+                                                       VerticalAlignment="Center" Margin="0,0,12,6" />
+                                            <ColorPicker Grid.Row="0" Grid.Column="1" Margin="0,0,0,6"
+                                                         HorizontalAlignment="Left"
+                                                         Color="{Binding Appearance.Background}" />
 
-                                <Button Content="Reset font sizes" Margin="0,10,0,0"
-                                        HorizontalAlignment="Left"
-                                        Command="{Binding Appearance.ResetFontSizesCommand}" />
-                            </StackPanel>
-                        </Border>
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Accent"
+                                                       VerticalAlignment="Center" Margin="0,0,12,6" />
+                                            <ColorPicker Grid.Row="1" Grid.Column="1" Margin="0,0,0,6"
+                                                         HorizontalAlignment="Left"
+                                                         Color="{Binding Appearance.Accent}" />
 
-                        <!-- Bound to the main view model rather than to Appearance: these are the same
-                             properties the inline Wrap checkboxes on the workspace screen use, so both
-                             places stay in step without a second copy of the state. -->
-                        <Border Classes="section">
-                            <StackPanel Spacing="6">
-                                <TextBlock Classes="group" Text="Source viewer" />
+                                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Text"
+                                                       VerticalAlignment="Center" Margin="0,0,12,0" />
+                                            <ColorPicker Grid.Row="2" Grid.Column="1"
+                                                         HorizontalAlignment="Left"
+                                                         Color="{Binding Appearance.Foreground}" />
+                                        </Grid>
 
-                                <CheckBox Content="Show line numbers" IsChecked="{Binding ShowLineNumbers}" />
-                                <CheckBox Content="Wrap long lines" IsChecked="{Binding WrapSql}" />
+                                        <!-- The pickers will accept a pair nobody can read, and the
+                                             preview alone cannot say whether a marginal one is merely
+                                             dim or actually failing. -->
+                                        <Border Classes="contrast"
+                                                Classes.passes="{Binding Appearance.ContrastPasses}">
+                                            <StackPanel Spacing="4">
+                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                    <TextBlock Text="{Binding Appearance.ContrastGrade}"
+                                                               FontWeight="SemiBold"
+                                                               FontSize="{DynamicResource AppFontSizeSmall}" />
+                                                    <TextBlock Text="{Binding Appearance.ContrastRatioText}"
+                                                               FontSize="{DynamicResource AppFontSizeSmall}" />
+                                                </StackPanel>
+                                                <TextBlock Text="{Binding Appearance.ContrastNote}"
+                                                           TextWrapping="Wrap" MaxWidth="270"
+                                                           HorizontalAlignment="Left"
+                                                           FontSize="{DynamicResource AppFontSizeTiny}" />
+                                            </StackPanel>
+                                        </Border>
 
-                                <TextBlock Classes="hint"
-                                           Text="Covers the migration source and the generated SQL. Wrapping is off by default because EF's SQL has meaningful indentation that wrapping breaks up; the Wrap checkbox on the Script tab is this same setting." />
-                            </StackPanel>
-                        </Border>
+                                        <TextBlock Classes="hint" MaxWidth="280"
+                                                   Text="Borders, panels, hover states and the accent's own lighter and darker shades are derived from these three." />
 
-                        <Border Classes="section">
-                            <StackPanel Spacing="6">
-                                <TextBlock Classes="group" Text="Diagrams" />
-
-                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <TextBlock Text="Open on" VerticalAlignment="Center" Opacity="0.7" />
-                                    <ComboBox ItemsSource="{Binding DiagramKinds}"
-                                              SelectedItem="{Binding DefaultDiagramKind}" MinWidth="200">
-                                        <ComboBox.ItemTemplate>
-                                            <DataTemplate>
-                                                <TextBlock Text="{Binding Converter={x:Static app:OutputConverters.SpacedName}}" />
-                                            </DataTemplate>
-                                        </ComboBox.ItemTemplate>
-                                    </ComboBox>
-                                </StackPanel>
-
-                                <TextBlock Classes="hint"
-                                           Text="Which diagram a workspace shows the first time. A workspace you have switched keeps its own choice, and the button on the Diagrams tab switches either at any time." />
-                            </StackPanel>
-                        </Border>
-
-                        <Border Classes="section">
-                            <StackPanel Spacing="6">
-                                <TextBlock Classes="group" Text="Window" />
-
-                                <CheckBox Content="Open as maximised window" IsChecked="{Binding OpenMaximised}" />
-
-                                <TextBlock Classes="hint"
-                                           Text="Takes effect on the next start, and follows how the window was last closed. Its size and position are remembered either way, unless the screen they were on is gone." />
-                            </StackPanel>
-                        </Border>
-
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
-
-            <TabItem Header="Tools">
-                <ScrollViewer>
-                    <StackPanel Spacing="12" Margin="0,10,0,0">
-                        <Border Classes="section">
-                            <StackPanel>
-                                <TextBlock Classes="group" Text="dotnet-ef" />
-                                <TextBlock Text="{Binding EnvironmentSummary}" Classes="label" />
-
-                                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0"
-                                            VerticalAlignment="Center">
-                                    <Button Content="Update dotnet-ef" Command="{Binding UpdateEfToolCommand}"
-                                            IsVisible="{Binding EfToolAvailable}"
-                                            ToolTip.Tip="Runs dotnet tool update dotnet-ef (local install if this solution pins one, global otherwise)." />
-                                    <TextBlock Text="&#x2713;" FontWeight="Bold" VerticalAlignment="Center"
-                                               Foreground="{DynamicResource StateAppliedBrush}"
-                                               IsVisible="{Binding EfToolUpdateSucceeded}"
-                                               ToolTip.Tip="dotnet-ef update finished." />
-                                </StackPanel>
-
-                                <Button IsVisible="{Binding HasEfToolUpdateError}"
-                                        Margin="0,8,0,0" HorizontalAlignment="Left"
-                                        Command="{Binding ShowEfToolUpdateErrorCommand}"
-                                        ToolTip.Tip="Click for the full output.">
-                                    <StackPanel Orientation="Horizontal" Spacing="4">
-                                        <TextBlock Text="&#x2717;" FontWeight="Bold"
-                                                   Foreground="{DynamicResource DangerForegroundBrush}" />
-                                        <TextBlock Text="{Binding EfToolUpdateErrorSummary}"
-                                                   Foreground="{DynamicResource DangerForegroundBrush}"
-                                                   TextTrimming="CharacterEllipsis" MaxWidth="320" />
+                                        <Button Content="Reset colours to palette"
+                                                HorizontalAlignment="Left"
+                                                IsEnabled="{Binding Appearance.HasOverrides}"
+                                                Command="{Binding Appearance.ResetColoursCommand}"
+                                                ToolTip.Tip="Affects only the half selected above." />
                                     </StackPanel>
-                                </Button>
+                                </Border>
 
-                                <TextBlock Classes="hint" Margin="0,8,0,0"
-                                           Text="Output goes to the console on the workspace screen. Only available with no command already running." />
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
+                                <!-- Preview. Painted from plain brushes rather than theme resources: it
+                                     has to show the palette being edited, which is not the one the
+                                     window around it is using. -->
+                                <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Top">
+                                    <TextBlock Classes="group" Margin="0" Text="Preview" />
+                                    <Border CornerRadius="5" BorderThickness="1" ClipToBounds="True"
+                                            Background="{Binding Appearance.Preview.Surface, Converter={x:Static app:OutputConverters.Brush}}"
+                                            BorderBrush="{Binding Appearance.Preview.Border, Converter={x:Static app:OutputConverters.Brush}}">
+                                        <StackPanel>
+                                            <Border BorderThickness="0,0,0,1" Padding="10,7"
+                                                    Background="{Binding Appearance.Preview.Panel, Converter={x:Static app:OutputConverters.Brush}}"
+                                                    BorderBrush="{Binding Appearance.Preview.Border, Converter={x:Static app:OutputConverters.Brush}}">
+                                                <Grid ColumnDefinitions="Auto,*,Auto">
+                                                    <TextBlock Grid.Column="0" Text="Migrations"
+                                                               VerticalAlignment="Center"
+                                                               FontSize="{DynamicResource AppFontSizeTiny}"
+                                                               Foreground="{Binding Appearance.Preview.MutedText, Converter={x:Static app:OutputConverters.Brush}}" />
+                                                    <Border Grid.Column="2" CornerRadius="3" Padding="9,3"
+                                                            Background="{Binding Appearance.Preview.Accent, Converter={x:Static app:OutputConverters.Brush}}">
+                                                        <TextBlock Text="Add migration"
+                                                                   FontSize="{DynamicResource AppFontSizeSmall}"
+                                                                   Foreground="{Binding Appearance.Preview.OnAccent, Converter={x:Static app:OutputConverters.Brush}}" />
+                                                    </Border>
+                                                </Grid>
+                                            </Border>
 
-            <TabItem Header="Updates">
-                <ScrollViewer>
-                    <StackPanel Spacing="12" Margin="0,10,0,0">
-                        <Border Classes="section">
-                            <StackPanel>
-                                <TextBlock Classes="group" Text="EfAssist" />
-                                <TextBlock Classes="label"
-                                           Text="{Binding Update.CurrentVersion, StringFormat='Version {0}'}" />
+                                            <Border BorderThickness="0,0,0,1" Padding="10,8"
+                                                    Background="{Binding Appearance.Preview.Panel, Converter={x:Static app:OutputConverters.Brush}}"
+                                                    BorderBrush="{Binding Appearance.Preview.Border, Converter={x:Static app:OutputConverters.Brush}}">
+                                                <Grid ColumnDefinitions="*,Auto">
+                                                    <StackPanel Grid.Column="0" Spacing="1">
+                                                        <TextBlock Text="AddBlogUrl" FontWeight="SemiBold"
+                                                                   Foreground="{Binding Appearance.Preview.Text, Converter={x:Static app:OutputConverters.Brush}}" />
+                                                        <TextBlock Text="20260818140952_AddBlogUrl"
+                                                                   FontFamily="Consolas,Menlo,monospace"
+                                                                   FontSize="{DynamicResource AppFontSizeMono}"
+                                                                   Foreground="{Binding Appearance.Preview.MutedText, Converter={x:Static app:OutputConverters.Brush}}" />
+                                                    </StackPanel>
+                                                    <Border Grid.Column="1" CornerRadius="3" Padding="8,2"
+                                                            VerticalAlignment="Center"
+                                                            Background="{DynamicResource StatePendingBrush}">
+                                                        <TextBlock Text="Pending"
+                                                                   FontSize="{DynamicResource AppFontSizeTiny}"
+                                                                   Foreground="{DynamicResource StateBadgeForegroundBrush}" />
+                                                    </Border>
+                                                </Grid>
+                                            </Border>
 
-                                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
-                                    <!-- Left visible but disabled for a development or portable run:
-                                         there is no install to update in place, and a missing button
-                                         reads as a missing feature. -->
-                                    <Button Content="Check for updates" Command="{Binding Update.CheckCommand}"
-                                            ToolTip.Tip="Checks GitHub for a newer release. Only available in an installed build." />
-                                    <Button Content="Update and restart"
-                                            Classes="accent"
-                                            IsVisible="{Binding Update.IsUpdateAvailable}"
-                                            Command="{Binding Update.UpdateNowCommand}" />
+                                            <Border Padding="10,8"
+                                                    Background="{Binding Appearance.Preview.Panel, Converter={x:Static app:OutputConverters.Brush}}">
+                                            <StackPanel Spacing="2">
+                                                <TextBlock Text="Build succeeded in 2.1s"
+                                                           FontFamily="Consolas,Menlo,monospace"
+                                                           FontSize="{DynamicResource AppFontSizeMono}"
+                                                           Foreground="{Binding Appearance.Preview.Text, Converter={x:Static app:OutputConverters.Brush}}" />
+                                                <TextBlock Text="Applying migration '20260818140952_AddBlogUrl'."
+                                                           FontFamily="Consolas,Menlo,monospace"
+                                                           FontSize="{DynamicResource AppFontSizeMono}"
+                                                           Foreground="{Binding Appearance.Preview.MutedText, Converter={x:Static app:OutputConverters.Brush}}" />
+                                                <!-- A failure keeps its own colour whatever the palette
+                                                     is, which is exactly what the preview should show. -->
+                                                <TextBlock Text="error: the ALTER TABLE statement conflicted with the FOREIGN KEY constraint"
+                                                           FontFamily="Consolas,Menlo,monospace"
+                                                           FontSize="{DynamicResource AppFontSizeMono}"
+                                                           TextWrapping="Wrap"
+                                                           Foreground="{DynamicResource OutputErrorBrush}" />
+                                            </StackPanel>
+                                            </Border>
+                                        </StackPanel>
+                                    </Border>
+                                    <TextBlock Classes="hint" MaxWidth="420"
+                                               Text="What the next start will look like, derived by the same rules the real theme uses." />
                                 </StackPanel>
+                            </Grid>
+                        </StackPanel>
 
-                                <TextBlock Classes="hint" Margin="0,8,0,0"
-                                           Text="{Binding Update.Message}"
-                                           IsVisible="{Binding Update.Message, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                                <TextBlock Classes="hint" Margin="0,8,0,0"
-                                           Text="EfAssist checks once on launch and offers anything it finds as a banner. Nothing is downloaded until you ask." />
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
+                        <!-- ==================== Text and layout ==================== -->
+                        <StackPanel Name="TextPane" Spacing="12"
+                                    IsVisible="{Binding Appearance.Category, Converter={x:Static app:OutputConverters.Matches}, ConverterParameter=TextAndLayout}">
+                            <Border Classes="card" Padding="14,4">
+                                <StackPanel>
+                                    <Border Classes="row" views:SettingsSearch.Terms="font size interface ui scale bigger smaller">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,16,0">
+                                                <TextBlock Text="Interface font size" />
+                                                <TextBlock Classes="hint"
+                                                           Text="Everything chrome-side scales from this one size: labels, buttons, lists and tabs." />
+                                            </StackPanel>
+                                            <Grid Grid.Column="1" ColumnDefinitions="200,Auto">
+                                                <Slider Grid.Column="0" VerticalAlignment="Center"
+                                                        Minimum="{x:Static vm:SettingsViewModel.MinFontSize}"
+                                                        Maximum="{x:Static vm:SettingsViewModel.MaxFontSize}"
+                                                        TickFrequency="1" IsSnapToTickEnabled="True"
+                                                        Value="{Binding Appearance.UiFontSize}" />
+                                                <TextBlock Grid.Column="1" VerticalAlignment="Center" MinWidth="34"
+                                                           TextAlignment="Right"
+                                                           Text="{Binding Appearance.UiFontSize, StringFormat='{}{0:0} pt'}" />
+                                            </Grid>
+                                        </Grid>
+                                    </Border>
+
+                                    <Border Classes="row" views:SettingsSearch.Terms="font size code sql console monospace editor">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,16,0">
+                                                <TextBlock Text="Code font size" />
+                                                <TextBlock Classes="hint"
+                                                           Text="The migration source, the SQL preview and the output console." />
+                                            </StackPanel>
+                                            <Grid Grid.Column="1" ColumnDefinitions="200,Auto">
+                                                <Slider Grid.Column="0" VerticalAlignment="Center"
+                                                        Minimum="{x:Static vm:SettingsViewModel.MinFontSize}"
+                                                        Maximum="{x:Static vm:SettingsViewModel.MaxFontSize}"
+                                                        TickFrequency="1" IsSnapToTickEnabled="True"
+                                                        Value="{Binding Appearance.EditorFontSize}" />
+                                                <TextBlock Grid.Column="1" VerticalAlignment="Center" MinWidth="34"
+                                                           TextAlignment="Right"
+                                                           FontFamily="Consolas,Menlo,monospace"
+                                                           Text="{Binding Appearance.EditorFontSize, StringFormat='{}{0:0} pt'}" />
+                                            </Grid>
+                                        </Grid>
+                                    </Border>
+
+                                    <Border Classes="row" views:SettingsSearch.Terms="reset font size default shipped">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,16,0">
+                                                <TextBlock Text="Reset font sizes" />
+                                                <TextBlock Classes="hint" Text="Back to 14 and 12, the sizes the app shipped with." />
+                                            </StackPanel>
+                                            <Button Grid.Column="1" Content="Reset"
+                                                    Command="{Binding Appearance.ResetFontSizesCommand}" />
+                                        </Grid>
+                                    </Border>
+
+                                    <Border Classes="row" views:SettingsSearch.Terms="window maximised size position screen startup">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,16,0">
+                                                <TextBlock Text="Open as maximised window" />
+                                                <TextBlock Classes="hint"
+                                                           Text="Takes effect on the next start, and follows how the window was last closed. Its size and position are remembered either way, unless the screen they were on is gone." />
+                                            </StackPanel>
+                                            <ToggleSwitch Grid.Column="1" OnContent="" OffContent=""
+                                                          IsChecked="{Binding OpenMaximised}" />
+                                        </Grid>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- ==================== Code and console ==================== -->
+                        <StackPanel Name="CodePane" Spacing="12"
+                                    IsVisible="{Binding Appearance.Category, Converter={x:Static app:OutputConverters.Matches}, ConverterParameter=CodeAndConsole}">
+                            <Border Classes="card" Padding="14,4">
+                                <StackPanel>
+                                    <Border Classes="row" views:SettingsSearch.Terms="line numbers gutter source sql">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,16,0">
+                                                <TextBlock Text="Show line numbers" />
+                                                <TextBlock Classes="hint"
+                                                           Text="Down the left of the migration source and the generated SQL." />
+                                            </StackPanel>
+                                            <ToggleSwitch Grid.Column="1" OnContent="" OffContent=""
+                                                          IsChecked="{Binding ShowLineNumbers}" />
+                                        </Grid>
+                                    </Border>
+
+                                    <Border Classes="row" views:SettingsSearch.Terms="wrap long lines sql script horizontal scroll">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,16,0">
+                                                <TextBlock Text="Wrap long lines" />
+                                                <TextBlock Classes="hint"
+                                                           Text="Off by default because EF's SQL has meaningful indentation that wrapping breaks up; the Wrap checkbox on the Script tab is this same setting." />
+                                            </StackPanel>
+                                            <ToggleSwitch Grid.Column="1" OnContent="" OffContent=""
+                                                          IsChecked="{Binding WrapSql}" />
+                                        </Grid>
+                                    </Border>
+
+                                    <Border Classes="row" views:SettingsSearch.Terms="wrap console output panel">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,16,0">
+                                                <TextBlock Text="Wrap console output" />
+                                                <TextBlock Classes="hint"
+                                                           Text="The same choice for the output panel, which the console's own header also toggles." />
+                                            </StackPanel>
+                                            <ToggleSwitch Grid.Column="1" OnContent="" OffContent=""
+                                                          IsChecked="{Binding WrapOutput}" />
+                                        </Grid>
+                                    </Border>
+
+                                    <Border Classes="row" views:SettingsSearch.Terms="sort order newest oldest migrations list chronological">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,16,0">
+                                                <TextBlock Text="Newest migration first" />
+                                                <TextBlock Classes="hint"
+                                                           Text="Off means EF's own chronological order, which is the order migrations are applied in. The sort button on the Migrations tab is this same setting." />
+                                            </StackPanel>
+                                            <ToggleSwitch Grid.Column="1" OnContent="" OffContent=""
+                                                          IsChecked="{Binding Migrations.SortNewestFirst}" />
+                                        </Grid>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- ==================== Workspace defaults ==================== -->
+                        <StackPanel Name="WorkspacePane" Spacing="12"
+                                    IsVisible="{Binding Appearance.Category, Converter={x:Static app:OutputConverters.Matches}, ConverterParameter=WorkspaceDefaults}">
+
+                            <!-- The difference between a default and a lie: these seed a workspace's
+                                 own file the first time it is opened and are never applied again. -->
+                            <Border Classes="caution" CornerRadius="4" Padding="12,10">
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="A starting point, not a rule" FontWeight="SemiBold"
+                                               FontSize="{DynamicResource AppFontSizeSmall}" />
+                                    <TextBlock Classes="hint" MaxWidth="620"
+                                               Text="A workspace saves its own copy of these settings when it is first opened, so changes made here affect only new workspaces. Controls on the workspace screen still apply only to that specific workspace." />
+                                </StackPanel>
+                            </Border>
+
+                            <Border Classes="card" Padding="14,4">
+                                <StackPanel>
+                                    <Border Classes="row" views:SettingsSearch.Terms="discovery contexts projects startup cached auto manual scan">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,16,0">
+                                                <TextBlock Text="Discovery on open" />
+                                                <TextBlock Classes="hint"
+                                                           Text="Cached reuses the contexts found last time. Auto discovers as the workspace opens and can be cancelled. Manual waits for Refresh." />
+                                            </StackPanel>
+                                            <ComboBox Grid.Column="1" MinWidth="180"
+                                                      ItemsSource="{x:Static vm:SettingsViewModel.DiscoveryModes}"
+                                                      SelectedItem="{Binding Appearance.DefaultDiscovery}">
+                                                <ComboBox.ItemTemplate>
+                                                    <DataTemplate x:DataType="core:DiscoveryMode">
+                                                        <TextBlock Text="{Binding Converter={x:Static app:OutputConverters.SpacedName}}" />
+                                                    </DataTemplate>
+                                                </ComboBox.ItemTemplate>
+                                            </ComboBox>
+                                        </Grid>
+                                    </Border>
+
+                                    <Border Classes="row" views:SettingsSearch.Terms="migration refresh list open database round trip">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,16,0">
+                                                <TextBlock Text="Migration refresh on open" />
+                                                <TextBlock Classes="hint"
+                                                           Text="Whether the migrations list re-reads as the workspace opens, which is where the build and the database round trip live." />
+                                            </StackPanel>
+                                            <ComboBox Grid.Column="1" MinWidth="180"
+                                                      ItemsSource="{x:Static vm:SettingsViewModel.DiscoveryModes}"
+                                                      SelectedItem="{Binding Appearance.DefaultMigrationRefresh}">
+                                                <ComboBox.ItemTemplate>
+                                                    <DataTemplate x:DataType="core:DiscoveryMode">
+                                                        <TextBlock Text="{Binding Converter={x:Static app:OutputConverters.SpacedName}}" />
+                                                    </DataTemplate>
+                                                </ComboBox.ItemTemplate>
+                                            </ComboBox>
+                                        </Grid>
+                                    </Border>
+
+                                    <Border Classes="row" views:SettingsSearch.Terms="offline database connection applied pending">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,16,0">
+                                                <TextBlock Text="List migrations offline" />
+                                                <TextBlock Classes="hint"
+                                                           Text="Lists migrations without reaching the database, so nothing reads as applied or pending." />
+                                                <TextBlock Classes="flag" Text="dotnet ef migrations list --no-connect" />
+                                            </StackPanel>
+                                            <ToggleSwitch Grid.Column="1" OnContent="" OffContent=""
+                                                          IsChecked="{Binding Appearance.DefaultOffline}" />
+                                        </Grid>
+                                    </Border>
+
+                                    <Border Classes="row" views:SettingsSearch.Terms="idempotent script history table safe twice">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,16,0">
+                                                <TextBlock Text="Idempotent scripts" />
+                                                <TextBlock Classes="hint"
+                                                           Text="Generated SQL checks the migrations history table first, so it is safe to run twice. Not every provider supports it." />
+                                                <TextBlock Classes="flag" Text="dotnet ef migrations script --idempotent" />
+                                            </StackPanel>
+                                            <ToggleSwitch Grid.Column="1" OnContent="" OffContent=""
+                                                          IsChecked="{Binding Appearance.DefaultIdempotent}" />
+                                        </Grid>
+                                    </Border>
+
+                                    <Border Classes="row" views:SettingsSearch.Terms="skip build faster stale compile">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,16,0">
+                                                <TextBlock Text="Skip build" />
+                                                <TextBlock Classes="hint"
+                                                           Text="Faster, and wrong after a code change: dotnet-ef reads the last build rather than your source." />
+                                                <TextBlock Classes="flag" Text="dotnet ef … --no-build" />
+                                            </StackPanel>
+                                            <ToggleSwitch Grid.Column="1" OnContent="" OffContent=""
+                                                          IsChecked="{Binding Appearance.DefaultNoBuild}" />
+                                        </Grid>
+                                    </Border>
+
+                                    <Border Classes="row" views:SettingsSearch.Terms="script output folder save as path sql write">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,16,0">
+                                                <TextBlock Text="Script output folder" />
+                                                <TextBlock Classes="hint"
+                                                           Text="Where a generated script is written. Unset prompts with a Save As dialog each time." />
+                                                <TextBlock Classes="flag" Text="{Binding Appearance.ScriptFolderText}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                                <Button Content="Browse…"
+                                                        Command="{Binding Appearance.ChooseScriptFolderCommand}" />
+                                                <Button Content="Clear"
+                                                        IsVisible="{Binding Appearance.HasScriptFolder}"
+                                                        Command="{Binding Appearance.ClearScriptFolderCommand}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- ==================== Diagrams ==================== -->
+                        <StackPanel Name="DiagramPane" Spacing="12"
+                                    IsVisible="{Binding Appearance.Category, Converter={x:Static app:OutputConverters.Matches}, ConverterParameter=Diagrams}">
+                            <Border Classes="card" Padding="14,4">
+                                <StackPanel>
+                                    <Border Classes="row" views:SettingsSearch.Terms="diagram open first entity relationship class default">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,16,0">
+                                                <TextBlock Text="Open on" />
+                                                <TextBlock Classes="hint"
+                                                           Text="Which diagram a workspace shows the first time. A workspace you have switched keeps its own choice, and the button on the Diagrams tab switches either at any time." />
+                                            </StackPanel>
+                                            <ComboBox Grid.Column="1" MinWidth="180"
+                                                      ItemsSource="{Binding DiagramKinds}"
+                                                      SelectedItem="{Binding DefaultDiagramKind}">
+                                                <ComboBox.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Text="{Binding Converter={x:Static app:OutputConverters.SpacedName}}" />
+                                                    </DataTemplate>
+                                                </ComboBox.ItemTemplate>
+                                            </ComboBox>
+                                        </Grid>
+                                    </Border>
+
+                                    <Border Classes="row" views:SettingsSearch.Terms="legend corner overlay key diff">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,16,0">
+                                                <TextBlock Text="Legend corner" />
+                                                <TextBlock Classes="hint"
+                                                           Text="Which corner of the surface the diff legend sits in. The zoom cluster keeps the bottom right." />
+                                            </StackPanel>
+                                            <ComboBox Grid.Column="1" MinWidth="180"
+                                                      ItemsSource="{x:Static vm:SettingsViewModel.LegendCorners}"
+                                                      SelectedItem="{Binding Diagrams.LegendCorner}">
+                                                <ComboBox.ItemTemplate>
+                                                    <DataTemplate x:DataType="core:SurfaceCorner">
+                                                        <TextBlock Text="{Binding Converter={x:Static app:OutputConverters.SpacedName}}" />
+                                                    </DataTemplate>
+                                                </ComboBox.ItemTemplate>
+                                            </ComboBox>
+                                        </Grid>
+                                    </Border>
+
+                                    <Border Classes="row" views:SettingsSearch.Terms="detail pane properties relationships entity">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,16,0">
+                                                <TextBlock Text="Show detail pane" />
+                                                <TextBlock Classes="hint"
+                                                           Text="The pane beside the surface listing a selected entity's properties and relationships. Closing it gives the whole width back to the diagram." />
+                                            </StackPanel>
+                                            <ToggleSwitch Grid.Column="1" OnContent="" OffContent=""
+                                                          IsChecked="{Binding Diagrams.DetailVisible}" />
+                                        </Grid>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- ==================== Tools ==================== -->
+                        <StackPanel Name="ToolsPane" Spacing="12"
+                                    IsVisible="{Binding Appearance.Category, Converter={x:Static app:OutputConverters.Matches}, ConverterParameter=Tools}">
+                            <Border Classes="card" Padding="14,4">
+                                <StackPanel>
+                                    <Border Classes="row"
+                                            Classes.undivided="{Binding !HasEfToolUpdateError}"
+                                            views:SettingsSearch.Terms="dotnet-ef tool update version install local global sdk">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,16,0">
+                                                <TextBlock Text="dotnet-ef" />
+                                                <TextBlock Classes="hint" Text="{Binding EnvironmentSummary}" />
+                                                <TextBlock Classes="hint"
+                                                           Text="Runs dotnet tool update dotnet-ef — the local install if this solution pins one, the global one otherwise. Output goes to the console on the workspace screen, and it is unavailable while a command is running." />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"
+                                                        VerticalAlignment="Center">
+                                                <TextBlock Text="&#x2713;" FontWeight="Bold" VerticalAlignment="Center"
+                                                           Foreground="{DynamicResource StateAppliedBrush}"
+                                                           IsVisible="{Binding EfToolUpdateSucceeded}"
+                                                           ToolTip.Tip="dotnet-ef update finished." />
+                                                <Button Content="Update" Command="{Binding UpdateEfToolCommand}"
+                                                        IsVisible="{Binding EfToolAvailable}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+
+                                    <!-- The condition lives on a wrapper, never on the row itself: the
+                                         search assigns each row's IsVisible, and a local value beats a
+                                         binding — so a row that binds its own visibility would be
+                                         forced on the moment the search ran. -->
+                                    <StackPanel IsVisible="{Binding HasEfToolUpdateError}">
+                                    <Border Classes="row" views:SettingsSearch.Terms="dotnet-ef update failed error output">
+                                        <Button HorizontalAlignment="Left"
+                                                Command="{Binding ShowEfToolUpdateErrorCommand}"
+                                                ToolTip.Tip="Click for the full output.">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <TextBlock Text="&#x2717;" FontWeight="Bold"
+                                                           Foreground="{DynamicResource DangerForegroundBrush}" />
+                                                <TextBlock Text="{Binding EfToolUpdateErrorSummary}"
+                                                           Foreground="{DynamicResource DangerForegroundBrush}"
+                                                           TextTrimming="CharacterEllipsis" MaxWidth="420" />
+                                            </StackPanel>
+                                        </Button>
+                                    </Border>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- ==================== Shortcuts ==================== -->
+                        <!-- Rendered from EfAssist.App.ViewModels.Shortcuts, which is the single list:
+                             a binding added to the window belongs there in the same change. -->
+                        <ItemsControl Name="ShortcutsPane" ItemsSource="{x:Static vm:Shortcuts.Groups}"
+                                      IsVisible="{Binding Appearance.Category, Converter={x:Static app:OutputConverters.Matches}, ConverterParameter=Shortcuts}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:ShortcutGroup">
+                                    <Border Classes="card" Width="330" Margin="0,0,12,12" VerticalAlignment="Top">
+                                        <StackPanel Spacing="6">
+                                            <TextBlock Classes="group" Margin="0" Text="{Binding Title}" />
+                                            <ItemsControl ItemsSource="{Binding Shortcuts}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="vm:Shortcut">
+                                                        <Grid ColumnDefinitions="118,*" Margin="0,0,0,4">
+                                                            <Border Grid.Column="0" CornerRadius="3" Padding="6,2"
+                                                                    HorizontalAlignment="Left" VerticalAlignment="Center"
+                                                                    Background="{DynamicResource PanelBackgroundBrush}"
+                                                                    BorderThickness="1"
+                                                                    BorderBrush="{DynamicResource SubtleBorderBrush}">
+                                                                <TextBlock Text="{Binding Gesture}"
+                                                                           FontFamily="Consolas,Menlo,monospace"
+                                                                           FontSize="{DynamicResource AppFontSizeMono}" />
+                                                            </Border>
+                                                            <TextBlock Grid.Column="1" Text="{Binding Description}"
+                                                                       TextWrapping="Wrap" VerticalAlignment="Center"
+                                                                       Margin="10,0,0,0"
+                                                                       FontSize="{DynamicResource AppFontSizeSmall}" />
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <!-- ==================== Updates and about ==================== -->
+                        <StackPanel Name="AboutPane" Spacing="12"
+                                    IsVisible="{Binding Appearance.Category, Converter={x:Static app:OutputConverters.Matches}, ConverterParameter=About}">
+                            <Border Classes="card" Padding="14,4">
+                                <StackPanel>
+                                    <Border Classes="row" views:SettingsSearch.Terms="update check github release version">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,16,0">
+                                                <TextBlock Text="{Binding Update.CurrentVersion, StringFormat='EfAssist {0}'}" />
+                                                <TextBlock Classes="hint"
+                                                           Text="Checks GitHub for a newer release. Only available in an installed build, and nothing is downloaded until you ask." />
+                                                <TextBlock Classes="hint"
+                                                           Text="{Binding Update.Message}"
+                                                           IsVisible="{Binding Update.Message, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                                <Button Content="Check now" Command="{Binding Update.CheckCommand}" />
+                                                <Button Content="Update and restart" Classes="accent"
+                                                        IsVisible="{Binding Update.IsUpdateAvailable}"
+                                                        Command="{Binding Update.UpdateNowCommand}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+
+                                    <Border Classes="row" views:SettingsSearch.Terms="update launch startup automatic banner check">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,16,0">
+                                                <TextBlock Text="Check for updates on launch" />
+                                                <TextBlock Classes="hint"
+                                                           Text="One quiet check shortly after the app starts, offered as a banner if it finds anything. Off means updates are only looked for when you press Check now." />
+                                            </StackPanel>
+                                            <ToggleSwitch Grid.Column="1" OnContent="" OffContent=""
+                                                          IsChecked="{Binding Appearance.CheckForUpdatesOnLaunch}" />
+                                        </Grid>
+                                    </Border>
+
+                                    <Border Classes="row" views:SettingsSearch.Terms="settings file json folder reveal explorer location">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,16,0">
+                                                <TextBlock Text="Settings file" />
+                                                <TextBlock Classes="hint"
+                                                           Text="One hand-editable file, with a file per workspace beside it. A value that is not valid falls back rather than breaking the app." />
+                                                <TextBlock Classes="flag" Text="{Binding Appearance.SettingsFilePath}"
+                                                           TextTrimming="CharacterEllipsis" MaxWidth="440" />
+                                            </StackPanel>
+                                            <Button Grid.Column="1" Content="Show in folder"
+                                                    Command="{Binding Appearance.RevealSettingsFileCommand}" />
+                                        </Grid>
+                                    </Border>
+
+                                    <Border Classes="row" views:SettingsSearch.Terms="export import backup restore another machine share">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,16,0">
+                                                <TextBlock Text="Export or import settings" />
+                                                <TextBlock Classes="hint"
+                                                           Text="The theme, colours, font sizes and workspace defaults as one file. Each workspace's own remembered projects, migrations and diagrams stay here: they are absolute paths, and mean nothing on another machine." />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                                <Button Content="Export…" Command="{Binding Appearance.ExportCommand}" />
+                                                <Button Content="Import…" Command="{Binding Appearance.ImportCommand}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+
+                                    <Border Classes="row" views:SettingsSearch.Terms="reset everything default clear recent forget">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,16,0">
+                                                <TextBlock Text="Reset everything" />
+                                                <TextBlock Classes="hint"
+                                                           Text="The theme, colours, font sizes, workspace defaults and the recent list, back to how EfAssist shipped. Asks first, and leaves each workspace's own settings alone." />
+                                            </StackPanel>
+                                            <Button Grid.Column="1" Content="Reset" Classes="danger"
+                                                    Command="{Binding Appearance.ResetEverythingCommand}" />
+                                        </Grid>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+
+                            <TextBlock Classes="hint" MaxWidth="620"
+                                       Text="{Binding Appearance.ActionMessage}"
+                                       IsVisible="{Binding Appearance.ActionMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                        </StackPanel>
+                    </Panel>
                 </ScrollViewer>
-            </TabItem>
-
-        </TabControl>
+            </Grid>
+        </Grid>
 
         <!-- Close only: every change on this screen saves as it is made. -->
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right"
-                    Margin="0,14,0,0">
-            <Button Name="CloseButton" Content="Close" IsCancel="True" IsDefault="True" MinWidth="90" />
-        </StackPanel>
+        <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="16,12">
+            <TextBlock Grid.Column="0" Classes="hint" VerticalAlignment="Center"
+                       Text="Every change saves as it is made." />
+            <Button Grid.Column="1" Name="CloseButton" Content="Close"
+                    IsCancel="True" IsDefault="True" MinWidth="90" />
+        </Grid>
     </Grid>
 </Window>

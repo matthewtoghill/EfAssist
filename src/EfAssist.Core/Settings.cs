@@ -113,6 +113,48 @@ public sealed class WorkspaceSettings
     public string? DiagramSaveFolder { get; set; }
 }
 
+/// <summary>
+/// The values a workspace's own settings file starts from the first time that workspace is opened.
+/// </summary>
+/// <remarks>
+/// Only a seed. An existing workspace keeps whatever it was left with, so changing a default here
+/// never reaches back into a solution someone has already tuned — the same reason
+/// <see cref="WorkspaceSettings"/> holds these per workspace in the first place. Only the choices
+/// worth carrying between solutions are here: remembered projects, contexts, migrations and diagram
+/// layouts are facts about one solution and have no sensible default.
+/// </remarks>
+public sealed class WorkspaceDefaults
+{
+    /// <inheritdoc cref="WorkspaceSettings.Discovery"/>
+    public DiscoveryMode Discovery { get; set; } = DiscoveryMode.Cached;
+
+    /// <inheritdoc cref="WorkspaceSettings.MigrationRefresh"/>
+    public DiscoveryMode MigrationRefresh { get; set; } = DiscoveryMode.Cached;
+
+    /// <inheritdoc cref="WorkspaceSettings.Offline"/>
+    public bool Offline { get; set; }
+
+    /// <inheritdoc cref="WorkspaceSettings.Idempotent"/>
+    public bool Idempotent { get; set; }
+
+    /// <inheritdoc cref="WorkspaceSettings.NoBuild"/>
+    public bool NoBuild { get; set; }
+
+    /// <inheritdoc cref="WorkspaceSettings.ScriptOutputFolder"/>
+    public string? ScriptOutputFolder { get; set; }
+
+    /// <summary>A fresh workspace's settings, seeded from these defaults.</summary>
+    public WorkspaceSettings CreateWorkspace() => new()
+    {
+        Discovery = Discovery,
+        MigrationRefresh = MigrationRefresh,
+        Offline = Offline,
+        Idempotent = Idempotent,
+        NoBuild = NoBuild,
+        ScriptOutputFolder = ScriptOutputFolder,
+    };
+}
+
 /// <summary>Which theme variant the UI uses.</summary>
 public enum AppTheme
 {
@@ -227,6 +269,28 @@ public sealed class DisplaySettings
     private WindowSettings _window = new();
 
     /// <summary>
+    /// The settings window's own size. Its own block rather than sharing <see cref="Window"/>: the
+    /// settings screen is resizable and someone who widens it to read the workspace defaults should
+    /// not find the main window has moved. Only the size is used — the settings screen is a modal
+    /// and always opens centred on the window it belongs to, so <see cref="WindowSettings.X"/> and
+    /// <see cref="WindowSettings.Y"/> are left alone here. <see cref="WindowSettings.Maximised"/> is
+    /// recorded rather than offered as a choice.
+    /// </summary>
+    public WindowSettings SettingsWindow
+    {
+        get => _settingsWindow;
+        set => _settingsWindow = value ?? new WindowSettings();
+    }
+
+    private WindowSettings _settingsWindow = new();
+
+    /// <summary>
+    /// Check GitHub for a newer release once, shortly after launch. On by default, which is how the
+    /// app behaved before this was a choice; off means updates are only ever looked for on demand.
+    /// </summary>
+    public bool CheckForUpdatesOnLaunch { get; set; } = true;
+
+    /// <summary>
     /// Light, dark, or follow the OS. App-wide rather than per workspace: it is a property of the
     /// person looking at the screen, not of the solution they happen to have open.
     /// </summary>
@@ -301,20 +365,36 @@ public sealed class AppSettings
 
     private DisplaySettings _display = new();
 
+    /// <summary>
+    /// What a workspace's settings start from the first time it is opened. See
+    /// <see cref="WorkspaceDefaults"/>: a seed for new workspaces, never applied to existing ones.
+    /// </summary>
+    public WorkspaceDefaults WorkspaceDefaults
+    {
+        get => _workspaceDefaults;
+        set => _workspaceDefaults = value ?? new WorkspaceDefaults();
+    }
+
+    private WorkspaceDefaults _workspaceDefaults = new();
+
     /// <summary>Most recent first.</summary>
     public List<string> RecentWorkspaces { get; set; } = [];
 
     /// <summary>
     /// The settings for a workspace, read from its own file the first time it is asked for and
     /// cached thereafter. Never null and never throws: an unknown or unreadable workspace gets
-    /// defaults, same as a first run.
+    /// <see cref="WorkspaceDefaults"/>, same as a first run.
     /// </summary>
+    /// <remarks>
+    /// This is the one place the defaults are applied, which is what keeps them a seed: a workspace
+    /// with a file of its own never sees them again, however they change later.
+    /// </remarks>
     public WorkspaceSettings For(string workspacePath)
     {
         var key = Path.GetFullPath(workspacePath);
         if (!Workspaces.TryGetValue(key, out var settings))
         {
-            settings = SettingsStore.LoadWorkspace(Root, key) ?? new WorkspaceSettings();
+            settings = SettingsStore.LoadWorkspace(Root, key) ?? WorkspaceDefaults.CreateWorkspace();
             Workspaces[key] = settings;
         }
 
@@ -338,6 +418,18 @@ public sealed class AppSettings
         var key = Path.GetFullPath(workspacePath);
         RecentWorkspaces.RemoveAll(p => string.Equals(p, key, StringComparison.OrdinalIgnoreCase));
     }
+}
+
+/// <summary>
+/// The app-wide half of the settings as an export file carries it: preferences plus the defaults a
+/// new workspace starts from. Both halves are optional, so a file written by an older or newer build
+/// imports whatever it does have.
+/// </summary>
+public sealed class SettingsBackup
+{
+    public DisplaySettings? Display { get; set; }
+
+    public WorkspaceDefaults? WorkspaceDefaults { get; set; }
 }
 
 /// <summary>
@@ -407,6 +499,139 @@ public static class SettingsStore
         {
             WriteAtomic(WorkspaceFile(root, workspacePath), workspace);
         }
+    }
+
+    /// <summary>
+    /// Writes the app-wide half of the settings to <paramref name="path"/> for carrying to another
+    /// machine. Returns false when the file could not be written, which the caller reports; there is
+    /// nothing here worth throwing over.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not the whole folder. A workspace's file is a list of absolute project paths, a
+    /// remembered migration list and a hand-arranged diagram — none of which mean anything on
+    /// another machine — so the export is the preferences and the workspace defaults only. Window
+    /// size and position go the same way, for the same reason; "open maximised" is a preference and
+    /// stays.
+    /// </remarks>
+    public static bool Export(AppSettings settings, string path)
+    {
+        try
+        {
+            WriteAtomic(path, new SettingsBackup
+            {
+                Display = ForBackup(settings.Display),
+                WorkspaceDefaults = settings.WorkspaceDefaults,
+            });
+
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Replaces the app-wide settings with the contents of an exported file. Returns false when the
+    /// file is missing, unreadable, or carries neither half — nothing is changed in that case. The
+    /// caller saves.
+    /// </summary>
+    public static bool Import(AppSettings settings, string path)
+    {
+        var backup = ReadOrDefault<SettingsBackup>(path);
+        if (backup is null || (backup.Display is null && backup.WorkspaceDefaults is null))
+        {
+            return false;
+        }
+
+        if (backup.Display is { } display)
+        {
+            // Where the windows are is a fact about this machine's screens, not something an import
+            // gets to move. Only the maximised preference comes across.
+            display.Window = Reposition(display.Window, settings.Display.Window);
+            display.SettingsWindow = Reposition(display.SettingsWindow, settings.Display.SettingsWindow);
+
+            display.UiFontSize = ThemePresets.ClampFontSize(
+                display.UiFontSize, ThemePresets.DefaultUiFontSize);
+            display.EditorFontSize = ThemePresets.ClampFontSize(
+                display.EditorFontSize, ThemePresets.DefaultEditorFontSize);
+
+            Overwrite(settings.Display, display);
+        }
+
+        if (backup.WorkspaceDefaults is { } defaults)
+        {
+            Overwrite(settings.WorkspaceDefaults, defaults);
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Puts the app-wide preferences and the workspace defaults back to how the app shipped, and
+    /// empties the recent list. Existing workspaces keep their own settings files: this resets what
+    /// a new one starts from, not what an old one was left with. The caller saves.
+    /// </summary>
+    public static void Reset(AppSettings settings)
+    {
+        Overwrite(settings.Display, new DisplaySettings
+        {
+            // Same reasoning as an import: a reset is about preferences, and a window that jumps to
+            // the middle of another screen reads as a bug rather than as a reset.
+            Window = Reposition(new WindowSettings(), settings.Display.Window),
+            SettingsWindow = Reposition(new WindowSettings(), settings.Display.SettingsWindow),
+        });
+
+        Overwrite(settings.WorkspaceDefaults, new WorkspaceDefaults());
+        settings.RecentWorkspaces.Clear();
+    }
+
+    /// <summary>
+    /// Copies every publicly settable property from <paramref name="source"/> onto
+    /// <paramref name="target"/>, in place.
+    /// </summary>
+    /// <remarks>
+    /// In place, rather than assigning a new block, because view models are handed the
+    /// <see cref="DisplaySettings"/> instance at construction and keep it: replacing the object
+    /// would leave half the app writing to a block nothing reads. Reflection rather than a
+    /// hand-written field list for the same reason <see cref="ForBackup"/> clones through JSON — a
+    /// preference added later should not need this method updating.
+    /// </remarks>
+    private static void Overwrite<T>(T target, T source) where T : class
+    {
+        foreach (var property in typeof(T).GetProperties())
+        {
+            if (property is { CanRead: true, SetMethod.IsPublic: true })
+            {
+                property.SetValue(target, property.GetValue(source));
+            }
+        }
+    }
+
+    /// <summary>The maximised preference from <paramref name="from"/>, everything else from here.</summary>
+    private static WindowSettings Reposition(WindowSettings from, WindowSettings here) => new()
+    {
+        Maximised = from.Maximised,
+        Width = here.Width,
+        Height = here.Height,
+        X = here.X,
+        Y = here.Y,
+    };
+
+    /// <summary>
+    /// A copy of the display settings with the machine-specific geometry dropped. Cloned through
+    /// JSON rather than field by field, so a preference added later is exported without anyone
+    /// having to remember this method.
+    /// </summary>
+    private static DisplaySettings ForBackup(DisplaySettings display)
+    {
+        var clone = JsonSerializer.Deserialize<DisplaySettings>(
+            JsonSerializer.Serialize(display, Options), Options)!;
+
+        clone.Window = new WindowSettings { Maximised = display.Window.Maximised };
+        clone.SettingsWindow = new WindowSettings();
+
+        return clone;
     }
 
     /// <summary>

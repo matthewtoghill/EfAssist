@@ -79,13 +79,40 @@ Highlighting, line numbers, Ctrl+F and a wrap toggle: **done**. Code folding: st
 - **Revisit when:** someone is scrolling past collapsed blocks they do not care about. Ctrl+F covers the "find the bit I want" case that folding would otherwise serve.
 - **Cost:** a day for a folding strategy that handles nested `BEGIN`/`END` without being fooled by strings and comments.
 
-### Dedicated Settings dialog — done, per-workspace sections still parked
-A Settings window, rather than every option living inline next to what it affects. **Done** as a modal.
+### Dedicated Settings dialog — done, rebuilt as a searchable two-pane screen
+A Settings window, rather than every option living inline next to what it affects. **Done** as a modal,
+and since redesigned: the three tabs became a category list, and the options that had nowhere to live
+came in with it.
 
-- **Current state:** `SettingsWindow` is modal, reachable from a gear button in the workspace toolbar, from the home page's action row, and from `Ctrl+,`. Three tabs — Appearance (variant, palette preset, the three colours per variant, the two font sizes, the preview tile), Tools (`Update dotnet-ef`) and Updates (version and `Check for updates`). Its `DataContext` is the shell's `MainWindowViewModel`, so those tabs drive the same commands the rest of the app does rather than a second copy. There is no OK button: every change saves as it is made and `Close` is the only action. See `PROGRESS.md`.
-- **Not done:** per-workspace sections. Options that belong to one workspace — discovery mode, migration refresh, skip-build, idempotent, the script output folder — are still inline in the workspace panel, and app-wide display toggles that sit where they are used (the two Wrap checkboxes, line numbers, sort order) stayed there too. The dialog took the options that had no natural inline home; it did not become the only place options live.
-- **Revisit when:** an inline control is genuinely hard to find, or a per-workspace option appears that has nowhere to sit. Moving a checkbox from beside the thing it affects into a dialog is a downgrade unless the toolbar is out of room.
-- **Cost:** hours per section; the settings model already separates app-wide from per-workspace.
+- **Current state:** `SettingsWindow` is modal, reachable from a gear button in the workspace toolbar,
+  from the home page's action row, from `Ctrl+,`, and — since the shortcut sheet folded into it — from
+  `F1` and `Ctrl+/`. It opens at 1000×760 centred on the shell, is resizable down to 760×560, and
+  remembers its own size — not its position — in `DisplaySettings.SettingsWindow`: it is a modal over
+  the shell, so a remembered position would open it on whichever monitor it was last dragged to. A 224px category list replaces the tabs: Theme, Text and
+  layout, Code and console, Workspace defaults, Diagrams, Tools, Shortcuts, Updates and about. A search
+  box above the list filters the rows inside every pane and hides the categories with nothing left,
+  showing "3 of 6 shown" beside the pane heading and a match count against each category. The filtering
+  lives in the view (`Views/SettingsSearch.cs`, an attached property carrying each row's extra search
+  terms) because the rows are declared in XAML: a parallel list in a view model would be a second copy
+  to keep in step, and the first thing to rot would be the setting nobody could find. Theme now shows all
+  nine palettes as a gallery of tiles, each painted in its own colours rather than as three chips, plus a
+  WCAG contrast grade on the chosen trio — the pickers will happily accept a pair nobody can read. Its
+  `DataContext` is still the shell's `MainWindowViewModel`, so every row drives the same commands and
+  properties the rest of the app does rather than a second copy. There is no OK button: every change
+  saves as it is made and `Close` is the only action. See `PROGRESS.md`.
+- **Also in:** workspace defaults (`AppSettings.WorkspaceDefaults`) seed a workspace's own file the first
+  time it is opened and are never applied again, so changing one cannot reach back into a solution
+  already set up; `WrapOutput` and `SortNewestFirst` are finally reachable from Settings as well as from
+  the controls beside what they affect; and About carries export, import and reset for the app-wide half
+  of the settings.
+- **Not done:** per-workspace panes. The workspace's own options stay inline on the workspace screen —
+  Settings offers the defaults a new one starts from, not a second place to change the open one. Also not
+  done: keyboard-only navigation of the palette gallery beyond arrow keys, and rebinding a shortcut.
+- **Revisit when:** an inline control proves genuinely hard to find, or someone wants the open
+  workspace's own options in Settings too — at which point the honest shape is a scope switch at the top
+  of that pane, not a duplicate set of rows.
+- **Cost:** as estimated per section. The search was the surprise: cheap in the view, and it would have
+  been a week as a data-driven row engine.
 
 ### View a migration's Up/Down changes — done, SQL diffing still parked
 From the migrations list, select a migration and read what it does. **Done.**
@@ -232,10 +259,12 @@ the buttons themselves.
   search inside an editor. They were split across `Alt` for navigation and `Ctrl` for commands, which
   is the Windows convention, but `Ctrl+,` and ``Ctrl+` `` are worth more as conventions than the split
   was, and `Ctrl+1..n` for "go to view n" is what a browser does — so one held key now reveals the
-  lot. The sheet is `ShortcutsWindow` rendered from `EfAssist.App.ViewModels.Shortcuts`, which is the
+  lot. The sheet renders `EfAssist.App.ViewModels.Shortcuts`, which is the
   single list a new binding has to be added to. On top of that, holding `Ctrl` for 400ms badges every
   button that gesture reaches (`Views/ShortcutHint.cs`, an attached property plus an `AdornerLayer`
-  badge), the way Windows labels access keys.
+  badge), the way Windows labels access keys. The sheet is no longer a window of its own: `F1` and `Ctrl+/` open
+  the settings screen on its Shortcuts category, which renders the same list. Two windows meant two
+  places for the app's chrome to drift.
 - **What changed the mind:** someone asked what the shortcuts were, which was the recorded trigger.
   The tooltips answered it only once the mouse was already on the button, which is the wrong end of
   the problem for a keyboard shortcut.

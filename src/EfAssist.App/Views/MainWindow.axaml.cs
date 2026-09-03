@@ -417,7 +417,15 @@ public partial class MainWindow : Window
     private Task ShowSettingsAsync() =>
         new SettingsWindow { DataContext = DataContext }.ShowDialog(this);
 
-    private Task ShowShortcutsAsync() => new ShortcutsWindow().ShowDialog(this);
+    /// <summary>
+    /// F1 and Ctrl+/ open the settings screen on its shortcut reference. The sheet used to be a
+    /// window of its own, which meant a second place for the app's chrome to drift.
+    /// </summary>
+    private Task ShowShortcutsAsync()
+    {
+        (DataContext as MainWindowViewModel)?.Appearance.ShowShortcuts();
+        return ShowSettingsAsync();
+    }
 
     /// <summary>
     /// Opens the Add migration flyout, for Ctrl+N. Posted rather than called straight through: the
@@ -511,7 +519,7 @@ public partial class MainWindow : Window
     /// Hands the path to the OS: open the file with whatever is registered for .sql, or open its
     /// folder. <c>UseShellExecute</c> is what makes that work rather than trying to exec the file.
     /// </summary>
-    private static Task OpenWithShellAsync(string path, bool reveal)
+    internal static Task OpenWithShellAsync(string path, bool reveal)
     {
         // ponytail: Explorer's /select is Windows-only, which matches the v1 publish target. Other
         // platforms fall back to opening the containing folder, which is the useful part anyway.

@@ -109,8 +109,13 @@ public partial class MainWindowViewModel : ObservableObject
         _defaultDiagramKind = settings.Display.DefaultDiagramKind;
         _openMaximised = settings.Display.Window.Maximised;
         Appearance = new SettingsViewModel(
-            settings.Display,
-            () => SettingsStore.Save(settings, settingsPath));
+            settings,
+            () => SettingsStore.Save(settings, settingsPath),
+            settingsPath)
+        {
+            // An import or a reset replaces values half a dozen view models are already holding.
+            SettingsReplaced = ReloadDisplaySettings,
+        };
 
         Session = new CommandSession(runner) { DiagnosticsHeader = BuildDiagnosticsHeader };
         Session.PropertyChanged += (_, e) =>
@@ -1392,8 +1397,33 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     public Func<Task>? ShowSettingsAsync { get; set; }
 
-    /// <summary>Supplied by the view: shows the keyboard shortcut reference.</summary>
+    /// <summary>Supplied by the view: opens the settings screen on the shortcut reference.</summary>
     public Func<Task>? ShowShortcutsAsync { get; set; }
+
+    /// <inheritdoc cref="DisplaySettings.CheckForUpdatesOnLaunch"/>
+    public bool CheckForUpdatesOnLaunch => _settings.Display.CheckForUpdatesOnLaunch;
+
+    /// <summary>
+    /// Re-reads the app-wide preferences after the settings screen has replaced them wholesale, which
+    /// an import or a reset does. Each of these properties is the live copy some tab binds to, so
+    /// without this the screen would show the new values and the app would keep using the old ones.
+    /// </summary>
+    private void ReloadDisplaySettings()
+    {
+        var display = _settings.Display;
+
+        WrapOutput = display.WrapOutput;
+        WrapSql = display.WrapSql;
+        ShowLineNumbers = display.ShowLineNumbers;
+        OutputExpanded = display.OutputExpanded;
+        DefaultDiagramKind = display.DefaultDiagramKind;
+        OpenMaximised = display.Window.Maximised;
+        Migrations.SortNewestFirst = display.SortNewestFirst;
+        Diagrams.DetailVisible = display.DiagramDetailVisible;
+        Diagrams.LegendCorner = display.DiagramLegendCorner;
+
+        OnPropertyChanged(nameof(CheckForUpdatesOnLaunch));
+    }
 
     /// <summary>
     /// Opens the shortcut sheet. The app had no shortcut reference anywhere until this: Ctrl+, and
