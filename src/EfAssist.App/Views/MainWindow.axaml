@@ -1422,11 +1422,15 @@
                                                 Background="{DynamicResource CardBackgroundBrush}">
                                             <StackPanel Orientation="Horizontal" Spacing="6">
                                                 <Button Name="DiagramZoomOut" Content="&#x2212;" MinWidth="32"
-                                                        ToolTip.Tip="Zoom out" />
+                                                        ToolTip.Tip="Zoom out"
+														VerticalContentAlignment="Center"
+														HorizontalContentAlignment="Center" />
                                                 <Button Name="DiagramZoomReset" Content="100%"
                                                         ToolTip.Tip="Reset the zoom and position" />
                                                 <Button Name="DiagramZoomIn" Content="+" MinWidth="32"
-                                                        ToolTip.Tip="Zoom in" />
+                                                        ToolTip.Tip="Zoom in"
+														VerticalContentAlignment="Center"
+														HorizontalContentAlignment="Center" />
                                                 <Button Name="DiagramFit" Content="Fit"
                                                         ToolTip.Tip="Fit the whole diagram in the window" />
                                             </StackPanel>
