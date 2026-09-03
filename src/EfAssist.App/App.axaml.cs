@@ -27,7 +27,10 @@ public partial class App : Application
             // update check goes out at the same time and stays silent unless it finds something.
             desktop.MainWindow.Opened += async (_, _) =>
             {
-                _ = viewModel.Update.CheckOnStartupAsync();
+                if (viewModel.CheckForUpdatesOnLaunch)
+                {
+                    _ = viewModel.Update.CheckOnStartupAsync();
+                }
                 await viewModel.InitialiseAsync();
             };
         }

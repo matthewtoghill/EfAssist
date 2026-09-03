@@ -94,7 +94,7 @@ public class ThemingTests
     public void Matching_the_preset_colour_by_hand_records_no_override()
     {
         var display = new DisplaySettings { Theme = AppTheme.Dark };
-        var settings = new SettingsViewModel(display, () => { });
+        var settings = new SettingsViewModel(new AppSettings { Display = display }, () => { });
 
         settings.Accent = Color.Parse(ThemePresets.Defaults(ThemePreset.Default, dark: true).Accent);
 
@@ -106,7 +106,7 @@ public class ThemingTests
     public void Changing_a_colour_records_it_against_the_variant_being_edited()
     {
         var display = new DisplaySettings { Theme = AppTheme.Light };
-        var settings = new SettingsViewModel(display, () => { });
+        var settings = new SettingsViewModel(new AppSettings { Display = display }, () => { });
 
         settings.Background = Color.Parse("#123456");
 
@@ -129,7 +129,7 @@ public class ThemingTests
     public void Switching_preset_keeps_untouched_colours_following_the_preset()
     {
         var display = new DisplaySettings { Theme = AppTheme.Dark };
-        var settings = new SettingsViewModel(display, () => { });
+        var settings = new SettingsViewModel(new AppSettings { Display = display }, () => { });
 
         settings.Preset = ThemePreset.Solarized;
 
@@ -146,7 +146,7 @@ public class ThemingTests
         display.LightColours.Accent = "#111111";
         display.DarkColours.Accent = "#222222";
 
-        var settings = new SettingsViewModel(display, () => { });
+        var settings = new SettingsViewModel(new AppSettings { Display = display }, () => { });
         settings.ResetColoursCommand.Execute(null);
 
         Assert.True(display.DarkColours.IsDefault);
@@ -157,7 +157,7 @@ public class ThemingTests
     public void Choosing_an_explicit_variant_moves_the_pickers_to_it()
     {
         var display = new DisplaySettings { Theme = AppTheme.Light };
-        var settings = new SettingsViewModel(display, () => { });
+        var settings = new SettingsViewModel(new AppSettings { Display = display }, () => { });
         Assert.False(settings.EditingDark);
 
         settings.Theme = AppTheme.Dark;
@@ -171,7 +171,7 @@ public class ThemingTests
     {
         var display = new DisplaySettings();
         var saves = 0;
-        var settings = new SettingsViewModel(display, () => saves++);
+        var settings = new SettingsViewModel(new AppSettings { Display = display }, () => saves++);
 
         settings.UiFontSize = 999;
         settings.EditorFontSize = 18;
@@ -216,7 +216,7 @@ public class ThemingTests
     public void A_colour_change_asks_for_a_restart_until_it_is_undone()
     {
         var display = new DisplaySettings { Theme = AppTheme.Dark };
-        var settings = new SettingsViewModel(display, () => { });
+        var settings = new SettingsViewModel(new AppSettings { Display = display }, () => { });
         Assert.False(settings.NeedsRestart);
 
         settings.Background = Color.Parse("#123456");
@@ -230,7 +230,7 @@ public class ThemingTests
     public void Switching_palette_asks_for_a_restart()
     {
         var display = new DisplaySettings();
-        var settings = new SettingsViewModel(display, () => { });
+        var settings = new SettingsViewModel(new AppSettings { Display = display }, () => { });
 
         settings.Preset = ThemePreset.Nord;
 
@@ -245,7 +245,7 @@ public class ThemingTests
     public void The_variant_and_the_font_sizes_do_not_ask_for_a_restart()
     {
         var display = new DisplaySettings { Theme = AppTheme.Light };
-        var settings = new SettingsViewModel(display, () => { });
+        var settings = new SettingsViewModel(new AppSettings { Display = display }, () => { });
 
         settings.Theme = AppTheme.Dark;
         settings.UiFontSize = 20;
@@ -262,7 +262,7 @@ public class ThemingTests
     public void Editing_the_hidden_variant_still_asks_for_a_restart()
     {
         var display = new DisplaySettings { Theme = AppTheme.System };
-        var settings = new SettingsViewModel(display, () => { }) { EditingDark = false };
+        var settings = new SettingsViewModel(new AppSettings { Display = display }, () => { }) { EditingDark = false };
         Assert.False(settings.NeedsRestart);
 
         settings.EditingDark = true;
@@ -279,7 +279,7 @@ public class ThemingTests
         display.LightColours.Background = "#FFFFFF";
         display.DarkColours.Background = "#101010";
 
-        var settings = new SettingsViewModel(display, () => { }) { EditingDark = false };
+        var settings = new SettingsViewModel(new AppSettings { Display = display }, () => { }) { EditingDark = false };
         Assert.Equal(Colors.White, settings.Preview.Surface);
 
         settings.EditingDark = true;

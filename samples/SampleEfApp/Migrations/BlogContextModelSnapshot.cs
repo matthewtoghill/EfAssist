@@ -31,7 +31,7 @@ namespace SampleEfApp.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Blogs", (string)null);
+                    b.ToTable("Blogs");
                 });
 
             modelBuilder.Entity("SampleEfApp.Post", b =>
@@ -49,7 +49,7 @@ namespace SampleEfApp.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Posts", (string)null);
+                    b.ToTable("Posts");
                 });
 #pragma warning restore 612, 618
         }

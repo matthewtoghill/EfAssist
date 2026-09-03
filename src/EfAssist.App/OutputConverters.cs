@@ -1,3 +1,5 @@
+﻿using System;
+using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -118,4 +120,23 @@ public static class OutputConverters
         ModelCheckState.Pending => "Pending changes",
         _ => "Not checked",
     });
+
+    /// <summary>
+    /// Whether a value equals the converter parameter, compared by name. The settings screen's panes
+    /// all sit in one <c>Panel</c> and show themselves when the selected category is theirs; a
+    /// <see cref="FuncValueConverter{TIn,TOut}"/> cannot see a parameter, so this is a class.
+    /// </summary>
+    public static readonly IValueConverter Matches = new NameMatchConverter();
+
+    private sealed class NameMatchConverter : IValueConverter
+    {
+        public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+            value is not null
+            && parameter is not null
+            && string.Equals(value.ToString(), parameter.ToString(), StringComparison.Ordinal);
+
+        // One-way: a hidden pane never tells the view model which category it would be.
+        public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+            throw new NotSupportedException();
+    }
 }

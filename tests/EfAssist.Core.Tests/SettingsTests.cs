@@ -198,6 +198,97 @@ public class SettingsTests : IDisposable
     }
 
     [Fact]
+    public void A_new_workspace_starts_from_the_workspace_defaults()
+    {
+        var settings = SettingsStore.Load(SettingsPath);
+        settings.WorkspaceDefaults.Discovery = DiscoveryMode.Manual;
+        settings.WorkspaceDefaults.Idempotent = true;
+        settings.WorkspaceDefaults.ScriptOutputFolder = @"C:\scripts";
+
+        var workspace = settings.For(@"C:\repos\New\New.slnx");
+
+        Assert.Equal(DiscoveryMode.Manual, workspace.Discovery);
+        Assert.True(workspace.Idempotent);
+        Assert.Equal(@"C:\scripts", workspace.ScriptOutputFolder);
+    }
+
+    [Fact]
+    public void Changing_the_defaults_leaves_an_existing_workspace_alone()
+    {
+        var settings = SettingsStore.Load(SettingsPath);
+        settings.For(@"C:\repos\Old\Old.slnx").Discovery = DiscoveryMode.Auto;
+        SettingsStore.Save(settings, SettingsPath);
+
+        var reloaded = SettingsStore.Load(SettingsPath);
+        reloaded.WorkspaceDefaults.Discovery = DiscoveryMode.Manual;
+
+        // A seed, not a policy: the workspace has a file of its own and keeps what it was left with.
+        Assert.Equal(DiscoveryMode.Auto, reloaded.For(@"C:\repos\Old\Old.slnx").Discovery);
+        Assert.Equal(DiscoveryMode.Manual, reloaded.For(@"C:\repos\Newer\Newer.slnx").Discovery);
+    }
+
+    [Fact]
+    public void Export_and_import_carry_the_preferences_but_not_the_window_geometry()
+    {
+        var settings = SettingsStore.Load(SettingsPath);
+        settings.Display.Preset = ThemePreset.Nord;
+        settings.Display.UiFontSize = 17;
+        settings.Display.Window.Maximised = true;
+        settings.Display.Window.Width = 1234;
+        settings.WorkspaceDefaults.NoBuild = true;
+
+        var backup = Path.Combine(_directory, "backup.json");
+        Assert.True(SettingsStore.Export(settings, backup));
+
+        var target = new AppSettings();
+        target.Display.Window.Width = 900;
+        Assert.True(SettingsStore.Import(target, backup));
+
+        Assert.Equal(ThemePreset.Nord, target.Display.Preset);
+        Assert.Equal(17, target.Display.UiFontSize);
+        Assert.True(target.Display.Window.Maximised);
+        Assert.True(target.WorkspaceDefaults.NoBuild);
+        // The exporting machine's screens are none of this machine's business.
+        Assert.Equal(900, target.Display.Window.Width);
+    }
+
+    [Fact]
+    public void Import_of_something_that_is_not_a_backup_changes_nothing()
+    {
+        var path = Path.Combine(_directory, "nonsense.json");
+        Directory.CreateDirectory(_directory);
+        File.WriteAllText(path, """{ "somethingElse": 1 }""");
+
+        var settings = new AppSettings { Display = { Preset = ThemePreset.Dracula } };
+
+        Assert.False(SettingsStore.Import(settings, path));
+        Assert.Equal(ThemePreset.Dracula, settings.Display.Preset);
+    }
+
+    [Fact]
+    public void Reset_clears_preferences_defaults_and_the_recent_list_but_keeps_workspace_files()
+    {
+        var settings = SettingsStore.Load(SettingsPath);
+        settings.Display.Preset = ThemePreset.GitHub;
+        settings.Display.Window.Width = 1111;
+        settings.WorkspaceDefaults.Offline = true;
+        settings.For(@"C:\repos\Keep\Keep.slnx").Context = "KeepContext";
+        settings.MarkRecent(@"C:\repos\Keep\Keep.slnx");
+        SettingsStore.Save(settings, SettingsPath);
+
+        SettingsStore.Reset(settings);
+        SettingsStore.Save(settings, SettingsPath);
+
+        var reloaded = SettingsStore.Load(SettingsPath);
+        Assert.Equal(ThemePreset.Default, reloaded.Display.Preset);
+        Assert.False(reloaded.WorkspaceDefaults.Offline);
+        Assert.Empty(reloaded.RecentWorkspaces);
+        Assert.Equal(1111, reloaded.Display.Window.Width);
+        // Resetting what a new workspace starts from is not the same as forgetting the old ones.
+        Assert.Equal("KeepContext", reloaded.For(@"C:\repos\Keep\Keep.slnx").Context);
+    }
+
+    [Fact]
     public void A_corrupt_workspace_file_falls_back_to_defaults_without_losing_the_core_file()
     {
         var settings = SettingsStore.Load(SettingsPath);
