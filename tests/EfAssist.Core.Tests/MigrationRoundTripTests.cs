@@ -51,6 +51,15 @@ public class MigrationRoundTripTests : IDisposable
         var sample = SamplePath();
         Assert.True(Directory.Exists(sample), $"sample project not found at {sample}");
 
+        await ResetDatabaseAsync(sample);
+
+        // Adding and removing a migration rewrites the model snapshot, and the installed dotnet-ef
+        // does not format it byte-identically to the committed copy (it emits the older
+        // `ToTable("Blogs", (string)null)` overload). The rewrite is harmless but it dirties a
+        // tracked file on every run, so put the committed bytes back when we are done.
+        var snapshotPath = Path.Combine(sample, "Migrations", "BlogContextModelSnapshot.cs");
+        var snapshot = await File.ReadAllBytesAsync(snapshotPath);
+
         var context = SynchronizationContext.Current;
         var shell = new MainWindowViewModel(new EfRunner(), new AppSettings(), _settingsPath)
         {
@@ -111,11 +120,42 @@ public class MigrationRoundTripTests : IDisposable
         finally
         {
             await RestoreFixtureStateAsync(shell, tab, sample);
+            await File.WriteAllBytesAsync(snapshotPath, snapshot);
         }
 
         // The fixture is back to one applied migration and one pending.
         Assert.Equal(MigrationState.Applied, tab.Migrations[0].State);
         Assert.Equal(MigrationState.Pending, tab.Migrations[1].State);
+    }
+
+    /// <summary>
+    /// Recreates <c>blog.db</c> at the fixture state before the test touches it, per the recipe in
+    /// this sample's README.
+    /// </summary>
+    /// <remarks>
+    /// The finally block below restores state on a failed assertion, but it cannot run if the test
+    /// host dies mid-run (Ctrl-C, an IDE stop, a crash). Killing EF partway through a
+    /// <c>database update</c> leaves a row in <c>__EFMigrationsLock</c>, and EF waits on that lock
+    /// with no timeout — so every later update, in this suite or in the GUI, blocks forever against
+    /// a stale lock no cleanup path ever clears. The database is generated and gitignored, so
+    /// deleting the file is the cheapest cure and makes this test self-healing rather than
+    /// dependent on the previous run having exited cleanly.
+    /// </remarks>
+    private static async Task ResetDatabaseAsync(string sample)
+    {
+        // Takes the -shm and -wal sidecars with it; a bare blog.db is what a fresh clone has.
+        foreach (var file in Directory.EnumerateFiles(sample, "blog.db*"))
+        {
+            File.Delete(file);
+        }
+
+        var target = new EfTarget(
+            Path.Combine(sample, "SampleEfApp.csproj"),
+            Context: "BlogContext");
+
+        var reset = await new EfRunner().RunAsync(EfArgs.DatabaseUpdate(target, "InitialCreate"), sample);
+
+        Assert.True(reset.Success, $"could not reset the sample database:\n{reset.Diagnostics}");
     }
 
     /// <summary>
