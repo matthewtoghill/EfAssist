@@ -43,13 +43,13 @@ public partial class MigrationDetailViewModel : ObservableObject
     private readonly Func<Task> _ensureProviderKnownAsync;
 
     /// <summary>
-    /// Generated SQL and the temp file it came from, keyed by migration id and whether it was
-    /// idempotent, so re-selecting a migration or flipping the option back costs nothing, and the
-    /// two variants never get shown, or opened, under each other's key.
+    /// Generated SQL and the temp file it came from, keyed by migration id, direction and whether it
+    /// was idempotent, so re-selecting a migration or flipping either switch back costs nothing, and
+    /// no variant ever gets shown, or opened, under another's key.
     /// </summary>
     // ponytail: invalidated by a list refresh, not by watching the files. Add a watcher if editing a
     // migration and re-reading its SQL without refreshing proves confusing.
-    private readonly Dictionary<(string Id, bool Idempotent), (string Sql, string Path)> _sqlCache = [];
+    private readonly Dictionary<(string Id, bool Idempotent, bool Down), (string Sql, string Path)> _sqlCache = [];
 
     public MigrationDetailViewModel(
         CommandSession session,
@@ -94,6 +94,25 @@ public partial class MigrationDetailViewModel : ObservableObject
     private string _sql = "";
 
     /// <summary>
+    /// Which half of the migration the SQL is for: its <c>Down</c> method rather than its <c>Up</c>.
+    /// Sticky across selection changes — someone reading rollback scripts is usually reading more
+    /// than one. Only offered while the SQL is on screen, and only while nothing is running, so it
+    /// cannot be flipped into a pane that has no way to catch up with it.
+    /// </summary>
+    [ObservableProperty]
+    private bool _scriptDown;
+
+    /// <summary>
+    /// The other half of the same choice, so both segments of the switch are bound rather than one
+    /// side leaving the switch showing neither.
+    /// </summary>
+    public bool ScriptUp
+    {
+        get => !ScriptDown;
+        set => ScriptDown = !value;
+    }
+
+    /// <summary>
     /// Where the SQL currently on screen was generated to. Null until this migration's SQL, for the
     /// idempotent option as it stood at the time, has actually been generated.
     /// </summary>
@@ -136,7 +155,9 @@ public partial class MigrationDetailViewModel : ObservableObject
     public string? Subtitle => Migration is null
         ? null
         : IsShowingSql
-            ? "SQL for this migration only, generated from the migration before it."
+            ? ScriptDown
+                ? "SQL for this migration's Down only, rolling it back to the migration before it."
+                : "SQL for this migration only, generated from the migration before it."
             : SourcePath ?? "Source file not found.";
 
     public bool IsReady => !_session.IsRunning && _target() is not null;
@@ -168,7 +189,7 @@ public partial class MigrationDetailViewModel : ObservableObject
         // Staying on the SQL view across a selection change would show an empty pane until the user
         // pressed the button again, so it only holds when this migration's SQL is already generated
         // for the option as currently ticked.
-        if (_sqlCache.TryGetValue((row.Id, EffectiveIdempotent), out var cached))
+        if (_sqlCache.TryGetValue((row.Id, EffectiveIdempotent, ScriptDown), out var cached))
         {
             Sql = cached.Sql;
             SqlPath = cached.Path;
@@ -229,8 +250,9 @@ public partial class MigrationDetailViewModel : ObservableObject
 
         await _ensureProviderKnownAsync();
         var idempotent = EffectiveIdempotent;
+        var down = ScriptDown;
 
-        if (_sqlCache.TryGetValue((row.Id, idempotent), out var cached))
+        if (_sqlCache.TryGetValue((row.Id, idempotent, down), out var cached))
         {
             Sql = cached.Sql;
             SqlPath = cached.Path;
@@ -238,7 +260,7 @@ public partial class MigrationDetailViewModel : ObservableObject
             return;
         }
 
-        var path = MigrationFiles.ScriptCachePath(target.Project, target.Context, row.Id, idempotent);
+        var path = MigrationFiles.ScriptCachePath(target.Project, target.Context, row.Id, idempotent, down);
 
         try
         {
@@ -250,12 +272,15 @@ public partial class MigrationDetailViewModel : ObservableObject
             return;
         }
 
-        // "0" is EF's name for the empty database, which is what the first migration starts from.
-        var from = PreviousId(row.Id) ?? "0";
+        // "0" is EF's name for the empty database, which is what the first migration starts from —
+        // and, going the other way, what rolling the first migration back returns to.
+        var neighbour = PreviousId(row.Id) ?? "0";
+        var (from, to) = down ? (row.Id, neighbour) : (neighbour, row.Id);
+        var what = down ? "rollback SQL" : "SQL";
 
         var result = await _session.RunAsync(
-            EfArgs.MigrationsScript(target, path, from, row.Id, idempotent),
-            $"Generating SQL for '{row.Name}'");
+            EfArgs.MigrationsScript(target, path, from, to, idempotent),
+            $"Generating {what} for '{row.Name}'");
 
         if (result is null)
         {
@@ -264,7 +289,7 @@ public partial class MigrationDetailViewModel : ObservableObject
 
         if (!result.Success)
         {
-            _session.ReportFailure(result, $"Could not generate the SQL for '{row.Name}'.");
+            _session.ReportFailure(result, $"Could not generate the {what} for '{row.Name}'.");
             return;
         }
 
@@ -279,11 +304,11 @@ public partial class MigrationDetailViewModel : ObservableObject
             return;
         }
 
-        _sqlCache[(row.Id, idempotent)] = (sql, path);
+        _sqlCache[(row.Id, idempotent, down)] = (sql, path);
         Sql = sql;
         SqlPath = path;
         View = MigrationView.Sql;
-        _session.StatusMessage = $"SQL for '{row.Name}': {sql.Length:N0} characters.";
+        _session.StatusMessage = $"{char.ToUpperInvariant(what[0])}{what[1..]} for '{row.Name}': {sql.Length:N0} characters.";
     }
 
     private bool CanShowSql() => IsReady && HasMigration;
@@ -389,6 +414,38 @@ public partial class MigrationDetailViewModel : ObservableObject
         OnPropertyChanged(nameof(CanOpenCurrent));
         OpenCommand.NotifyCanExecuteChanged();
         NotifyText();
+    }
+
+    /// <summary>
+    /// Flipping the direction while the SQL is on screen fetches the other direction rather than
+    /// waiting to be asked again — the switch would otherwise relabel the script already showing.
+    /// The old SQL is dropped first, so a slow generation leaves the pane empty rather than leaving
+    /// the Up script sitting under a subtitle that now says Down.
+    /// </summary>
+    partial void OnScriptDownChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ScriptUp));
+        OnPropertyChanged(nameof(Subtitle));
+
+        if (!IsShowingSql)
+        {
+            return;
+        }
+
+        var row = Migration;
+        if (row is not null && _sqlCache.TryGetValue((row.Id, EffectiveIdempotent, value), out var cached))
+        {
+            Sql = cached.Sql;
+            SqlPath = cached.Path;
+            return;
+        }
+
+        Sql = "";
+        SqlPath = null;
+
+        // Through the command rather than the method, so the generation it starts is observable —
+        // ShowSqlCommand.ExecutionTask — rather than a fire-and-forget nothing can wait on.
+        ShowSqlCommand.Execute(null);
     }
 
     partial void OnSourceChanged(string value) => NotifyText();
