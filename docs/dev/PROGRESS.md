@@ -865,6 +865,38 @@ ticked-and-unsupported, provider-probed-first-generation, and separately-cached-
 Not done: no visual check that the shared checkbox's enabled/disabled state updates promptly when
 switching context on the Migrations tab without ever having visited the Script tab.
 
+### Down scripts in the detail pane
+The `SQL` button only ever showed the migration's `Up`. The `Down` was readable in the source but
+its SQL — the thing you actually want before rolling anything back — was not available anywhere.
+
+- **A direction switch, not a third button.** `Source` / `SQL` stayed as they were, with an `Up` /
+  `Down` segmented switch beside them, reusing the `segments` style from the output pane. Two
+  buttons said "one of these costs a build"; a third would have said it twice, and the direction is
+  a property of the SQL rather than a fourth thing the pane can show.
+- **The switch is only on screen with the SQL.** There is nothing for it to mean over the source.
+- **`migrations script <this> <previous>`** — the same two migrations as the up script, the other
+  way round, which is what runs this migration's `Down` and nothing else. Rolling back the first
+  migration scripts to `"0"`, the same name for the empty database that the up script starts from.
+- **Flipping the switch fetches the other direction immediately.** Waiting to be asked again would
+  leave the up script on screen under a subtitle now saying `Down`. The old SQL is dropped first, so
+  a slow generation shows an empty pane rather than the wrong script. The switch is disabled while a
+  command runs, so it cannot be flipped into a pane with no way to catch up with it.
+- **The direction is sticky across selection changes.** Someone reading rollback scripts is usually
+  reading more than one of them.
+- **Direction joins the cache key and the temp file name**, alongside the idempotent flag, for the
+  reason that flag is already in both: generating one variant must not overwrite the file that
+  `Open file` still thinks holds another. `ScriptCachePath` gained a `down` parameter that appends
+  `_down` before any `_idempotent`, so existing up-script paths are unchanged.
+- **The idempotent option applies to both directions.** It is one shared flag; a pane that quietly
+  ignored it in one direction would disagree with a ticked checkbox.
+
+Verified: `dotnet test EfAssist.slnx` → **660 passed, 0 failed, 0 warnings** (was 653).
+`MigrationDetailViewModelTests` gained the reversed range, the roll-back-to-`0` case for the first
+migration, the fetch-on-flip and cache-hit-on-flip-back behaviour, no generation when the direction
+changes over the source, the two directions never sharing a file, and the direction surviving a
+selection change.
+Not done: no visual check of the switch in either theme variant.
+
 ---
 
 ## Phase 6 — Done

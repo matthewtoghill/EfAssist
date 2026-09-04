@@ -940,6 +940,24 @@
                                             <Button Content="SQL"
                                                     Command="{Binding Migrations.Detail.ShowSqlCommand}"
                                                     ToolTip.Tip="Generate the SQL this migration alone would run. Builds the project the first time; kept for the session afterwards." />
+                                            <!-- Which half of the migration the SQL is for. Only
+                                                 there while the SQL is, because there is nothing for
+                                                 it to mean over the source, and disabled while a
+                                                 command runs so it cannot relabel a script the pane
+                                                 has no way to replace yet. -->
+                                            <Border Classes="segments"
+                                                    IsVisible="{Binding Migrations.Detail.IsShowingSql}"
+                                                    IsEnabled="{Binding Migrations.Detail.IsReady}"
+                                                    ToolTip.Tip="Up is the SQL this migration applies; Down is the SQL that rolls it back. Each direction is generated once and kept for the session.">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <RadioButton Classes="segment" GroupName="MigrationSqlDirection"
+                                                                 Content="Up"
+                                                                 IsChecked="{Binding Migrations.Detail.ScriptUp}" />
+                                                    <RadioButton Classes="segment" GroupName="MigrationSqlDirection"
+                                                                 Content="Down"
+                                                                 IsChecked="{Binding Migrations.Detail.ScriptDown}" />
+                                                </StackPanel>
+                                            </Border>
                                             <Button Content="Copy"
                                                     Command="{Binding Migrations.Detail.CopyCommand}" />
                                             <Button Content="Open file"

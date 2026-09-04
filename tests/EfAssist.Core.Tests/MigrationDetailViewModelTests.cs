@@ -354,6 +354,120 @@ public class MigrationDetailViewModelTests : IDisposable
         Assert.Equal(2, runner.Calls.Count);
     }
 
+    // ---- Direction ----
+
+    [Fact]
+    public async Task The_down_script_runs_the_range_backwards()
+    {
+        var (detail, runner) = Build();
+        detail.Show(Row(1));
+
+        detail.ScriptDown = true;
+        await detail.ShowSqlCommand.ExecuteAsync(null);
+
+        // The same two migrations as the up script, the other way round: from this one back to the
+        // one before it, which is what runs its Down method and nothing else.
+        Assert.Equal(
+            ["ef", "migrations", "script", "20260101000001_AddBlogUrl", "20260101000000_InitialCreate"],
+            ScriptCall(runner).Take(5));
+        Assert.True(detail.IsShowingSql);
+    }
+
+    [Fact]
+    public async Task Rolling_back_the_first_migration_scripts_down_to_the_empty_database()
+    {
+        var (detail, runner) = Build();
+        detail.Show(Row(0));
+
+        detail.ScriptDown = true;
+        await detail.ShowSqlCommand.ExecuteAsync(null);
+
+        Assert.Equal(
+            ["ef", "migrations", "script", "20260101000000_InitialCreate", "0"],
+            ScriptCall(runner).Take(5));
+    }
+
+    [Fact]
+    public async Task Flipping_the_direction_while_showing_sql_fetches_the_other_direction()
+    {
+        var (detail, runner) = Build();
+        detail.Show(Row(1));
+        await detail.ShowSqlCommand.ExecuteAsync(null);
+
+        detail.ScriptDown = true;
+        await detail.ShowSqlCommand.ExecutionTask!;
+
+        // Otherwise the switch would simply relabel the up script already on screen.
+        Assert.Equal(2, runner.Calls.Count);
+        Assert.Equal(
+            "-- SQL for 20260101000001_AddBlogUrl-to-20260101000000_InitialCreate", detail.Sql);
+    }
+
+    [Fact]
+    public async Task Flipping_the_direction_back_reuses_the_cached_sql()
+    {
+        var (detail, runner) = Build();
+        detail.Show(Row(1));
+        await detail.ShowSqlCommand.ExecuteAsync(null);
+
+        detail.ScriptDown = true;
+        await detail.ShowSqlCommand.ExecutionTask!;
+
+        detail.ScriptUp = true;
+        await detail.ShowSqlCommand.ExecutionTask!;
+
+        Assert.Equal(2, runner.Calls.Count);
+        Assert.Equal("-- SQL for 20260101000000_InitialCreate-to-20260101000001_AddBlogUrl", detail.Sql);
+    }
+
+    [Fact]
+    public void Flipping_the_direction_over_the_source_generates_nothing()
+    {
+        var (detail, runner) = Build();
+        detail.Show(Row(1));
+
+        detail.ScriptDown = true;
+
+        // The switch is only on screen with the SQL, but nothing about it should imply a build.
+        Assert.Empty(runner.Calls);
+        Assert.False(detail.IsShowingSql);
+    }
+
+    [Fact]
+    public async Task Up_and_down_sql_are_never_opened_from_the_same_file()
+    {
+        var (detail, _) = Build();
+        detail.Show(Row(1));
+
+        await detail.ShowSqlCommand.ExecuteAsync(null);
+        var upPath = detail.SqlPath;
+
+        detail.ScriptDown = true;
+        await detail.ShowSqlCommand.ExecutionTask!;
+
+        Assert.NotNull(upPath);
+        Assert.NotNull(detail.SqlPath);
+        Assert.NotEqual(upPath, detail.SqlPath);
+    }
+
+    [Fact]
+    public async Task Reselecting_a_migration_keeps_the_chosen_direction()
+    {
+        var (detail, runner) = Build();
+        detail.Show(Row(1));
+        detail.ScriptDown = true;
+        await detail.ShowSqlCommand.ExecuteAsync(null);
+
+        detail.Show(Row(0));
+        await detail.ShowSqlCommand.ExecuteAsync(null);
+
+        // Someone reading rollback scripts is usually reading more than one of them.
+        Assert.True(detail.ScriptDown);
+        Assert.Equal(
+            ["ef", "migrations", "script", "20260101000000_InitialCreate", "0"],
+            ScriptCall(runner).Take(5));
+    }
+
     // ---- Open file follows the current view ----
 
     [Fact]

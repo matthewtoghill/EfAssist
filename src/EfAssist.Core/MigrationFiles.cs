@@ -110,13 +110,25 @@ public static class MigrationFiles
     /// this, generating one after the other would silently overwrite the file that "Open file"
     /// still thinks holds the other one.
     /// </param>
+    /// <param name="down">
+    /// Whether the script rolls the migration back rather than applying it. Part of the path for the
+    /// same reason as <paramref name="idempotent"/>: the two directions are different scripts for
+    /// the same migration, and must not share a file.
+    /// </param>
     public static string ScriptCachePath(
-        string migrationsProjectPath, string? context, string migrationId, bool idempotent = false)
+        string migrationsProjectPath,
+        string? context,
+        string migrationId,
+        bool idempotent = false,
+        bool down = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(migrationId);
 
         var key = Key(Path.GetFullPath(migrationsProjectPath) + "|" + (context ?? ""));
-        var fileName = idempotent ? migrationId + "_idempotent.sql" : migrationId + ".sql";
+        var fileName = migrationId
+            + (down ? "_down" : "")
+            + (idempotent ? "_idempotent" : "")
+            + ".sql";
         return Path.Combine(Path.GetTempPath(), "EfAssist", "preview", key, fileName);
     }
 

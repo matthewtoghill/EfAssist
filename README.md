@@ -15,7 +15,8 @@ remembering which project is `--project` and which is `--startup-project`.
 ## What it does
 
 - **Migrations** — every migration with its applied or pending state, and what its `Up` and `Down`
-  actually change. Add, apply, roll back to any point, remove, drop.
+  actually change, in source or as the SQL either direction would run. Add, apply, roll back to any
+  point, remove, drop.
 - **Script** — `migrations script` between any two migrations, idempotent or not, in a
   syntax-highlighted viewer with Copy and Save As.
 - **Diagrams** — your model drawn as an entity-relationship or class diagram, read from the EF model

@@ -133,11 +133,11 @@ public partial class MainWindowViewModel : ObservableObject
         Script = new ScriptViewModel(
             Session,
             BuildTargetForCommands,
-            () => Migrations.Ordered,
+            () => Migrations!.Ordered,
             Persist,
             idempotentRequested: () => Idempotent,
             onIdempotentUnsupported: () => Idempotent = false,
-            selectedMigration: () => Migrations.SelectedMigration?.Name);
+            selectedMigration: () => Migrations!.SelectedMigration?.Name);
         Migrations = new MigrationsViewModel(
             Session,
             BuildTargetForCommands,
