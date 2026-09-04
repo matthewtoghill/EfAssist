@@ -144,8 +144,8 @@ Let the app opt in to GitHub pre-releases, so a beta can be tried without publis
 - **Cost:** hours for the flag, most of the work is the downgrade path.
 
 ### UI/UX and layout pass — done
-Built as the Option A layout, on `feat/app-layout-redesign`. See `docs/LAYOUT-REDESIGN-PLAN.md` for
-the plan and `docs/PROGRESS.md` § Layout pass for what landed and what was decided along the way.
+Built as the Option A layout, on `feat/app-layout-redesign`. See `docs/dev/LAYOUT-REDESIGN-PLAN.md` for
+the plan and `docs/dev/PROGRESS.md` § Layout pass for what landed and what was decided along the way.
 
 - **What changed:** the 320px options panel is gone — its pickers are a breadcrumb in the top bar and
   its switches are a Run options popover with a count badge; the tab strip is a 62px icon rail; the
@@ -192,7 +192,7 @@ All three want the same `.ico`, and it is a multi-resolution one (16 through 256
 Shipped as the Diagrams tab in phases D0–D6. Per-migration diagrams and diffing followed: the
 snapshot picker draws the model as of any migration from its `.Designer.cs`, and marks what that
 migration added, removed and changed against the migration before it — no git read needed, because
-every migration keeps its own snapshot on disk. The model is extracted from the EF model snapshot with Roslyn — no build, no database — and drawn as an interactive entity-relationship or class diagram that survives a restart and exports to JSON, SVG, PNG, PDF and Mermaid. See `docs/DIAGRAMS-PLAN.md` for the reasoning and `docs/DIAGRAMS-IMPLEMENTATION.md` for the build.
+every migration keeps its own snapshot on disk. The model is extracted from the EF model snapshot with Roslyn — no build, no database — and drawn as an interactive entity-relationship or class diagram that survives a restart and exports to JSON, SVG, PNG, PDF and Mermaid. See `docs/dev/DIAGRAMS-PLAN.md` for the reasoning and `docs/dev/DIAGRAMS-IMPLEMENTATION.md` for the build.
 
 The rank direction toggle followed: a **Top to bottom** / **Left to right** button on the toolbar
 runs the ranks as rows rather than as columns, so a wide, shallow model fills a landscape window

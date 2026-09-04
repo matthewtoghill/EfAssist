@@ -131,8 +131,8 @@ commit. Phases are ordered so the app is usable at every boundary.
 - Walk every new surface in both variants, checking the new overlays and the popover against the
   Dark dictionary (surfaces read from `PanelBackgroundBrush` / `SubtleBorderBrush`, never a
   literal).
-- Update `docs/PROGRESS.md` (what landed, what was deliberately left) and the
-  "UI/UX and layout pass" entry in `docs/ROADMAP.md`, which this plan closes out.
+- Update `docs/dev/PROGRESS.md` (what landed, what was deliberately left) and the
+  "UI/UX and layout pass" entry in `docs/dev/ROADMAP.md`, which this plan closes out.
 
 ## Deliberately not in this pass
 
