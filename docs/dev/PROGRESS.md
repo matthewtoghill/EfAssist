@@ -1089,7 +1089,7 @@ that matched what the preview had shown.
 
 ## Model diagrams — Phases D0 to D2 (Core only)
 
-`docs/DIAGRAMS-PLAN.md` is the research and the decisions; `docs/DIAGRAMS-IMPLEMENTATION.md` is the
+`docs/dev/DIAGRAMS-PLAN.md` is the research and the decisions; `docs/dev/DIAGRAMS-IMPLEMENTATION.md` is the
 build plan. This is what exists so far: everything in Core, fully tested, with no UI yet. Phases D3
 onwards — the tab itself, persistence and export — are not started.
 
@@ -1437,7 +1437,7 @@ the window shows highlighted SQL over the confirmation" is an outstanding manual
 
 The "UI/UX and layout pass" that `ROADMAP.md` had parked, built to the Option A design agreed on the
 design canvas. Nine commits on `feat/app-layout-redesign`, one per phase, each building and passing
-the tests. `docs/LAYOUT-REDESIGN-PLAN.md` holds the plan and the four decisions taken before
+the tests. `docs/dev/LAYOUT-REDESIGN-PLAN.md` holds the plan and the four decisions taken before
 starting.
 
 ### Built

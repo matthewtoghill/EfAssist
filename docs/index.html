@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EfAssist — a desktop GUI for EF Core migrations</title>
+<meta name="description" content="A desktop GUI over the dotnet ef CLI. Add, apply, roll back, remove and script Entity Framework Core migrations, and draw your model as a diagram with no build and no database.">
+<link rel="icon" href="assets/favicon.png">
+<meta property="og:title" content="EfAssist">
+<meta property="og:description" content="A desktop GUI over the dotnet ef CLI for Entity Framework Core migrations.">
+<meta property="og:image" content="https://matthewtoghill.github.io/EfAssist/assets/migrations.png">
+<meta property="og:url" content="https://matthewtoghill.github.io/EfAssist/">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+/* The palette is the app's own Nord preset: surface, accent and foreground, light and dark. */
+:root {
+  --surface: #ECEFF4;
+  --surface-2: #E1E5EC;
+  --accent: #5E81AC;
+  --fg: #2E3440;
+  --fg-dim: #4C566A;
+  --border: #D3D8E0;
+  --code-bg: #E1E5EC;
+  --shadow: 0 1px 2px rgba(46, 52, 64, .08), 0 8px 30px rgba(46, 52, 64, .10);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface: #2E3440;
+    --surface-2: #353C4A;
+    --accent: #88C0D0;
+    --fg: #D8DEE9;
+    --fg-dim: #9AA5B4;
+    --border: #434C5E;
+    --code-bg: #262B35;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 12px 40px rgba(0, 0, 0, .35);
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--fg);
+  font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent); }
+code, kbd, pre {
+  font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+  font-size: .92em;
+}
+code { background: var(--code-bg); padding: .12em .35em; border-radius: 4px; }
+pre {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  overflow-x: auto;
+}
+pre code { background: none; padding: 0; }
+.wrap { max-width: 1060px; margin: 0 auto; padding: 0 24px; }
+
+/* ---- header ---- */
+header { border-bottom: 1px solid var(--border); }
+.bar { display: flex; align-items: center; gap: 14px; padding: 14px 0; }
+.bar img { width: 28px; height: 28px; }
+.bar strong { font-size: 1.05rem; letter-spacing: .2px; }
+.bar nav { margin-left: auto; display: flex; gap: 20px; font-size: .93rem; }
+.bar nav a { color: var(--fg-dim); text-decoration: none; }
+.bar nav a:hover { color: var(--accent); }
+
+/* ---- hero ---- */
+.hero { padding: 72px 0 8px; text-align: center; }
+.hero h1 { font-size: clamp(2.1rem, 5vw, 3.2rem); line-height: 1.12; margin: 0 0 18px; letter-spacing: -.5px; }
+.hero p.lead { font-size: clamp(1.05rem, 2vw, 1.22rem); color: var(--fg-dim); max-width: 660px; margin: 0 auto 32px; }
+.cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.btn {
+  display: inline-block; padding: 12px 22px; border-radius: 8px; text-decoration: none;
+  font-weight: 600; font-size: .97rem; border: 1px solid var(--accent);
+}
+.btn-primary { background: var(--accent); color: var(--surface); }
+.btn-primary:hover { filter: brightness(1.08); }
+.btn-secondary { background: none; color: var(--accent); }
+.btn-secondary:hover { background: var(--surface-2); }
+.hero .note { font-size: .85rem; color: var(--fg-dim); margin-top: 16px; }
+
+/* ---- screenshots ---- */
+figure { margin: 40px 0 0; }
+figure img {
+  width: 100%; height: auto; display: block;
+  border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow);
+}
+figcaption { font-size: .85rem; color: var(--fg-dim); text-align: center; margin-top: 10px; }
+
+/* ---- sections ---- */
+section { padding: 64px 0 0; }
+section > h2 { font-size: 1.6rem; margin: 0 0 6px; letter-spacing: -.2px; }
+section > p.sub { color: var(--fg-dim); margin: 0 0 28px; }
+.grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.card {
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 20px 22px;
+}
+.card h3 { margin: 0 0 8px; font-size: 1.03rem; }
+.card p { margin: 0; color: var(--fg-dim); font-size: .94rem; }
+.card kbd {
+  background: var(--code-bg); border: 1px solid var(--border); border-bottom-width: 2px;
+  border-radius: 4px; padding: .05em .4em; font-size: .82em; color: var(--fg);
+}
+
+/* ---- download table ---- */
+table { width: 100%; border-collapse: collapse; font-size: .94rem; }
+th, td { text-align: left; padding: 11px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { font-size: .8rem; text-transform: uppercase; letter-spacing: .6px; color: var(--fg-dim); font-weight: 600; }
+td code { white-space: nowrap; }
+
+footer {
+  margin-top: 80px; border-top: 1px solid var(--border); padding: 28px 0 48px;
+  color: var(--fg-dim); font-size: .88rem;
+  display: flex; gap: 18px; flex-wrap: wrap; align-items: center;
+}
+footer nav { margin-left: auto; display: flex; gap: 18px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap bar">
+    <img src="assets/favicon.png" alt="">
+    <strong>EfAssist</strong>
+    <nav>
+      <a href="#features">Features</a>
+      <a href="#download">Download</a>
+      <a href="#faq">FAQ</a>
+      <a href="https://github.com/matthewtoghill/EfAssist">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="hero">
+    <h1>EF Core migrations,<br>without the command line</h1>
+    <p class="lead">
+      A desktop GUI over the <code>dotnet ef</code> CLI. Open a solution, pick a <code>DbContext</code>,
+      and add, apply, roll back, remove and script migrations — without remembering which project is
+      <code>--project</code> and which is <code>--startup-project</code>.
+    </p>
+    <div class="cta">
+      <a class="btn btn-primary" href="https://github.com/matthewtoghill/EfAssist/releases/latest">Download for Windows</a>
+      <a class="btn btn-secondary" href="https://github.com/matthewtoghill/EfAssist">View on GitHub</a>
+    </div>
+    <p class="note">Free and open source, MIT licensed. Installs per-user — no administrator rights, no .NET runtime needed.</p>
+  </div>
+
+  <figure>
+    <img src="assets/migrations.png" alt="The Migrations tab: a list of migrations with applied and pending badges, and the selected migration's Up and Down changes beside it.">
+    <figcaption>Every migration, its applied state, and what its <code>Up</code> and <code>Down</code> actually change.</figcaption>
+  </figure>
+
+  <section id="features">
+    <h2>What it does</h2>
+    <p class="sub">Four tabs, and a keyboard shortcut for each.</p>
+    <div class="grid">
+      <div class="card">
+        <h3>Migrations <kbd>Ctrl</kbd>+<kbd>1</kbd></h3>
+        <p>Every migration with its applied or pending state, read from the database itself. Add, apply,
+           roll back to any point, remove, drop. Anything that touches a database asks first, and says
+           exactly what it is about to do.</p>
+      </div>
+      <div class="card">
+        <h3>Script <kbd>Ctrl</kbd>+<kbd>2</kbd></h3>
+        <p><code>migrations script</code> between any two migrations, idempotent or not, in a
+           syntax-highlighted viewer with Copy and Save As.</p>
+      </div>
+      <div class="card">
+        <h3>Diagrams <kbd>Ctrl</kbd>+<kbd>3</kbd></h3>
+        <p>Your model as an entity-relationship or class diagram, read from the EF model snapshot — no
+           build, no database. Exports to JSON, SVG, PNG, PDF or Mermaid.</p>
+      </div>
+      <div class="card">
+        <h3>Tools <kbd>Ctrl</kbd>+<kbd>4</kbd></h3>
+        <p>Ask EF whether your model has changes not yet in a migration, see exactly what this workspace
+           is pointed at, and reach the actions that affect the whole database.</p>
+      </div>
+      <div class="card">
+        <h3>Errors in plain language</h3>
+        <p>The common EF failures — a missing <code>Design</code> package, the wrong startup project, no
+           <code>DbContext</code> found — explained in a sentence, with the raw output still one click away.</p>
+      </div>
+      <div class="card">
+        <h3>Nothing hidden</h3>
+        <p>Every action runs the real <code>dotnet ef</code> and streams its output live, cancellable.
+           <em>Copy diagnostics</em> puts the command line, exit code, full output and tool versions on
+           your clipboard.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="diagrams">
+    <h2>See the model, at any point in its history</h2>
+    <p class="sub">
+      The diagram is read from the model snapshot each migration leaves behind, so you can pick any
+      migration and see the model as it stood then — with what that migration added, removed and changed
+      marked up against the one before it.
+    </p>
+    <figure style="margin-top: 0">
+      <img src="assets/diagrams.png" alt="The Diagrams tab: an entity-relationship diagram of the model, with a details panel showing the selected entity's columns, keys, indexes and relationships.">
+      <figcaption>Entities, keys, indexes and relationships — with no build and no database connection.</figcaption>
+    </figure>
+  </section>
+
+  <section id="download">
+    <h2>Download</h2>
+    <p class="sub">Windows x64. Take a file from the <a href="https://github.com/matthewtoghill/EfAssist/releases/latest">latest release</a>.</p>
+    <table>
+      <thead>
+        <tr><th>File</th><th>Use it when</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>EfAssist-win-Setup.exe</code></td>
+          <td><strong>Start here.</strong> Installs per-user into <code>%LocalAppData%\EfAssist</code> — no
+              administrator rights, no .NET runtime needed, and it updates itself.</td>
+        </tr>
+        <tr>
+          <td><code>EfAssist-win-Portable.zip</code></td>
+          <td>The same application with no installer. No updates.</td>
+        </tr>
+        <tr>
+          <td><code>EfAssist-win.msi</code></td>
+          <td>Machine-wide, for deploying via Group Policy or Intune. Needs administrator rights; updates
+              still come from the in-app updater.</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>You also need the tool EfAssist drives:</p>
+    <pre><code>dotnet tool install --global dotnet-ef</code></pre>
+    <p>The app checks for it at startup and shows the command to copy if it is missing.</p>
+  </section>
+
+  <section id="faq">
+    <h2>Questions</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>Does it need my connection string?</h3>
+        <p>No. EfAssist ships no database drivers at all — it asks <code>dotnet ef</code>, which resolves
+           the connection from your startup project's configuration and user-secrets exactly as it does on
+           the command line.</p>
+      </div>
+      <div class="card">
+        <h3>Why does SmartScreen warn me?</h3>
+        <p>The installer is not code-signed yet, so Windows has no reputation for it. Choose
+           <em>More info</em>, then <em>Run anyway</em> — or use the portable zip.</p>
+      </div>
+      <div class="card">
+        <h3>macOS or Linux?</h3>
+        <p>Not published yet. The app is Avalonia and the whole codebase is cross-platform, so it is a
+           build-matrix job rather than a rewrite — parked in the roadmap, not ruled out.</p>
+      </div>
+      <div class="card">
+        <h3>Which EF Core versions?</h3>
+        <p>Whatever your <code>dotnet-ef</code> tool supports, since that is what runs. The app warns when
+           the tool's version and your project's <code>Microsoft.EntityFrameworkCore</code> reference
+           disagree.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>MIT licensed. © 2026 Matthew Toghill.</span>
+    <nav>
+      <a href="https://github.com/matthewtoghill/EfAssist">Source</a>
+      <a href="https://github.com/matthewtoghill/EfAssist/issues">Issues</a>
+      <a href="https://github.com/matthewtoghill/EfAssist/releases">Releases</a>
+    </nav>
+  </footer>
+
+</main>
+</body>
+</html>

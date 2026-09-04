@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # The app shells out to dotnet-ef, and so do the tests — they drive the real CLI against
+      # samples/SampleEfApp rather than mocking it.
+      - name: Install dotnet-ef
+        run: dotnet tool install --global dotnet-ef
+
+      - name: Build
+        run: dotnet build EfAssist.slnx --configuration Release
+
+      # blog.db is not committed, and the tests expect the sample's fixture state: two migrations
+      # with only the first applied. See samples/SampleEfApp/README.md.
+      # The sample is outside EfAssist.slnx on purpose, so the solution build above does not
+      # restore it and dotnet ef refuses to build it without a project.assets.json.
+      - name: Seed the sample database
+        working-directory: samples/SampleEfApp
+        run: |
+          dotnet restore
+          dotnet ef database update InitialCreate --context BlogContext
+
+      - name: Test
+        run: dotnet test EfAssist.slnx --configuration Release --no-build --verbosity normal

@@ -14,7 +14,7 @@ namespace EfAssist.App;
 /// <remarks>
 /// <para>
 /// The scene carries roles rather than colours precisely so this lookup happens at draw time. Baking
-/// a colour into the scene would repeat the trap recorded in <c>docs/ROADMAP.md</c> for the SQL
+/// a colour into the scene would repeat the trap recorded in <c>docs/dev/ROADMAP.md</c> for the SQL
 /// syntax definitions: a literal colour is not a theme resource, so nothing repaints it when the
 /// variant changes and the diagram keeps its light-theme text on a dark background.
 /// </para>

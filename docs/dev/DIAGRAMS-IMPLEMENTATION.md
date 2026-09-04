@@ -117,8 +117,8 @@ New fixtures under `Fixtures/`, following the existing `.txt` convention:
 | `src/EfAssist.App/Views/MainWindow.axaml` | New `TabItem Header="Diagrams"` between Script and Tools. |
 | `src/EfAssist.App/Views/MainWindow.axaml.cs` | Wire the surface's file dialogs / open / reveal to the existing `PickSaveFileAsync`, `PickFolderAsync`, `OpenWithShellAsync` helpers, exactly as `Script` does. Re-render the surface on `ActualThemeVariantChanged`. |
 | `src/EfAssist.App/Views/SettingsWindow.axaml` | The `DefaultDiagramKind` preference. |
-| `docs/PROGRESS.md` | Correct the "**no package references at all**" wording for Core — it described a state, not a rule (`DIAGRAMS-PLAN.md` §8 Q1). Record the phase when done. |
-| `docs/ROADMAP.md` | Move MSAGL layout and per-migration diagram diffing into the parked list. |
+| `docs/dev/PROGRESS.md` | Correct the "**no package references at all**" wording for Core — it described a state, not a rule (`DIAGRAMS-PLAN.md` §8 Q1). Record the phase when done. |
+| `docs/dev/ROADMAP.md` | Move MSAGL layout and per-migration diagram diffing into the parked list. |
 
 ### Not changed: `samples/SampleEfApp`
 
