@@ -11,9 +11,16 @@
 <meta property="og:image" content="https://matthewtoghill.github.io/EfAssist/assets/migrations.png">
 <meta property="og:url" content="https://matthewtoghill.github.io/EfAssist/">
 <meta name="twitter:card" content="summary_large_image">
+<script>
+// Set the theme before first paint so there is no flash of the wrong one.
+document.documentElement.dataset.theme =
+  localStorage.getItem('theme') ||
+  (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+</script>
 <style>
 /* The palette is the app's own Nord preset: surface, accent and foreground, light and dark. */
 :root {
+  color-scheme: light;
   --surface: #ECEFF4;
   --surface-2: #E1E5EC;
   --accent: #5E81AC;
@@ -23,17 +30,16 @@
   --code-bg: #E1E5EC;
   --shadow: 0 1px 2px rgba(46, 52, 64, .08), 0 8px 30px rgba(46, 52, 64, .10);
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --surface: #2E3440;
-    --surface-2: #353C4A;
-    --accent: #88C0D0;
-    --fg: #D8DEE9;
-    --fg-dim: #9AA5B4;
-    --border: #434C5E;
-    --code-bg: #262B35;
-    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 12px 40px rgba(0, 0, 0, .35);
-  }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface: #2E3440;
+  --surface-2: #353C4A;
+  --accent: #88C0D0;
+  --fg: #D8DEE9;
+  --fg-dim: #9AA5B4;
+  --border: #434C5E;
+  --code-bg: #262B35;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 12px 40px rgba(0, 0, 0, .35);
 }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
@@ -68,6 +74,13 @@ header { border-bottom: 1px solid var(--border); }
 .bar nav { margin-left: auto; display: flex; gap: 20px; font-size: .93rem; }
 .bar nav a { color: var(--fg-dim); text-decoration: none; }
 .bar nav a:hover { color: var(--accent); }
+#theme {
+  background: none; border: 1px solid var(--border); border-radius: 6px;
+  color: var(--fg-dim); cursor: pointer; padding: 4px 9px; font-size: .95rem; line-height: 1.2;
+}
+#theme:hover { color: var(--accent); border-color: var(--accent); }
+#theme::before { content: "\2600\FE0E"; }
+:root[data-theme="dark"] #theme::before { content: "\263D\FE0E"; }
 
 /* ---- hero ---- */
 .hero { padding: 72px 0 8px; text-align: center; }
@@ -132,6 +145,7 @@ footer nav { margin-left: auto; display: flex; gap: 18px; }
       <a href="#download">Download</a>
       <a href="#faq">FAQ</a>
       <a href="https://github.com/matthewtoghill/EfAssist">GitHub</a>
+      <button id="theme" type="button" aria-label="Switch between light and dark mode" title="Switch between light and dark mode"></button>
     </nav>
   </div>
 </header>
@@ -276,5 +290,13 @@ footer nav { margin-left: auto; display: flex; gap: 18px; }
   </footer>
 
 </main>
+
+<script>
+document.getElementById('theme').addEventListener('click', function () {
+  var root = document.documentElement;
+  root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('theme', root.dataset.theme);
+});
+</script>
 </body>
 </html>
