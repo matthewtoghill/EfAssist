@@ -32,9 +32,13 @@ jobs:
 
       # blog.db is not committed, and the tests expect the sample's fixture state: two migrations
       # with only the first applied. See samples/SampleEfApp/README.md.
+      # The sample is outside EfAssist.slnx on purpose, so the solution build above does not
+      # restore it and dotnet ef refuses to build it without a project.assets.json.
       - name: Seed the sample database
         working-directory: samples/SampleEfApp
-        run: dotnet ef database update InitialCreate --context BlogContext
+        run: |
+          dotnet restore
+          dotnet ef database update InitialCreate --context BlogContext
 
       - name: Test
         run: dotnet test EfAssist.slnx --configuration Release --no-build --verbosity normal
