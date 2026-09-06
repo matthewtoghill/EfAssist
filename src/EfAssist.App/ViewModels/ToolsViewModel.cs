@@ -224,19 +224,11 @@ public partial class ToolsViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Checks the workspace's "Don't build" option before bundling, and offers to ignore it.
+    /// Checks the workspace's "Don't build" option before bundling, and offers to ignore it. A
+    /// question of its own because bundling has no confirmation to hang a tick box on — see
+    /// <see cref="NoBuildPrompt"/> for why writes ask at all.
     /// </summary>
-    /// <remarks>
-    /// Every other command honours <c>NoBuild</c> silently, and this one asks, because the artefacts
-    /// differ in what a stale build costs. A stale <c>migrations list</c> is refreshed by pressing
-    /// refresh; a stale bundle is a file that leaves the machine and applies the wrong migrations to
-    /// a database somewhere the app cannot see. Only asked when the option is actually set — the
-    /// normal path gets no extra dialog.
-    /// </remarks>
-    /// <returns>
-    /// The target to run with — the original, or one with <c>NoBuild</c> cleared — or null if the
-    /// user cancelled.
-    /// </returns>
+    /// <returns>The target to run with, or null if the user cancelled.</returns>
     private async Task<EfTarget?> ResolveNoBuildAsync(EfTarget target)
     {
         if (!target.NoBuild)
@@ -250,29 +242,13 @@ public partial class ToolsViewModel : ObservableObject
             return null;
         }
 
-        var request = new ConfirmRequest(
+        return await NoBuildPrompt.AskAsync(
+            target,
+            ConfirmAsync,
             "Create bundle without building?",
-            "This workspace has \u201cDon\u2019t build\u201d set, so the bundle would be made from whatever "
-                + "was last compiled. If that output is out of date, the bundle applies the wrong "
-                + "migrations on whichever machine it is run against.",
             "Create bundle",
-            Detail: "Building first costs a moment now. A stale bundle costs it on the target database.")
-        {
-            IsDestructive = false,
-            OptionText = "Build the project first, ignoring this workspace\u2019s \u201cDon\u2019t build\u201d option",
-
-            // Ticked by default: the safe answer should be the one a distracted Enter gives.
-            OptionChecked = true,
-        };
-
-        if (!await ConfirmAsync(request))
-        {
-            return null;
-        }
-
-        // Only ever clears the flag for this one run. The workspace's own setting is untouched —
-        // answering a question about one bundle must not quietly rewrite a saved preference.
-        return request.OptionChecked ? target with { NoBuild = false } : target;
+            "The bundle would be made from whatever was last compiled. If that output is out of date, "
+                + "the bundle applies the wrong migrations on whichever machine it is run against.");
     }
 
     [RelayCommand(CanExecute = nameof(HasBundle))]

@@ -1805,27 +1805,10 @@ database; a bundle is what you hand to a server where none of that is true.
   into the same place. A bundle is produced for a deployment, so it is always a Save As dialog, and
   that saved a `WorkspaceSettings` field, a `WorkspaceDefaults` field, a Settings row and the
   Restore/Store wiring.
-- **`NoBuild` is the one setting this command asks about.** `--no-build` is valid on `bundle` and
-  every other command honours the workspace's setting silently, but the artefacts differ in what a
-  stale build costs. A stale `migrations list` is fixed by pressing refresh; a stale bundle is a file
-  that leaves the machine and applies the wrong migrations to a database the app cannot see. So
-  `ResolveNoBuildAsync` asks — but only when the option is actually set, so the normal path gains no
-  dialog. Clearing the flag applies to that one run via `target with { NoBuild = false }`; the
-  workspace's saved preference is untouched, because answering a question about one bundle must not
-  quietly rewrite a setting.
-- **The three-way answer rides on a tick box, not a third button.** The question has three answers —
-  build first, trust the flag, or do not bundle — and `ConfirmAsync` is a `Func<ConfirmRequest,
-  Task<bool>>` shared by the Migrations, Script and Diagrams tabs. Turning that into a tri-state
-  would have rewritten every call site for the sake of one of them. Instead `ConfirmRequest` grew an
-  optional `OptionText`/`OptionChecked` pair: the two ways ride on the tick box, Cancel stays the
-  third, and the bool is unchanged. `OptionChecked` is deliberately mutable on an otherwise immutable
-  record — it is the tick box's return channel, and nothing else reads it. It is seeded ticked, so
-  the safe answer is the one a distracted Enter gives (Enter lands on Cancel; the tick box only
-  matters once Confirm is chosen).
-- **`ConfirmRequest.IsDestructive` came in with it.** The dialog's confirm button was unconditionally
-  red, which was right for every caller it had — dropping a database, reverting every migration. This
-  question is not destructive, and a red button that does not mean danger teaches people to click red
-  buttons. Defaults true, so nothing that was here first changed.
+- **`NoBuild` is not honoured silently here.** Bundling asks first, because a stale bundle is a file
+  that leaves the machine. The question started as this command's own and immediately turned out to
+  belong to every write — see § The no-build question on writes, below, which is where the shared
+  rule and the reasoning now live.
 - **The bundle path is cleared on a context change**, like the pending-model-changes result beside
   it. A path left on screen after the context changed describes a file built from a different model.
 
@@ -1845,9 +1828,7 @@ database; a bundle is what you hand to a server where none of that is true.
   leaving the tick box on drops `--no-build`, clearing it keeps `--no-build`, cancelling runs nothing
   and never reaches the file dialog, two runs are asked twice (so the workspace setting really was
   not rewritten), and a missing `ConfirmAsync` refuses rather than guessing.
-- `ConfirmRequestTests` — no tick box unless one is asked for, and destructive by default.
-- 686 tests pass. Compiled bindings are on, so the build validated every `Tools.*` path in the new
-  card and every new `ConfirmRequest` path in the dialog.
+- Compiled bindings are on, so the build validated every `Tools.*` path in the new card.
 
 ### Not verified yet
 
@@ -1856,6 +1837,106 @@ database; a bundle is what you hand to a server where none of that is true.
   dialog with a tick box and a non-red confirm button all need a look — as does actually running the
   produced executable against a database, which is the only thing that proves the feature rather than
   the plumbing.
+
+---
+
+## The no-build question on writes — Done
+
+The bundle work turned up a rule that was bigger than bundling. An audit of all six
+`ConfirmRequest` sites, plus `migrations add`, sorted them by what a stale build actually costs.
+
+### The rule
+
+**`--no-build` is honoured silently on reads, and asks on writes.**
+
+Reads are what the option exists for: `migrations list`, `dbcontext list`/`info`,
+`has-pending-model-changes`. A stale read is corrected by pressing refresh, and the whole point of the
+option is that iterating does not pay for a build every time.
+
+Writes are different, and they differ from each other only in where the damage lands:
+
+| Action | Command | What a stale build costs |
+| --- | --- | --- |
+| Apply / Roll back / Revert all | `database update` | Applies migrations from the last compiled assembly to a live database. Worse, the dialog's own "N migration(s) will be applied" list came from `migrations list` against that same assembly, so the confirmation can be wrong about what it is confirming |
+| Remove migration | `migrations remove` | Deletes files and rewrites the model snapshot from the compiled model |
+| Drop database | `database drop` | EF loads the compiled context to resolve the connection string, so the name in the typed gate may not be the database that gets destroyed |
+| Create bundle | `migrations bundle` | A file that leaves the machine and applies the wrong migrations somewhere the app cannot see |
+
+Not touched: the Script tab's overwrite confirmation (a wrong script is read before anything runs
+it), the Diagrams re-layout confirmation and the Settings reset confirmation (neither runs a
+`dotnet ef` command at all).
+
+### Built
+
+`ViewModels/NoBuildPrompt.cs`, two extension methods on `ConfirmRequest` and one helper, in two
+shapes because the actions differ in whether they already have a dialog:
+
+- `WithBuildOption(request, target)` — adds the tick box, and the sentence explaining it, to a
+  confirmation the action was going to show anyway. Returns the request untouched when the workspace
+  builds normally, so the common path gains nothing. Used by `database update` and
+  `migrations remove`.
+- `ResolvedTarget(request, target)` — read back after the dialog closes; `target with
+  { NoBuild = false }` when the tick box was left on.
+- `AskAsync(...)` — a dialog of its own, for an action with no confirmation to hang a tick box on.
+  Used by `migrations bundle`, and by `database drop`.
+
+### Decisions worth recording
+
+- **The three-way answer rides on a tick box, not a third button.** The question has three answers —
+  build first, trust the flag, or do not do it — and `ConfirmAsync` is a `Func<ConfirmRequest,
+  Task<bool>>` shared by the Migrations, Script, Diagrams and Tools tabs. A tri-state return would
+  have rewritten every call site for the sake of four of them. `ConfirmRequest` grew an optional
+  `OptionText`/`OptionChecked` pair instead: the two ways ride on the tick box, Cancel stays the
+  third, and the bool is unchanged. `OptionChecked` is deliberately mutable on an otherwise immutable
+  record — it is the tick box's return channel, and nothing else reads it, so there is no change
+  notification to keep in step. Seeded ticked, and Enter lands on Cancel, so the tick box only
+  matters once the user has chosen to go ahead — at which point the safe answer is the one already
+  selected.
+- **No action shows two modals in a row.** Anything already confirmed gains a tick box on the dialog
+  it already had. Two dialogs for one click is how people learn to dismiss dialogs.
+- **Except dropping a database, which asks first and separately.** Its confirmation is gated on
+  typing the database name, and that name comes from a `dbcontext info` probe that has to run before
+  the dialog can be built. Folding the question into that dialog would gate the drop on a name read
+  from output the run then rebuilds past. So the build question is settled first, and the probe and
+  the drop both run against the answer. Two modals, on the single most destructive action in the app,
+  and only when a non-default option is set.
+- **The SQL preview follows the tick box.** `PreviewUpdateAsync` took the workspace's target and now
+  takes the resolved one, because the preview's whole contract is to be what the run will execute.
+  The lambda captures the `confirmation` variable rather than its value, so pressing Preview reads
+  the tick box as it stands at that moment. Subtle enough to be worth the comment it has.
+- **`ConfirmRequest.IsDestructive` came in with this.** The dialog's confirm button was
+  unconditionally red, which was right for every caller it had — dropping a database, reverting every
+  migration. A question about *how* something runs is not destructive, and a red button that does not
+  mean danger teaches people to click red buttons. Defaults true, so nothing that was here first
+  changed.
+- **Clearing the flag never reaches the saved settings.** Every path produces a copy of the
+  `EfTarget` for that one run. Answering a question about one action must not quietly rewrite a
+  workspace preference, and there is a test that runs an action twice and asserts it was asked twice.
+- **`migrations add` was considered and left alone.** It generates migration content by diffing the
+  compiled model, so a stale build there writes a migration with the wrong contents — probably the
+  most common way this bites. It has no confirmation today, and adding one would put a dialog in
+  front of the app's most-used command. Parked rather than rejected; see `ROADMAP.md`.
+
+### Verified
+
+- `NoBuildPromptTests` — a normally-building workspace gets the identical request back, skipping the
+  build adds the tick box after the action's own detail, a request with no detail still gets the
+  explanation, the tick box clears `NoBuild` on a copy while the workspace's target keeps it,
+  clearing the box keeps the flag, a request that never had a tick box cannot clear the flag
+  (`OptionChecked` defaults true on every request, so the guard has to be `HasOption`), and the
+  standalone question is skipped when the workspace builds, is not styled destructive, and returns
+  nothing to run when cancelled.
+- `MigrationsViewModelTests` — applying offers the tick box in one dialog rather than two, asks
+  nothing extra when the workspace builds normally, clearing the box applies against the last build,
+  the SQL preview is generated the way the update will run, removing offers it too, dropping settles
+  the question before asking EF which database it is, and declining it runs nothing at all — not even
+  the probe, which would have built.
+- 702 tests pass.
+
+### Not verified yet
+
+- Nothing on screen. The tick box's wrapping in the dialog at its fixed 520px width, and the
+  confirm button now that it is not always red, both want a look.
 
 ---
 

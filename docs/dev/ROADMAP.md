@@ -232,18 +232,32 @@ no SDK and no source. **Done**, as a fifth card on the Tools screen.
   Windows is still a Linux executable. After a successful run the path is shown with a "Show in
   folder" button; it is dropped when the context changes, because a bundle built from a different
   one is not the thing on screen. See `PROGRESS.md`.
-- **The one place it does not follow the workspace silently:** `NoBuild`. Every other command honours
-  the "Don't build" option without comment; bundling asks, because a stale bundle is a file that
-  leaves the machine. The dialog offers to build anyway as a ticked-by-default tick box, and clearing
-  the flag applies to that run only. The tick box is a new `ConfirmRequest.OptionText`/`OptionChecked`
-  pair rather than a third button, which kept `ConfirmAsync` a `Task<bool>` for the Migrations,
-  Script and Diagrams tabs that already share it.
+- **It does not follow the workspace's "Don't build" option silently,** and neither do the other
+  write commands any more: bundling raised the question and an audit moved it to a shared rule —
+  `--no-build` is honoured silently on reads and asks on writes. See `PROGRESS.md` § The no-build
+  question on writes.
 - **Not done:** the bundle is not run from the app, and there is no equivalent of its `--connection`
   argument. That is deliberate — see **Connection-string override** above, which is the same
   safety design and still parked. Nothing verifies the produced executable beyond EF's own exit code.
 - **Cost:** as estimated — small. `--self-contained` and `--target-runtime` came in with it rather
   than waiting, because without them "no SDK needed" is only half true: a plain bundle still wants a
   matching runtime already installed.
+
+### A build warning on `migrations add`
+`database update`, `migrations remove`, `database drop` and `migrations bundle` all ask before running
+against a stale build. `migrations add` does not.
+
+- **Why parked:** it is the strongest case on the merits and the weakest on cost. `migrations add`
+  generates its content by diffing the compiled model against the last snapshot, so a stale build
+  writes a migration with the wrong contents — probably the most common way this bites. But it is the
+  app's most-used command and the only one of the five with no confirmation at all, so this means
+  *adding* a dialog rather than adding a tick box to one, and friction on the happy path is how people
+  learn to dismiss dialogs. It would only ever appear when the non-default option is set.
+- **Revisit when:** someone generates an empty or wrong migration because of it. That is the recorded
+  trigger, and the failure is obvious enough when it happens to be reported.
+- **Cost:** an hour. `NoBuildPrompt.AskAsync` already exists and already has the shape this needs; the
+  work is deciding the wording and whether it is a dialog or an inline warning beside the name box.
+  An inline warning may well be the better answer, and is cheaper.
 
 ### `dotnet ef dbcontext optimize`
 Generate a compiled model, which cuts EF's startup cost on a large model.
