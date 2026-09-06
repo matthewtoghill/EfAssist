@@ -54,6 +54,8 @@ public partial class ToolsViewModel : ObservableObject
 
     // ---- Supplied by the view ----
 
+    public Func<ConfirmRequest, Task<bool>>? ConfirmAsync { get; set; }
+
     /// <summary>Save As dialog. Returns the chosen path, or null if cancelled.</summary>
     public Func<string, string?, Task<string?>>? PickSaveFileAsync { get; set; }
 
@@ -179,6 +181,15 @@ public partial class ToolsViewModel : ObservableObject
             return;
         }
 
+        // Asked before the file dialog: it decides how the command runs, and backing out of it
+        // should not have cost the user a filename first.
+        var resolved = await ResolveNoBuildAsync(target);
+        if (resolved is null)
+        {
+            return;
+        }
+
+        target = resolved;
         var runtime = Runtime;
 
         // The OS dialog does its own overwrite prompt and EfArgs passes --force, so a replacement
@@ -210,6 +221,58 @@ public partial class ToolsViewModel : ObservableObject
 
         BundlePath = path;
         _session.StatusMessage = $"Bundle written to {path}.";
+    }
+
+    /// <summary>
+    /// Checks the workspace's "Don't build" option before bundling, and offers to ignore it.
+    /// </summary>
+    /// <remarks>
+    /// Every other command honours <c>NoBuild</c> silently, and this one asks, because the artefacts
+    /// differ in what a stale build costs. A stale <c>migrations list</c> is refreshed by pressing
+    /// refresh; a stale bundle is a file that leaves the machine and applies the wrong migrations to
+    /// a database somewhere the app cannot see. Only asked when the option is actually set — the
+    /// normal path gets no extra dialog.
+    /// </remarks>
+    /// <returns>
+    /// The target to run with — the original, or one with <c>NoBuild</c> cleared — or null if the
+    /// user cancelled.
+    /// </returns>
+    private async Task<EfTarget?> ResolveNoBuildAsync(EfTarget target)
+    {
+        if (!target.NoBuild)
+        {
+            return target;
+        }
+
+        if (ConfirmAsync is null)
+        {
+            _session.StatusMessage = "Cannot confirm this action.";
+            return null;
+        }
+
+        var request = new ConfirmRequest(
+            "Create bundle without building?",
+            "This workspace has \u201cDon\u2019t build\u201d set, so the bundle would be made from whatever "
+                + "was last compiled. If that output is out of date, the bundle applies the wrong "
+                + "migrations on whichever machine it is run against.",
+            "Create bundle",
+            Detail: "Building first costs a moment now. A stale bundle costs it on the target database.")
+        {
+            IsDestructive = false,
+            OptionText = "Build the project first, ignoring this workspace\u2019s \u201cDon\u2019t build\u201d option",
+
+            // Ticked by default: the safe answer should be the one a distracted Enter gives.
+            OptionChecked = true,
+        };
+
+        if (!await ConfirmAsync(request))
+        {
+            return null;
+        }
+
+        // Only ever clears the flag for this one run. The workspace's own setting is untouched —
+        // answering a question about one bundle must not quietly rewrite a saved preference.
+        return request.OptionChecked ? target with { NoBuild = false } : target;
     }
 
     [RelayCommand(CanExecute = nameof(HasBundle))]

@@ -232,6 +232,12 @@ no SDK and no source. **Done**, as a fifth card on the Tools screen.
   Windows is still a Linux executable. After a successful run the path is shown with a "Show in
   folder" button; it is dropped when the context changes, because a bundle built from a different
   one is not the thing on screen. See `PROGRESS.md`.
+- **The one place it does not follow the workspace silently:** `NoBuild`. Every other command honours
+  the "Don't build" option without comment; bundling asks, because a stale bundle is a file that
+  leaves the machine. The dialog offers to build anyway as a ticked-by-default tick box, and clearing
+  the flag applies to that run only. The tick box is a new `ConfirmRequest.OptionText`/`OptionChecked`
+  pair rather than a third button, which kept `ConfirmAsync` a `Task<bool>` for the Migrations,
+  Script and Diagrams tabs that already share it.
 - **Not done:** the bundle is not run from the app, and there is no equivalent of its `--connection`
   argument. That is deliberate — see **Connection-string override** above, which is the same
   safety design and still parked. Nothing verifies the produced executable beyond EF's own exit code.

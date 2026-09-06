@@ -39,4 +39,18 @@ public class ConfirmRequestTests
         // Case-insensitivity would make a near-miss enough to destroy a database.
         Assert.False(Gated("OrdersDb").IsSatisfiedBy(typed));
     }
+
+    [Fact]
+    public void A_request_has_no_tick_box_unless_one_is_asked_for()
+    {
+        Assert.False(new ConfirmRequest("T", "M", "Go").HasOption);
+        Assert.True(new ConfirmRequest("T", "M", "Go") { OptionText = "Also do X" }.HasOption);
+    }
+
+    [Fact]
+    public void Everything_is_destructive_until_it_says_otherwise()
+    {
+        Assert.True(new ConfirmRequest("T", "M", "Go").IsDestructive);
+        Assert.False(new ConfirmRequest("T", "M", "Go") { IsDestructive = false }.IsDestructive);
+    }
 }

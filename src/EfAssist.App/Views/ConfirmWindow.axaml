@@ -1,4 +1,4 @@
-﻿<Window xmlns="https://github.com/avaloniaui"
+<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:EfAssist.App.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -21,6 +21,12 @@
             <TextBlock Text="{Binding Detail}" TextWrapping="Wrap" FontSize="{DynamicResource AppFontSizeSmall}" />
         </Border>
 
+        <!-- Not an answer to the question, but a modifier on the answer: which way the action runs
+             if it runs at all. Cancel is still the way to say no. -->
+        <CheckBox IsVisible="{Binding HasOption}"
+                  Content="{Binding OptionText}"
+                  IsChecked="{Binding OptionChecked}" />
+
         <StackPanel IsVisible="{Binding RequiresTyping}" Spacing="4">
             <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource AppFontSizeSmall}" Opacity="0.8">
                 <Run Text="Type" />
@@ -39,7 +45,8 @@
 
             <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
                 <Button Name="CancelButton" Content="Cancel" IsCancel="True" MinWidth="90" />
-                <Button Name="ConfirmButton" Content="{Binding ConfirmText}" MinWidth="90" Classes="danger" />
+                <Button Name="ConfirmButton" Content="{Binding ConfirmText}" MinWidth="90"
+                        Classes.danger="{Binding IsDestructive}" />
             </StackPanel>
         </Grid>
     </StackPanel>

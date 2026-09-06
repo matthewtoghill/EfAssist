@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 
 namespace EfAssist.App.ViewModels;
@@ -33,6 +33,32 @@ public sealed record ConfirmRequest(
     /// reason this is a button the user presses rather than something the dialog does as it opens.
     /// </remarks>
     public Func<Task>? PreviewAsync { get; init; }
+
+    /// <summary>
+    /// Label for an optional tick box in the dialog, or null for no tick box. It exists because some
+    /// questions have three answers — do it this way, do it that way, or do not do it — and the
+    /// dialog answers with a bool. The two ways ride on <see cref="OptionChecked"/> and Cancel stays
+    /// the third, rather than every caller of <c>ConfirmAsync</c> changing shape for one of them.
+    /// </summary>
+    public string? OptionText { get; init; }
+
+    /// <summary>
+    /// The tick box's state: seeded by the caller as the recommended answer, written by the dialog,
+    /// and read back by the caller once it closes. Deliberately mutable on an otherwise immutable
+    /// record — it is the return channel for the tick box, and nothing else reads it, so there is no
+    /// change notification to keep in step.
+    /// </summary>
+    public bool OptionChecked { get; set; } = true;
+
+    /// <summary>
+    /// Whether the confirming button is styled as destructive. True for everything that was here
+    /// first — dropping a database, reverting every migration. A question that only asks how to do
+    /// something harmless sets this false, because a red button that does not mean danger teaches
+    /// people to click red buttons.
+    /// </summary>
+    public bool IsDestructive { get; init; } = true;
+
+    public bool HasOption => !string.IsNullOrEmpty(OptionText);
 
     public bool RequiresTyping => !string.IsNullOrEmpty(RequiredTypedValue);
 

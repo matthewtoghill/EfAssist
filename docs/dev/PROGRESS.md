@@ -1782,6 +1782,9 @@ database; a bundle is what you hand to a server where none of that is true.
   Create button, and the resulting path with "Show in folder" once there is one. The grid grew a
   third row, and the danger card moved down to stay last — a destructive card in the middle of the
   screen reads as though the cards after it are destructive too.
+- `ToolsViewModel.ResolveNoBuildAsync`, and the two `ConfirmRequest` properties it needed:
+  `OptionText`/`OptionChecked` for a tick box in the shared dialog, and `IsDestructive` so a
+  non-destructive question stops getting a red confirm button.
 
 ### Decisions worth recording
 
@@ -1802,10 +1805,27 @@ database; a bundle is what you hand to a server where none of that is true.
   into the same place. A bundle is produced for a deployment, so it is always a Save As dialog, and
   that saved a `WorkspaceSettings` field, a `WorkspaceDefaults` field, a Settings row and the
   Restore/Store wiring.
-- **`NoBuild` still flows through from the workspace.** `--no-build` is valid on `bundle`, and every
-  other command honours the workspace's setting, so this one does too. It is a footgun — a bundle
-  built from stale output is a stale deployment — but a command that silently ignored a setting the
-  user ticked would be worse.
+- **`NoBuild` is the one setting this command asks about.** `--no-build` is valid on `bundle` and
+  every other command honours the workspace's setting silently, but the artefacts differ in what a
+  stale build costs. A stale `migrations list` is fixed by pressing refresh; a stale bundle is a file
+  that leaves the machine and applies the wrong migrations to a database the app cannot see. So
+  `ResolveNoBuildAsync` asks — but only when the option is actually set, so the normal path gains no
+  dialog. Clearing the flag applies to that one run via `target with { NoBuild = false }`; the
+  workspace's saved preference is untouched, because answering a question about one bundle must not
+  quietly rewrite a setting.
+- **The three-way answer rides on a tick box, not a third button.** The question has three answers —
+  build first, trust the flag, or do not bundle — and `ConfirmAsync` is a `Func<ConfirmRequest,
+  Task<bool>>` shared by the Migrations, Script and Diagrams tabs. Turning that into a tri-state
+  would have rewritten every call site for the sake of one of them. Instead `ConfirmRequest` grew an
+  optional `OptionText`/`OptionChecked` pair: the two ways ride on the tick box, Cancel stays the
+  third, and the bool is unchanged. `OptionChecked` is deliberately mutable on an otherwise immutable
+  record — it is the tick box's return channel, and nothing else reads it. It is seeded ticked, so
+  the safe answer is the one a distracted Enter gives (Enter lands on Cancel; the tick box only
+  matters once Confirm is chosen).
+- **`ConfirmRequest.IsDestructive` came in with it.** The dialog's confirm button was unconditionally
+  red, which was right for every caller it had — dropping a database, reverting every migration. This
+  question is not destructive, and a red button that does not mean danger teaches people to click red
+  buttons. Defaults true, so nothing that was here first changed.
 - **The bundle path is cleared on a context change**, like the pending-model-changes result beside
   it. A path left on screen after the context changed describes a file built from a different model.
 
@@ -1821,15 +1841,21 @@ database; a bundle is what you hand to a server where none of that is true.
 - `ToolsViewModelTests` — the command runs with the chosen path, a cancelled dialog runs nothing,
   the suggested name and the arguments both follow the chosen runtime, the "(this machine)" sentinel
   never reaches the CLI, a failure clears the path and reports, and a context change drops it.
-- 678 tests pass. Compiled bindings are on, so the build validated every `Tools.*` path in the new
-  card.
+- `ToolsViewModelTests`, the no-build question — a workspace that builds normally is asked nothing,
+  leaving the tick box on drops `--no-build`, clearing it keeps `--no-build`, cancelling runs nothing
+  and never reaches the file dialog, two runs are asked twice (so the workspace setting really was
+  not rewritten), and a missing `ConfirmAsync` refuses rather than guessing.
+- `ConfirmRequestTests` — no tick box unless one is asked for, and destructive by default.
+- 686 tests pass. Compiled bindings are on, so the build validated every `Tools.*` path in the new
+  card and every new `ConfirmRequest` path in the dialog.
 
 ### Not verified yet
 
 - **Nothing on screen, and no bundle has been produced against a real project.** The card's layout,
-  the third grid row at the 900px width, and the danger card in its new position all need a look —
-  as does actually running the produced executable against a database, which is the only thing that
-  proves the feature rather than the plumbing.
+  the third grid row at the 900px width, the danger card in its new position, and the confirmation
+  dialog with a tick box and a non-red confirm button all need a look — as does actually running the
+  produced executable against a database, which is the only thing that proves the feature rather than
+  the plumbing.
 
 ---
 

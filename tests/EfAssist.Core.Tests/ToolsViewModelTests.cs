@@ -225,4 +225,127 @@ public class ToolsViewModelTests
         tools.BundleSelfContained = true;
         Assert.Contains("needs nothing installed", tools.BundleHint);
     }
+
+    // ---- The no-build question ----
+
+    private static readonly EfTarget NoBuildTarget = new(
+        Project: @"C:\repo\src\Data\Data.csproj",
+        StartupProject: @"C:\repo\src\Api\Api.csproj",
+        Context: "BlogContext",
+        NoBuild: true);
+
+    /// <summary>Records what the dialog was asked, and answers it the way the test wants.</summary>
+    private sealed class FakeConfirm
+    {
+        public List<ConfirmRequest> Asked { get; } = [];
+
+        public bool Answer { get; set; } = true;
+
+        /// <summary>What the user leaves the tick box on. Null means leave it as the caller seeded it.</summary>
+        public bool? TickBox { get; set; }
+
+        public Task<bool> HandleAsync(ConfirmRequest request)
+        {
+            Asked.Add(request);
+            if (TickBox is not null)
+            {
+                request.OptionChecked = TickBox.Value;
+            }
+
+            return Task.FromResult(Answer);
+        }
+    }
+
+    [Fact]
+    public async Task A_workspace_that_builds_normally_is_not_asked_anything()
+    {
+        var runner = new FakeEf();
+        var (tools, _) = Build(runner);
+        var confirm = new FakeConfirm();
+        tools.ConfirmAsync = confirm.HandleAsync;
+        WithSaveDialog(tools, "bundle.exe", []);
+
+        await tools.CreateBundleCommand.ExecuteAsync(null);
+
+        Assert.Empty(confirm.Asked);
+        Assert.Single(runner.Calls);
+    }
+
+    [Fact]
+    public async Task Leaving_the_tick_box_on_drops_no_build_for_this_run()
+    {
+        var runner = new FakeEf();
+        var (tools, _) = Build(runner, NoBuildTarget);
+        var confirm = new FakeConfirm();
+        tools.ConfirmAsync = confirm.HandleAsync;
+        WithSaveDialog(tools, "bundle.exe", []);
+
+        await tools.CreateBundleCommand.ExecuteAsync(null);
+
+        var request = Assert.Single(confirm.Asked);
+        Assert.True(request.HasOption);
+        Assert.True(request.OptionChecked);
+        Assert.False(request.IsDestructive);
+
+        Assert.DoesNotContain("--no-build", Assert.Single(runner.Calls));
+    }
+
+    [Fact]
+    public async Task Clearing_the_tick_box_keeps_no_build()
+    {
+        var runner = new FakeEf();
+        var (tools, _) = Build(runner, NoBuildTarget);
+        var confirm = new FakeConfirm { TickBox = false };
+        tools.ConfirmAsync = confirm.HandleAsync;
+        WithSaveDialog(tools, "bundle.exe", []);
+
+        await tools.CreateBundleCommand.ExecuteAsync(null);
+
+        Assert.Contains("--no-build", Assert.Single(runner.Calls));
+    }
+
+    [Fact]
+    public async Task Cancelling_the_question_runs_nothing_and_never_asks_for_a_filename()
+    {
+        var runner = new FakeEf();
+        var (tools, _) = Build(runner, NoBuildTarget);
+        tools.ConfirmAsync = new FakeConfirm { Answer = false }.HandleAsync;
+        List<string> suggested = [];
+        WithSaveDialog(tools, "bundle.exe", suggested);
+
+        await tools.CreateBundleCommand.ExecuteAsync(null);
+
+        Assert.Empty(runner.Calls);
+        Assert.Empty(suggested);
+        Assert.False(tools.HasBundle);
+    }
+
+    [Fact]
+    public async Task Answering_once_does_not_rewrite_the_workspace_setting()
+    {
+        var runner = new FakeEf();
+        var (tools, _) = Build(runner, NoBuildTarget);
+        var confirm = new FakeConfirm();
+        tools.ConfirmAsync = confirm.HandleAsync;
+        WithSaveDialog(tools, "bundle.exe", []);
+
+        await tools.CreateBundleCommand.ExecuteAsync(null);
+        await tools.CreateBundleCommand.ExecuteAsync(null);
+
+        // Asked both times: clearing the flag applies to the one run, not to the workspace.
+        Assert.Equal(2, confirm.Asked.Count);
+    }
+
+    [Fact]
+    public async Task Bundling_without_a_way_to_ask_refuses_rather_than_guessing()
+    {
+        var runner = new FakeEf();
+        var (tools, session) = Build(runner, NoBuildTarget);
+        WithSaveDialog(tools, "bundle.exe", []);
+
+        await tools.CreateBundleCommand.ExecuteAsync(null);
+
+        Assert.Empty(runner.Calls);
+        Assert.NotEqual("Ready.", session.StatusMessage);
+    }
 }
