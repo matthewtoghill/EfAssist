@@ -1,0 +1,61 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release. Blank uses <Version> from EfAssist.App.csproj.'
+        required: false
+      draft:
+        description: 'Leave the GitHub release as a draft.'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # release.ps1 runs the test suite, which drives the real dotnet-ef CLI against
+      # samples/SampleEfApp. Same setup as ci.yml.
+      - name: Install dotnet-ef
+        run: dotnet tool install --global dotnet-ef
+
+      - name: Seed the sample database
+        working-directory: samples/SampleEfApp
+        run: |
+          dotnet restore
+          dotnet ef database update InitialCreate --context BlogContext
+
+      - name: Restore vpk
+        run: dotnet tool restore
+
+      # releases/ is gitignored, so the runner starts empty and Velopack would pack a full-only
+      # release. Pulling the previous releases back down gives it a base to delta against.
+      - name: Download previous releases
+        run: |
+          New-Item -ItemType Directory -Force -Path releases | Out-Null
+          dotnet vpk download github --repoUrl https://github.com/${{ github.repository }} --token $env:GITHUB_TOKEN --outputDir releases
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish the release
+        run: |
+          $version = '${{ inputs.version }}'
+          if (-not $version -and $env:GITHUB_REF_TYPE -eq 'tag') { $version = $env:GITHUB_REF_NAME.TrimStart('v') }
+          $arguments = @{ Upload = $true; Draft = ('${{ inputs.draft }}' -eq 'true') }
+          if ($version) { $arguments.Version = $version }
+          ./build/release.ps1 @arguments
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
