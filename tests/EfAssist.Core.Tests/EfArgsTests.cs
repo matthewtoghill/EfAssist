@@ -23,6 +23,7 @@ public class EfArgsTests
             EfArgs.DbContextList(Target),
             EfArgs.DbContextInfo(Target),
             EfArgs.MigrationsHasPendingModelChanges(Target),
+            EfArgs.MigrationsBundle(Target, "efbundle.exe"),
         ];
 
         Assert.All(commands, args =>
@@ -143,4 +144,45 @@ public class EfArgsTests
         var index = args.IndexOf(flag);
         return index >= 0 && index + 1 < args.Count ? args[index + 1] : null;
     }
+
+    [Fact]
+    public void A_bundle_names_its_output_and_always_forces()
+    {
+        var args = EfArgs.MigrationsBundle(Target, @"C:\deploy\BlogContext-efbundle.exe");
+
+        Assert.Equal(["ef", "migrations", "bundle"], args.Take(3));
+        Assert.DoesNotContain("--json", args);
+
+        // --output takes the path, and --force is unconditional: the CLI refuses to replace an
+        // existing bundle without it, and the app has already asked.
+        var output = args.IndexOf("--output");
+        Assert.True(output >= 0);
+        Assert.Equal(@"C:\deploy\BlogContext-efbundle.exe", args[output + 1]);
+        Assert.Contains("--force", args);
+    }
+
+    [Fact]
+    public void A_bundle_only_carries_the_runtime_when_asked()
+    {
+        Assert.DoesNotContain("--self-contained", EfArgs.MigrationsBundle(Target, "b.exe"));
+        Assert.Contains("--self-contained", EfArgs.MigrationsBundle(Target, "b.exe", selfContained: true));
+    }
+
+    [Fact]
+    public void A_bundle_passes_a_target_runtime_only_when_one_is_chosen()
+    {
+        Assert.DoesNotContain("--target-runtime", EfArgs.MigrationsBundle(Target, "b.exe"));
+        Assert.DoesNotContain(
+            "--target-runtime",
+            EfArgs.MigrationsBundle(Target, "b.exe", targetRuntime: "   "));
+
+        var args = EfArgs.MigrationsBundle(Target, "b", targetRuntime: "linux-x64");
+        var runtime = args.IndexOf("--target-runtime");
+        Assert.True(runtime >= 0);
+        Assert.Equal("linux-x64", args[runtime + 1]);
+    }
+
+    [Fact]
+    public void A_bundle_needs_somewhere_to_go() =>
+        Assert.Throws<ArgumentException>(() => EfArgs.MigrationsBundle(Target, "  "));
 }

@@ -1,4 +1,4 @@
-﻿# EfAssist — Progress
+# EfAssist — Progress
 
 What is actually built and verified. `PLAN.md` is the agreed plan and spec; this is the record of implementation, and the only place implementation detail is written down.
 
@@ -1762,6 +1762,184 @@ dropdown. Four directions were mocked; the two-pane one was picked and built out
 
 ---
 
+## Migrations bundle (roadmap item) — Done
+
+The one significant EF verb the app did not cover, and the only one that reaches off this machine.
+Everything else assumes the SDK, the source and `dotnet-ef` sit on the same box as the target
+database; a bundle is what you hand to a server where none of that is true.
+
+### Built
+
+- `EfArgs.MigrationsBundle(target, outputPath, selfContained, targetRuntime)` — `migrations bundle`
+  with `--output`, always `--force`, and the two optional flags. No positional arguments: a bundle
+  has no range, so there is nothing here corresponding to the Script tab's from/to.
+- `BundleFileName.Suggest(context, targetRuntime)` in Core, beside `ScriptFileName`, which had its
+  `Sanitise` widened from `private` to `internal` so the two share one answer about what is legal in
+  a filename rather than keeping two.
+- `ToolsViewModel.CreateBundleCommand` and `RevealBundleCommand`, with `PickSaveFileAsync` and
+  `RevealFileAsync` delegates supplied by the view the same way the Script tab's are.
+- A fifth card on Tools: a runtime picker, an "Include the .NET runtime" checkbox, a hint line, the
+  Create button, and the resulting path with "Show in folder" once there is one. The grid grew a
+  third row, and the danger card moved down to stay last — a destructive card in the middle of the
+  screen reads as though the cards after it are destructive too.
+- `ToolsViewModel.ResolveNoBuildAsync`, and the two `ConfirmRequest` properties it needed:
+  `OptionText`/`OptionChecked` for a tick box in the shared dialog, and `IsDestructive` so a
+  non-destructive question stops getting a red confirm button.
+
+### Decisions worth recording
+
+- **`--force` is unconditional**, the same call as `database drop`. Without it the CLI refuses to
+  replace an existing bundle, and the overwrite question has already been asked by the OS Save As
+  dialog before the command is built. The app owning the confirmation and the CLI never prompting is
+  the established shape here, because a CLI prompt on stdin hangs a GUI-launched process forever.
+- **The extension follows the target runtime, not the host.** A `linux-x64` bundle produced on
+  Windows is a Linux executable, and naming it `.exe` is a lie the target machine has to live with.
+  An unrecognised RID is treated as non-Windows rather than guessed at: a missing extension is a
+  rename, a wrong one is a file Explorer will happily try to run. `PickSaveFileAsync` grew an `exe`
+  label and a `*` pattern for the no-extension case, where `*.` would have matched nothing.
+- **`--self-contained` and `--target-runtime` shipped with it** rather than being left for later.
+  The roadmap costed them as optional, but a plain bundle still needs a matching .NET runtime
+  installed on the target, so "runs where there is no SDK" is only half the story without them —
+  and cross-targeting Linux from a Windows dev box is the deployment case, not an edge one.
+- **No configured output folder.** The Script tab has one because scripts are generated repeatedly
+  into the same place. A bundle is produced for a deployment, so it is always a Save As dialog, and
+  that saved a `WorkspaceSettings` field, a `WorkspaceDefaults` field, a Settings row and the
+  Restore/Store wiring.
+- **`NoBuild` is not honoured silently here.** Bundling asks first, because a stale bundle is a file
+  that leaves the machine. The question started as this command's own and immediately turned out to
+  belong to every write — see § The no-build question on writes, below, which is where the shared
+  rule and the reasoning now live.
+- **The bundle path is cleared on a context change**, like the pending-model-changes result beside
+  it. A path left on screen after the context changed describes a file built from a different model.
+
+### Verified
+
+- `EfArgsTests` — the verb and its output path, `--force` present unconditionally, `--json` absent,
+  `--self-contained` and `--target-runtime` only when asked, whitespace treated as no runtime, and
+  an empty output path rejected. Bundle joined the existing "every command asks for prefixed
+  uncoloured output" case.
+- `BundleFileNameTests` — context prefix, `.exe` for a Windows RID, no extension for Linux or an
+  unrecognised RID, host-dependent when no RID is chosen, EF's own `efbundle` when there is no
+  context, and a separator in the context sanitised so it cannot redirect the file.
+- `ToolsViewModelTests` — the command runs with the chosen path, a cancelled dialog runs nothing,
+  the suggested name and the arguments both follow the chosen runtime, the "(this machine)" sentinel
+  never reaches the CLI, a failure clears the path and reports, and a context change drops it.
+- `ToolsViewModelTests`, the no-build question — a workspace that builds normally is asked nothing,
+  leaving the tick box on drops `--no-build`, clearing it keeps `--no-build`, cancelling runs nothing
+  and never reaches the file dialog, two runs are asked twice (so the workspace setting really was
+  not rewritten), and a missing `ConfirmAsync` refuses rather than guessing.
+- Compiled bindings are on, so the build validated every `Tools.*` path in the new card.
+
+### Not verified yet
+
+- **Nothing on screen, and no bundle has been produced against a real project.** The card's layout,
+  the third grid row at the 900px width, the danger card in its new position, and the confirmation
+  dialog with a tick box and a non-red confirm button all need a look — as does actually running the
+  produced executable against a database, which is the only thing that proves the feature rather than
+  the plumbing.
+
+---
+
+## The no-build question on writes — Done
+
+The bundle work turned up a rule that was bigger than bundling. An audit of all six
+`ConfirmRequest` sites, plus `migrations add`, sorted them by what a stale build actually costs.
+
+### The rule
+
+**`--no-build` is honoured silently on reads, and asks on writes.**
+
+Reads are what the option exists for: `migrations list`, `dbcontext list`/`info`,
+`has-pending-model-changes`. A stale read is corrected by pressing refresh, and the whole point of the
+option is that iterating does not pay for a build every time.
+
+Writes are different, and they differ from each other only in where the damage lands:
+
+| Action | Command | What a stale build costs |
+| --- | --- | --- |
+| Apply / Roll back / Revert all | `database update` | Applies migrations from the last compiled assembly to a live database. Worse, the dialog's own "N migration(s) will be applied" list came from `migrations list` against that same assembly, so the confirmation can be wrong about what it is confirming |
+| Remove migration | `migrations remove` | Deletes files and rewrites the model snapshot from the compiled model |
+| Drop database | `database drop` | EF loads the compiled context to resolve the connection string, so the name in the typed gate may not be the database that gets destroyed |
+| Create bundle | `migrations bundle` | A file that leaves the machine and applies the wrong migrations somewhere the app cannot see |
+
+Not touched: the Script tab's overwrite confirmation (a wrong script is read before anything runs
+it), the Diagrams re-layout confirmation and the Settings reset confirmation (neither runs a
+`dotnet ef` command at all).
+
+### Built
+
+`ViewModels/NoBuildPrompt.cs`, two extension methods on `ConfirmRequest` and one helper, in two
+shapes because the actions differ in whether they already have a dialog:
+
+- `WithBuildOption(request, target)` — adds the tick box, and the sentence explaining it, to a
+  confirmation the action was going to show anyway. Returns the request untouched when the workspace
+  builds normally, so the common path gains nothing. Used by `database update` and
+  `migrations remove`.
+- `ResolvedTarget(request, target)` — read back after the dialog closes; `target with
+  { NoBuild = false }` when the tick box was left on.
+- `AskAsync(...)` — a dialog of its own, for an action with no confirmation to hang a tick box on.
+  Used by `migrations bundle`, and by `database drop`.
+
+### Decisions worth recording
+
+- **The three-way answer rides on a tick box, not a third button.** The question has three answers —
+  build first, trust the flag, or do not do it — and `ConfirmAsync` is a `Func<ConfirmRequest,
+  Task<bool>>` shared by the Migrations, Script, Diagrams and Tools tabs. A tri-state return would
+  have rewritten every call site for the sake of four of them. `ConfirmRequest` grew an optional
+  `OptionText`/`OptionChecked` pair instead: the two ways ride on the tick box, Cancel stays the
+  third, and the bool is unchanged. `OptionChecked` is deliberately mutable on an otherwise immutable
+  record — it is the tick box's return channel, and nothing else reads it, so there is no change
+  notification to keep in step. Seeded ticked, and Enter lands on Cancel, so the tick box only
+  matters once the user has chosen to go ahead — at which point the safe answer is the one already
+  selected.
+- **No action shows two modals in a row.** Anything already confirmed gains a tick box on the dialog
+  it already had. Two dialogs for one click is how people learn to dismiss dialogs.
+- **Except dropping a database, which asks first and separately.** Its confirmation is gated on
+  typing the database name, and that name comes from a `dbcontext info` probe that has to run before
+  the dialog can be built. Folding the question into that dialog would gate the drop on a name read
+  from output the run then rebuilds past. So the build question is settled first, and the probe and
+  the drop both run against the answer. Two modals, on the single most destructive action in the app,
+  and only when a non-default option is set.
+- **The SQL preview follows the tick box.** `PreviewUpdateAsync` took the workspace's target and now
+  takes the resolved one, because the preview's whole contract is to be what the run will execute.
+  The lambda captures the `confirmation` variable rather than its value, so pressing Preview reads
+  the tick box as it stands at that moment. Subtle enough to be worth the comment it has.
+- **`ConfirmRequest.IsDestructive` came in with this.** The dialog's confirm button was
+  unconditionally red, which was right for every caller it had — dropping a database, reverting every
+  migration. A question about *how* something runs is not destructive, and a red button that does not
+  mean danger teaches people to click red buttons. Defaults true, so nothing that was here first
+  changed.
+- **Clearing the flag never reaches the saved settings.** Every path produces a copy of the
+  `EfTarget` for that one run. Answering a question about one action must not quietly rewrite a
+  workspace preference, and there is a test that runs an action twice and asserts it was asked twice.
+- **`migrations add` was considered and left alone.** It generates migration content by diffing the
+  compiled model, so a stale build there writes a migration with the wrong contents — probably the
+  most common way this bites. It has no confirmation today, and adding one would put a dialog in
+  front of the app's most-used command. Parked rather than rejected; see `ROADMAP.md`.
+
+### Verified
+
+- `NoBuildPromptTests` — a normally-building workspace gets the identical request back, skipping the
+  build adds the tick box after the action's own detail, a request with no detail still gets the
+  explanation, the tick box clears `NoBuild` on a copy while the workspace's target keeps it,
+  clearing the box keeps the flag, a request that never had a tick box cannot clear the flag
+  (`OptionChecked` defaults true on every request, so the guard has to be `HasOption`), and the
+  standalone question is skipped when the workspace builds, is not styled destructive, and returns
+  nothing to run when cancelled.
+- `MigrationsViewModelTests` — applying offers the tick box in one dialog rather than two, asks
+  nothing extra when the workspace builds normally, clearing the box applies against the last build,
+  the SQL preview is generated the way the update will run, removing offers it too, dropping settles
+  the question before asking EF which database it is, and declining it runs nothing at all — not even
+  the probe, which would have built.
+- 702 tests pass.
+
+### Not verified yet
+
+- Nothing on screen. The tick box's wrapping in the dialog at its fixed 520px width, and the
+  confirm button now that it is not always red, both want a look.
+
+---
+
 ## Deliberate shortcuts
 
 Tracked so they do not rot into "later means never". Each is marked with a `ponytail:` comment at the site.
@@ -1798,5 +1976,6 @@ Tracked so they do not rot into "later means never". Each is marked with a `pony
 | `DiagramSurface` pan and zoom | Hand-rolled matrix maths rather than a pan-and-zoom library | Never, most likely — the obvious library is deprecated and Avalonia-11-only |
 | `DiagramsViewModel.RefreshMatches` | Substring match over every node and entity on each keystroke | Typing in the search box gets visibly laggy on a real model |
 | `DiagramStore` | Saved diagrams are never pruned, so a renamed context leaves its file behind | Someone notices the folder. The files are small and only ever read after being written |
+| `ToolsViewModel._lastBundleFolder` | The last bundle folder is session-only, unlike the script tab's persisted `LastSaveAsFolder` | Someone is retyping the same deployment path every session |
 | `Preflight.ToolIsOlderThanProject` | Compares release numbers only, so 10.0.0 and 10.0.0-rc.1 count as equal | Someone running previews needs the two told apart. Ordering prerelease labels properly needs NuGet's version rules, and guessing them would mean a false warning on a preview SDK |
 | `LayoutOptions.Default.MeasureText` | Character count times font size times 0.55 | Never — it is the deliberate fallback. The app injects a `FormattedText` measurement; this exists so Core and the tests need no font |

@@ -1,4 +1,4 @@
-﻿using EfAssist.App.ViewModels;
+using EfAssist.App.ViewModels;
 using EfAssist.Core;
 
 namespace EfAssist.Core.Tests;
@@ -1072,5 +1072,113 @@ public class MigrationsViewModelTests
 
         tab.SelectedMigration = tab.Migrations.First(m => m.Name == "AddBlogUrl");
         Assert.True(tab.SelectedIsLast);
+    }
+
+    // ---- The no-build question on writes ----
+    //
+    // Reads keep honouring the workspace's "Don't build" option silently; the commands that write
+    // ask first, because stale output does not fail loudly on any of them.
+
+    private static readonly EfTarget NoBuildTarget = Target with { NoBuild = true };
+
+    [Fact]
+    public async Task Applying_offers_to_build_first_when_the_workspace_skips_the_build()
+    {
+        var (tab, runner, confirm, _) = Build(target: NoBuildTarget);
+        await tab.RefreshCommand.ExecuteAsync(null);
+
+        await tab.UpdateToLatestCommand.ExecuteAsync(null);
+
+        // One dialog, not two: the tick box rides on the confirmation this action already showed.
+        var request = Assert.Single(confirm.Requests);
+        Assert.Equal("Apply migrations", request.Title);
+        Assert.True(request.HasOption);
+        Assert.True(request.OptionChecked);
+
+        // Ticked by default, so the update runs against a fresh build.
+        Assert.DoesNotContain("--no-build", LastCall(runner, "database update"));
+    }
+
+    [Fact]
+    public async Task Applying_asks_nothing_extra_when_the_workspace_builds_normally()
+    {
+        var (tab, _, confirm, _) = Build();
+        await tab.RefreshCommand.ExecuteAsync(null);
+
+        await tab.UpdateToLatestCommand.ExecuteAsync(null);
+
+        Assert.False(Assert.Single(confirm.Requests).HasOption);
+    }
+
+    [Fact]
+    public async Task Clearing_the_tick_box_applies_against_the_last_build()
+    {
+        var (tab, runner, _, _) = Build(target: NoBuildTarget);
+        await tab.RefreshCommand.ExecuteAsync(null);
+
+        tab.ConfirmAsync = request =>
+        {
+            request.OptionChecked = false;
+            return Task.FromResult(true);
+        };
+
+        await tab.UpdateToLatestCommand.ExecuteAsync(null);
+
+        Assert.Contains("--no-build", LastCall(runner, "database update"));
+    }
+
+    [Fact]
+    public async Task The_SQL_preview_is_generated_the_way_the_update_will_run()
+    {
+        // A preview built without the build the run is about to do is exactly the mismatch the
+        // dialog exists to prevent.
+        var (tab, runner, _, _) = Build(target: NoBuildTarget);
+        await tab.RefreshCommand.ExecuteAsync(null);
+        WirePreview(tab);
+
+        await tab.UpdateToLatestCommand.ExecuteAsync(null);
+
+        Assert.DoesNotContain("--no-build", LastCall(runner, "migrations script"));
+    }
+
+    [Fact]
+    public async Task Removing_offers_to_build_first_when_the_workspace_skips_the_build()
+    {
+        var (tab, runner, confirm, _) = Build(target: NoBuildTarget);
+        await tab.RefreshCommand.ExecuteAsync(null);
+
+        await tab.RemoveCommand.ExecuteAsync(null);
+
+        Assert.True(confirm.Last!.HasOption);
+        Assert.DoesNotContain("--no-build", LastCall(runner, "migrations remove"));
+    }
+
+    [Fact]
+    public async Task Dropping_settles_the_build_question_before_asking_EF_which_database_it_is()
+    {
+        var (tab, runner, confirm, _) = Build(target: NoBuildTarget);
+
+        await tab.DropDatabaseCommand.ExecuteAsync(null);
+
+        // Two dialogs here, unlike the others: the name in the typed gate comes from the probe, so
+        // the build question has to be settled before the probe runs.
+        Assert.Equal(2, confirm.Requests.Count);
+        Assert.Equal("Drop the database without building?", confirm.Requests[0].Title);
+        Assert.Equal("Drop database", confirm.Requests[1].Title);
+
+        Assert.DoesNotContain("--no-build", LastCall(runner, "dbcontext info"));
+        Assert.DoesNotContain("--no-build", LastCall(runner, "database drop"));
+    }
+
+    [Fact]
+    public async Task Declining_the_build_question_never_reaches_the_database()
+    {
+        var (tab, runner, confirm, _) = Build(confirmed: false, target: NoBuildTarget);
+
+        await tab.DropDatabaseCommand.ExecuteAsync(null);
+
+        // Nothing ran at all — not even the probe, which would have built.
+        Assert.Empty(runner.Calls);
+        Assert.Single(confirm.Requests);
     }
 }

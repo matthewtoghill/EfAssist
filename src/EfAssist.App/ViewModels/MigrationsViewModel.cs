@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -312,14 +312,21 @@ public partial class MigrationsViewModel : ObservableObject
             : "Only the migration files are deleted. If it has already been applied to the database, "
               + "EF will refuse — revert it first, or use Force.";
 
-        if (!await ConfirmedAsync(new ConfirmRequest(
-                "Remove migration",
-                $"Remove the most recent migration, '{last.Name}'?",
-                "Remove",
-                detail)))
+        // The tick box only appears when the workspace is set to skip the build. Note that the name
+        // above came from the migrations list, which may itself have been loaded without a build —
+        // building now fixes what gets removed, not what this sentence says.
+        var confirmation = new ConfirmRequest(
+            "Remove migration",
+            $"Remove the most recent migration, '{last.Name}'?",
+            "Remove",
+            detail).WithBuildOption(target);
+
+        if (!await ConfirmedAsync(confirmation))
         {
             return;
         }
+
+        target = confirmation.ResolvedTarget(target);
 
         IsStale = true;
         var result = await _session.RunAsync(
@@ -365,6 +372,34 @@ public partial class MigrationsViewModel : ObservableObject
         if (target is null)
         {
             return;
+        }
+
+        // Asked before the probe below, not folded into the drop confirmation, because the probe is
+        // what supplies the name the user has to type. Settling the build question afterwards would
+        // gate the drop on a name read from output the run then rebuilds past.
+        if (target.NoBuild)
+        {
+            if (ConfirmAsync is null)
+            {
+                _session.StatusMessage = "Cannot confirm this action.";
+                return;
+            }
+
+            var resolved = await NoBuildPrompt.AskAsync(
+                target,
+                ConfirmAsync,
+                "Drop the database without building?",
+                "Continue",
+                "EF loads the compiled context to work out which database this is. If that output is "
+                    + "out of date, the name you are about to confirm may not be the database that "
+                    + "gets destroyed.");
+
+            if (resolved is null)
+            {
+                return;
+            }
+
+            target = resolved;
         }
 
         // Ask EF what the database is actually called; guessing here would make the typed
@@ -439,16 +474,26 @@ public partial class MigrationsViewModel : ObservableObject
         // The preview is attached here rather than inside BuildUpdateConfirmation so all three routes
         // — forward, rollback and revert-all — get it from one line, and dropping a database, which
         // has no migration SQL to show, keeps its own request untouched.
-        var confirmation = BuildUpdateConfirmation(targetMigration);
+        var confirmation = BuildUpdateConfirmation(targetMigration).WithBuildOption(target);
         if (ShowSqlPreviewAsync is not null)
         {
-            confirmation = confirmation with { PreviewAsync = () => PreviewUpdateAsync(targetMigration) };
+            // The lambda captures the variable, not the value, so it reads whatever `confirmation`
+            // holds when Preview is pressed — which is this request, with the tick box the user has
+            // set by then. A preview generated without the build the run is about to do would be
+            // exactly the mismatch this dialog exists to prevent.
+            confirmation = confirmation with
+            {
+                PreviewAsync = () =>
+                    PreviewUpdateAsync(targetMigration, confirmation.ResolvedTarget(target)),
+            };
         }
 
         if (!await ConfirmedAsync(confirmation))
         {
             return;
         }
+
+        target = confirmation.ResolvedTarget(target);
 
         var label = targetMigration switch
         {
@@ -499,10 +544,13 @@ public partial class MigrationsViewModel : ObservableObject
     /// not run idempotent SQL, and a preview has one job, which is to be what the run will execute.
     /// </para>
     /// </remarks>
-    private async Task PreviewUpdateAsync(string? targetMigration)
+    /// <param name="target">
+    /// The target the update itself will run with, tick box included — not the workspace's, which
+    /// may still say "don't build" when the run is about to.
+    /// </param>
+    private async Task PreviewUpdateAsync(string? targetMigration, EfTarget target)
     {
-        var target = _target();
-        if (target is null || ShowSqlPreviewAsync is null)
+        if (ShowSqlPreviewAsync is null)
         {
             return;
         }
