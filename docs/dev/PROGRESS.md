@@ -1,4 +1,4 @@
-﻿# EfAssist — Progress
+# EfAssist — Progress
 
 What is actually built and verified. `PLAN.md` is the agreed plan and spec; this is the record of implementation, and the only place implementation detail is written down.
 
@@ -1762,6 +1762,77 @@ dropdown. Four directions were mocked; the two-pane one was picked and built out
 
 ---
 
+## Migrations bundle (roadmap item) — Done
+
+The one significant EF verb the app did not cover, and the only one that reaches off this machine.
+Everything else assumes the SDK, the source and `dotnet-ef` sit on the same box as the target
+database; a bundle is what you hand to a server where none of that is true.
+
+### Built
+
+- `EfArgs.MigrationsBundle(target, outputPath, selfContained, targetRuntime)` — `migrations bundle`
+  with `--output`, always `--force`, and the two optional flags. No positional arguments: a bundle
+  has no range, so there is nothing here corresponding to the Script tab's from/to.
+- `BundleFileName.Suggest(context, targetRuntime)` in Core, beside `ScriptFileName`, which had its
+  `Sanitise` widened from `private` to `internal` so the two share one answer about what is legal in
+  a filename rather than keeping two.
+- `ToolsViewModel.CreateBundleCommand` and `RevealBundleCommand`, with `PickSaveFileAsync` and
+  `RevealFileAsync` delegates supplied by the view the same way the Script tab's are.
+- A fifth card on Tools: a runtime picker, an "Include the .NET runtime" checkbox, a hint line, the
+  Create button, and the resulting path with "Show in folder" once there is one. The grid grew a
+  third row, and the danger card moved down to stay last — a destructive card in the middle of the
+  screen reads as though the cards after it are destructive too.
+
+### Decisions worth recording
+
+- **`--force` is unconditional**, the same call as `database drop`. Without it the CLI refuses to
+  replace an existing bundle, and the overwrite question has already been asked by the OS Save As
+  dialog before the command is built. The app owning the confirmation and the CLI never prompting is
+  the established shape here, because a CLI prompt on stdin hangs a GUI-launched process forever.
+- **The extension follows the target runtime, not the host.** A `linux-x64` bundle produced on
+  Windows is a Linux executable, and naming it `.exe` is a lie the target machine has to live with.
+  An unrecognised RID is treated as non-Windows rather than guessed at: a missing extension is a
+  rename, a wrong one is a file Explorer will happily try to run. `PickSaveFileAsync` grew an `exe`
+  label and a `*` pattern for the no-extension case, where `*.` would have matched nothing.
+- **`--self-contained` and `--target-runtime` shipped with it** rather than being left for later.
+  The roadmap costed them as optional, but a plain bundle still needs a matching .NET runtime
+  installed on the target, so "runs where there is no SDK" is only half the story without them —
+  and cross-targeting Linux from a Windows dev box is the deployment case, not an edge one.
+- **No configured output folder.** The Script tab has one because scripts are generated repeatedly
+  into the same place. A bundle is produced for a deployment, so it is always a Save As dialog, and
+  that saved a `WorkspaceSettings` field, a `WorkspaceDefaults` field, a Settings row and the
+  Restore/Store wiring.
+- **`NoBuild` still flows through from the workspace.** `--no-build` is valid on `bundle`, and every
+  other command honours the workspace's setting, so this one does too. It is a footgun — a bundle
+  built from stale output is a stale deployment — but a command that silently ignored a setting the
+  user ticked would be worse.
+- **The bundle path is cleared on a context change**, like the pending-model-changes result beside
+  it. A path left on screen after the context changed describes a file built from a different model.
+
+### Verified
+
+- `EfArgsTests` — the verb and its output path, `--force` present unconditionally, `--json` absent,
+  `--self-contained` and `--target-runtime` only when asked, whitespace treated as no runtime, and
+  an empty output path rejected. Bundle joined the existing "every command asks for prefixed
+  uncoloured output" case.
+- `BundleFileNameTests` — context prefix, `.exe` for a Windows RID, no extension for Linux or an
+  unrecognised RID, host-dependent when no RID is chosen, EF's own `efbundle` when there is no
+  context, and a separator in the context sanitised so it cannot redirect the file.
+- `ToolsViewModelTests` — the command runs with the chosen path, a cancelled dialog runs nothing,
+  the suggested name and the arguments both follow the chosen runtime, the "(this machine)" sentinel
+  never reaches the CLI, a failure clears the path and reports, and a context change drops it.
+- 678 tests pass. Compiled bindings are on, so the build validated every `Tools.*` path in the new
+  card.
+
+### Not verified yet
+
+- **Nothing on screen, and no bundle has been produced against a real project.** The card's layout,
+  the third grid row at the 900px width, and the danger card in its new position all need a look —
+  as does actually running the produced executable against a database, which is the only thing that
+  proves the feature rather than the plumbing.
+
+---
+
 ## Deliberate shortcuts
 
 Tracked so they do not rot into "later means never". Each is marked with a `ponytail:` comment at the site.
@@ -1798,5 +1869,6 @@ Tracked so they do not rot into "later means never". Each is marked with a `pony
 | `DiagramSurface` pan and zoom | Hand-rolled matrix maths rather than a pan-and-zoom library | Never, most likely — the obvious library is deprecated and Avalonia-11-only |
 | `DiagramsViewModel.RefreshMatches` | Substring match over every node and entity on each keystroke | Typing in the search box gets visibly laggy on a real model |
 | `DiagramStore` | Saved diagrams are never pruned, so a renamed context leaves its file behind | Someone notices the folder. The files are small and only ever read after being written |
+| `ToolsViewModel._lastBundleFolder` | The last bundle folder is session-only, unlike the script tab's persisted `LastSaveAsFolder` | Someone is retyping the same deployment path every session |
 | `Preflight.ToolIsOlderThanProject` | Compares release numbers only, so 10.0.0 and 10.0.0-rc.1 count as equal | Someone running previews needs the two told apart. Ordering prerelease labels properly needs NuGet's version rules, and guessing them would mean a false warning on a preview SDK |
 | `LayoutOptions.Default.MeasureText` | Character count times font size times 0.55 | Never — it is the deliberate fallback. The app injects a `FormattedText` measurement; this exists so Core and the tests need no font |

@@ -1,4 +1,4 @@
-﻿<Window xmlns="https://github.com/avaloniaui"
+<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:EfAssist.App.ViewModels"
         xmlns:app="using:EfAssist.App"
@@ -1481,7 +1481,7 @@
                                                Text="Checks, what this workspace is pointed at, and the actions that affect the whole database." />
                                 </StackPanel>
 
-                                <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" MaxWidth="1100"
+                                <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto" MaxWidth="1100"
                                       HorizontalAlignment="Left">
 
                                     <!-- Pending model changes -->
@@ -1585,7 +1585,7 @@
                                     </Border>
 
                                     <!-- Workspace -->
-                                    <Border Grid.Row="1" Grid.Column="0" Classes="card" Margin="0,0,10,0">
+                                    <Border Grid.Row="1" Grid.Column="0" Classes="card" Margin="0,0,10,10">
                                         <StackPanel Spacing="8">
                                             <TextBlock Text="Workspace" Classes="group" Margin="0" />
                                             <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto"
@@ -1628,11 +1628,53 @@
                                         </StackPanel>
                                     </Border>
 
+                                    <!-- Migrations bundle. The one way out of this machine: every
+                                         other command needs the SDK, the source and the tool on the
+                                         box it runs against. -->
+                                    <Border Grid.Row="1" Grid.Column="1" Classes="card" Margin="0,0,0,10">
+                                        <StackPanel Spacing="8">
+                                            <TextBlock Text="Migrations bundle" Classes="group" Margin="0" />
+                                            <TextBlock Classes="hint" TextWrapping="Wrap"
+                                                       Text="Builds a standalone executable that applies every migration, for a machine with no SDK and no source. It reads its connection string from an appsettings.json beside it, or from the argument you pass it." />
+
+                                            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto">
+                                                <TextBlock Grid.Column="0" Text="runtime" Classes="lbl" Width="90"
+                                                           VerticalAlignment="Center" />
+                                                <ComboBox Grid.Column="1" HorizontalAlignment="Left" MinWidth="180"
+                                                          ItemsSource="{Binding Tools.TargetRuntimes}"
+                                                          SelectedItem="{Binding Tools.SelectedTargetRuntime}"
+                                                          ToolTip.Tip="Which machine the bundle has to run on. A Linux bundle built here is still a Linux executable." />
+                                            </Grid>
+
+                                            <CheckBox Content="Include the .NET runtime"
+                                                      IsChecked="{Binding Tools.BundleSelfContained}"
+                                                      ToolTip.Tip="Makes the bundle self-contained, and much larger. Leave it off when the target already runs .NET." />
+
+                                            <TextBlock Classes="hint" TextWrapping="Wrap"
+                                                       Text="{Binding Tools.BundleHint}" />
+
+                                            <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
+                                                <Button Content="Create bundle&#x2026;"
+                                                        Command="{Binding Tools.CreateBundleCommand}" />
+                                                <Button Content="Show in folder"
+                                                        IsVisible="{Binding Tools.HasBundle}"
+                                                        Command="{Binding Tools.RevealBundleCommand}" />
+                                            </WrapPanel>
+
+                                            <TextBlock Text="{Binding Tools.BundlePath}"
+                                                       IsVisible="{Binding Tools.HasBundle}"
+                                                       FontFamily="Consolas,Menlo,monospace"
+                                                       FontSize="{DynamicResource AppFontSizeMono}"
+                                                       TextTrimming="CharacterEllipsis" Opacity="0.8"
+                                                       ToolTip.Tip="{Binding Tools.BundlePath}" />
+                                        </StackPanel>
+                                    </Border>
+
                                     <!-- Whole-database actions. They used to sit in the Migrations
                                          actions expander, beside per-migration ones, which made it
                                          look as though they acted on the selected migration. They do
                                          not: they act on every migration. -->
-                                    <Border Grid.Row="1" Grid.Column="1" Classes="card danger">
+                                    <Border Grid.Row="2" Grid.Column="0" Classes="card danger" Margin="0,0,10,0">
                                         <StackPanel Spacing="8">
                                             <TextBlock Text="Whole-database actions" Classes="group danger"
                                                        Margin="0" />

@@ -1,4 +1,4 @@
-﻿# EfAssist — Roadmap
+# EfAssist — Roadmap
 
 Ideas not being worked on now. Nothing here is rejected — it's parked with a reason, so the decision doesn't have to be re-argued from scratch. Two sections: things cut from the v1 plan, and things noticed in the shipped app since. Items that have since been built keep their entry, marked done, because the reasoning is worth as much afterwards as before.
 
@@ -212,19 +212,32 @@ Three follow-ups came out of it, parked with reasons of their own:
 Gaps noticed in the shipped app rather than cut from the v1 plan. Same rules: nothing here is
 rejected, and each carries the reason it is not being done now.
 
-### `dotnet ef migrations bundle`
+### `dotnet ef migrations bundle` — done
 Produce a self-contained migration bundle — an executable that applies migrations on a machine with
-no SDK and no source.
+no SDK and no source. **Done**, as a fifth card on the Tools screen.
 
-- **Why parked:** nothing more than that it has not been asked for yet. It is the one significant EF
-  verb the app does not cover: `EfArgs` has list, add, remove, script, `database update`,
-  `database drop`, `migrations has-pending-model-changes`, `dbcontext list` and `dbcontext info`.
-- **Revisit when:** migrations need to reach a server that has no SDK on it. That is the case a
-  bundle exists for, and the generated script — which the app does produce — is the alternative most
-  people reach for first.
-- **Cost:** small. One `Build` call in `EfArgs`, a save dialog, and the `--self-contained` /
-  `--target-runtime` options if a bundle for another OS is ever wanted. The confirmation and output
-  plumbing already exist.
+- **What changed the mind:** it was parked on "nothing more than that it has not been asked for
+  yet", which was the weakest reason on this list, and it was the one significant EF verb the app
+  did not cover. It is also the only thing the app does that reaches off this machine: every other
+  command assumes the SDK, the source and the tool are on the same box as the target database.
+- **Current state:** `EfArgs.MigrationsBundle` builds `migrations bundle` with `--output` and an
+  unconditional `--force`, plus `--self-contained` and `--target-runtime` when they are chosen. The
+  card offers a runtime picker (a short list of the RIDs a deployment lands on, editable for the
+  rest) and an "Include the .NET runtime" checkbox, with a line underneath saying what the target
+  machine will still need — the difference between the two is the whole reason a bundle is or is not
+  usable when it arrives, and it is not visible from the file. The destination is always a Save As
+  dialog: a bundle is produced for a deployment, not repeatedly into the same folder the way a script
+  is, so it got no configured-folder setting. `BundleFileName` suggests `<context>-efbundle`, with
+  the extension decided by the *target* runtime rather than the host — a `linux-x64` bundle built on
+  Windows is still a Linux executable. After a successful run the path is shown with a "Show in
+  folder" button; it is dropped when the context changes, because a bundle built from a different
+  one is not the thing on screen. See `PROGRESS.md`.
+- **Not done:** the bundle is not run from the app, and there is no equivalent of its `--connection`
+  argument. That is deliberate — see **Connection-string override** above, which is the same
+  safety design and still parked. Nothing verifies the produced executable beyond EF's own exit code.
+- **Cost:** as estimated — small. `--self-contained` and `--target-runtime` came in with it rather
+  than waiting, because without them "no SDK needed" is only half true: a plain bundle still wants a
+  matching runtime already installed.
 
 ### `dotnet ef dbcontext optimize`
 Generate a compiled model, which cuts EF's startup cost on a large model.

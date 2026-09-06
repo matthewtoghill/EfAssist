@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -100,6 +100,8 @@ public partial class MainWindow : Window
             viewModel.Script.OpenFileAsync = path => OpenWithShellAsync(path, reveal: false);
             viewModel.Script.RevealFileAsync = path => OpenWithShellAsync(path, reveal: true);
             viewModel.Migrations.Detail.OpenFileAsync = path => OpenWithShellAsync(path, reveal: false);
+            viewModel.Tools.PickSaveFileAsync = PickSaveFileAsync;
+            viewModel.Tools.RevealFileAsync = path => OpenWithShellAsync(path, reveal: true);
             viewModel.Migrations.ShowSqlPreviewAsync = ShowSqlPreviewAsync;
 
             // Layout sizes nodes from measured text, which Core cannot do — it has no Avalonia
@@ -491,8 +493,13 @@ public partial class MainWindow : Window
             "png" => "PNG image",
             "pdf" => "PDF document",
             "mmd" => "Mermaid diagram",
+            "exe" => "Executable",
             _ => "File",
         };
+
+        // A migrations bundle for a non-Windows runtime has no extension at all, and a pattern of
+        // "*." would match nothing rather than everything.
+        var patterns = extension.Length == 0 ? new[] { "*" } : new[] { "*." + extension };
 
         var options = new FilePickerSaveOptions
         {
@@ -502,7 +509,7 @@ public partial class MainWindow : Window
             // The OS dialog does its own overwrite prompt, which is why the app only asks when
             // writing straight into a configured scripts folder.
             ShowOverwritePrompt = true,
-            FileTypeChoices = [new FilePickerFileType(label) { Patterns = ["*." + extension] }],
+            FileTypeChoices = [new FilePickerFileType(label) { Patterns = patterns }],
         };
 
         if (startFolder is not null)

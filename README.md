@@ -24,7 +24,8 @@ remembering which project is `--project` and which is `--startup-project`.
   any migration to see the model as of that point in the history, with what it added, removed and
   changed marked up against the migration before it.
 - **Tools** — ask EF whether the model has changes not yet in a migration, see exactly what this
-  workspace is pointed at, and reach the whole-database actions.
+  workspace is pointed at, build a migrations bundle for a machine with no SDK and no source, and
+  reach the whole-database actions.
 - **Plain-language errors** — the common EF failures explained, with the raw output still one click
   away, and a "Copy diagnostics" button that puts the command line, exit code, full output and tool
   versions on your clipboard.

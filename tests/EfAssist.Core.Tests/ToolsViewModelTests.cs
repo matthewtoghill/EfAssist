@@ -15,11 +15,18 @@ public class ToolsViewModelTests
     {
         public EfResult NextResult { get; set; } = new(0, [], "fake", ".");
 
+        /// <summary>Every command's arguments, so a test can assert what was actually asked for.</summary>
+        public List<IReadOnlyList<string>> Calls { get; } = [];
+
         public Task<EfResult> RunAsync(
             IReadOnlyList<string> args,
             string workingDirectory,
             IProgress<OutputLine>? progress = null,
-            CancellationToken cancellationToken = default) => Task.FromResult(NextResult);
+            CancellationToken cancellationToken = default)
+        {
+            Calls.Add(args);
+            return Task.FromResult(NextResult);
+        }
     }
 
     private static (ToolsViewModel Tools, CommandSession Session) Build(FakeEf runner, EfTarget? target = null)
@@ -91,5 +98,131 @@ public class ToolsViewModelTests
         tools.NotifyTargetChanged();
 
         Assert.Equal(ModelCheckState.Unknown, tools.ModelCheckState);
+    }
+
+    // ---- Migrations bundle ----
+
+    /// <summary>Wires the Save As dialog to answer with a fixed path, and records what it was offered.</summary>
+    private static ToolsViewModel WithSaveDialog(ToolsViewModel tools, string? answer, List<string> suggested)
+    {
+        tools.PickSaveFileAsync = (name, _) =>
+        {
+            suggested.Add(name);
+            return Task.FromResult(answer);
+        };
+
+        return tools;
+    }
+
+    [Fact]
+    public async Task A_bundle_runs_the_bundle_command_against_the_chosen_path()
+    {
+        var runner = new FakeEf();
+        var (tools, session) = Build(runner);
+        List<string> suggested = [];
+        WithSaveDialog(tools, @"C:\deploy\BlogContext-efbundle.exe", suggested);
+
+        await tools.CreateBundleCommand.ExecuteAsync(null);
+
+        var args = Assert.Single(runner.Calls);
+        Assert.Equal(["ef", "migrations", "bundle"], args.Take(3));
+        Assert.Contains(@"C:\deploy\BlogContext-efbundle.exe", args);
+        Assert.Equal(@"C:\deploy\BlogContext-efbundle.exe", tools.BundlePath);
+        Assert.True(tools.HasBundle);
+        Assert.Contains("Bundle written", session.StatusMessage);
+    }
+
+    [Fact]
+    public async Task Cancelling_the_save_dialog_runs_nothing()
+    {
+        var runner = new FakeEf();
+        var (tools, _) = Build(runner);
+        WithSaveDialog(tools, null, []);
+
+        await tools.CreateBundleCommand.ExecuteAsync(null);
+
+        Assert.Empty(runner.Calls);
+        Assert.False(tools.HasBundle);
+    }
+
+    [Fact]
+    public async Task The_suggested_name_and_the_arguments_both_follow_the_chosen_runtime()
+    {
+        var runner = new FakeEf();
+        var (tools, _) = Build(runner);
+        List<string> suggested = [];
+        WithSaveDialog(tools, "/deploy/BlogContext-efbundle", suggested);
+
+        tools.SelectedTargetRuntime = "linux-x64";
+        tools.BundleSelfContained = true;
+
+        await tools.CreateBundleCommand.ExecuteAsync(null);
+
+        // No .exe on a Linux bundle, whichever machine produced it.
+        Assert.Equal("BlogContext-efbundle", Assert.Single(suggested));
+
+        var args = Assert.Single(runner.Calls);
+        Assert.Contains("--self-contained", args);
+        Assert.Contains("linux-x64", args);
+    }
+
+    [Fact]
+    public async Task The_default_runtime_sentinel_is_not_passed_to_the_cli()
+    {
+        var runner = new FakeEf();
+        var (tools, _) = Build(runner);
+        WithSaveDialog(tools, "bundle.exe", []);
+
+        await tools.CreateBundleCommand.ExecuteAsync(null);
+
+        var args = Assert.Single(runner.Calls);
+        Assert.DoesNotContain("--target-runtime", args);
+        Assert.DoesNotContain(ToolsViewModel.RuntimeThisMachine, args);
+    }
+
+    [Fact]
+    public async Task A_failed_bundle_is_reported_and_offers_nothing_to_open()
+    {
+        var runner = new FakeEf
+        {
+            NextResult = new EfResult(
+                1,
+                [new OutputLine(OutputChannel.Error, "MSBUILD : error MSB1011: more than one project.")],
+                "fake",
+                "."),
+        };
+        var (tools, session) = Build(runner);
+        WithSaveDialog(tools, "bundle.exe", []);
+
+        await tools.CreateBundleCommand.ExecuteAsync(null);
+
+        Assert.False(tools.HasBundle);
+        Assert.Null(tools.BundlePath);
+        Assert.NotEqual("Ready.", session.StatusMessage);
+    }
+
+    [Fact]
+    public async Task A_bundle_built_for_one_context_is_dropped_when_the_target_changes()
+    {
+        var (tools, _) = Build(new FakeEf());
+        WithSaveDialog(tools, "bundle.exe", []);
+
+        await tools.CreateBundleCommand.ExecuteAsync(null);
+        Assert.True(tools.HasBundle);
+
+        tools.NotifyTargetChanged();
+
+        Assert.False(tools.HasBundle);
+    }
+
+    [Fact]
+    public void The_hint_says_what_the_target_machine_still_needs()
+    {
+        var (tools, _) = Build(new FakeEf());
+
+        Assert.Contains("needs a matching .NET runtime", tools.BundleHint);
+
+        tools.BundleSelfContained = true;
+        Assert.Contains("needs nothing installed", tools.BundleHint);
     }
 }

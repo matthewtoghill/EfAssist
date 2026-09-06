@@ -106,6 +106,54 @@ public static class EfArgs
         return args;
     }
 
+    /// <summary>
+    /// Builds a migrations bundle: a standalone executable that applies the migrations on a machine
+    /// with no SDK and no source. Every migration in the project goes in — a bundle has no range, so
+    /// there is nothing here corresponding to the script tab's from/to.
+    /// </summary>
+    /// <param name="outputPath">
+    /// The executable to write. EF defaults to <c>efbundle</c> in the working directory; the app
+    /// always names it explicitly so the file never lands somewhere the user did not choose.
+    /// </param>
+    /// <param name="selfContained">
+    /// Bundle the .NET runtime alongside the migrations. Without it the bundle still needs a
+    /// matching runtime already installed on the target, which is only half of "no SDK needed".
+    /// </param>
+    /// <param name="targetRuntime">
+    /// The RID to build for, such as <c>linux-x64</c>. Null builds for the machine doing the
+    /// bundling, which is what the CLI does by default.
+    /// </param>
+    public static List<string> MigrationsBundle(
+        EfTarget target,
+        string outputPath,
+        bool selfContained = false,
+        string? targetRuntime = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
+
+        var args = Build("migrations", "bundle", [], target, json: false);
+        args.Add("--output");
+        args.Add(outputPath);
+
+        // Always --force, for the same reason as database drop: without it the CLI refuses to
+        // replace an existing bundle, and the overwrite question has already been asked by the Save
+        // As dialog before we get here.
+        args.Add("--force");
+
+        if (selfContained)
+        {
+            args.Add("--self-contained");
+        }
+
+        if (!string.IsNullOrWhiteSpace(targetRuntime))
+        {
+            args.Add("--target-runtime");
+            args.Add(targetRuntime);
+        }
+
+        return args;
+    }
+
     public static List<string> DatabaseUpdate(EfTarget target, string? targetMigration = null)
     {
         List<string> positional = string.IsNullOrWhiteSpace(targetMigration) ? [] : [targetMigration];

@@ -38,9 +38,11 @@ public static class ScriptFileName
     /// <summary>
     /// Migration and context names are C# identifiers so they are already safe, but the value can
     /// also come from a hand-typed custom range, and a stray separator would silently write the
-    /// script to a different directory.
+    /// script to a different directory. Shared with <see cref="BundleFileName"/> rather than
+    /// duplicated: a second copy is a second thing to fix when a platform disagrees about what is
+    /// legal in a filename.
     /// </summary>
-    private static string Sanitise(string value)
+    internal static string Sanitise(string value)
     {
         var invalid = Path.GetInvalidFileNameChars();
         var cleaned = new StringBuilder(value.Length);
