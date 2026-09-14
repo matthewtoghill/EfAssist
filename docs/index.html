@@ -153,11 +153,10 @@ footer nav { margin-left: auto; display: flex; gap: 18px; }
 <main class="wrap">
 
   <div class="hero">
-    <h1>EF Core migrations,<br>without the command line</h1>
+    <h1>EF Core migrations,<br>with a simple GUI</h1>
     <p class="lead">
       A desktop GUI over the <code>dotnet ef</code> CLI. Open a solution, pick a <code>DbContext</code>,
-      and add, apply, roll back, remove and script migrations — without remembering which project is
-      <code>--project</code> and which is <code>--startup-project</code>.
+      and add, apply, roll back, remove and script migrations without having to remember the required project flags and other nuances.
     </p>
     <div class="cta">
       <a class="btn btn-primary" href="https://github.com/matthewtoghill/EfAssist/releases/latest">Download for Windows</a>
@@ -188,8 +187,8 @@ footer nav { margin-left: auto; display: flex; gap: 18px; }
       </div>
       <div class="card">
         <h3>Diagrams <kbd>Ctrl</kbd>+<kbd>3</kbd></h3>
-        <p>Your model as an entity-relationship or class diagram, read from the EF model snapshot — no
-           build, no database. Exports to JSON, SVG, PNG, PDF or Mermaid.</p>
+        <p>Your model as an entity-relationship or class diagram, read from the EF model snapshot and migration history.
+           No build, no database. Exports to JSON, SVG, PNG, PDF or Mermaid.</p>
       </div>
       <div class="card">
         <h3>Tools <kbd>Ctrl</kbd>+<kbd>4</kbd></h3>
@@ -198,8 +197,8 @@ footer nav { margin-left: auto; display: flex; gap: 18px; }
       </div>
       <div class="card">
         <h3>Errors in plain language</h3>
-        <p>The common EF failures — a missing <code>Design</code> package, the wrong startup project, no
-           <code>DbContext</code> found — explained in a sentence, with the raw output still one click away.</p>
+        <p>The common EF failures - a missing <code>Design</code> package, the wrong startup project, no
+           <code>DbContext</code> found - explained in a sentence, with the raw output still one click away.</p>
       </div>
       <div class="card">
         <h3>Nothing hidden</h3>
@@ -214,12 +213,12 @@ footer nav { margin-left: auto; display: flex; gap: 18px; }
     <h2>See the model, at any point in its history</h2>
     <p class="sub">
       The diagram is read from the model snapshot each migration leaves behind, so you can pick any
-      migration and see the model as it stood then — with what that migration added, removed and changed
+      migration and see the model as it stood then with what that migration added, removed and changed
       marked up against the one before it.
     </p>
     <figure style="margin-top: 0">
       <img src="assets/diagrams.png" alt="The Diagrams tab: an entity-relationship diagram of the model, with a details panel showing the selected entity's columns, keys, indexes and relationships.">
-      <figcaption>Entities, keys, indexes and relationships — with no build and no database connection.</figcaption>
+      <figcaption>Entities, keys, indexes and relationships with no build and no database connection needed.</figcaption>
     </figure>
   </section>
 
@@ -233,7 +232,7 @@ footer nav { margin-left: auto; display: flex; gap: 18px; }
       <tbody>
         <tr>
           <td><code>EfAssist-win-Setup.exe</code></td>
-          <td><strong>Start here.</strong> Installs per-user into <code>%LocalAppData%\EfAssist</code> — no
+          <td><strong>Start here.</strong> Installs per-user into <code>%LocalAppData%\EfAssist</code> - no
               administrator rights, no .NET runtime needed, and it updates itself.</td>
         </tr>
         <tr>
@@ -242,7 +241,7 @@ footer nav { margin-left: auto; display: flex; gap: 18px; }
         </tr>
         <tr>
           <td><code>EfAssist-win.msi</code></td>
-          <td>Machine-wide, for deploying via Group Policy or Intune. Needs administrator rights; updates
+          <td>Machine-wide or for your user only, for deploying via Group Policy or Intune. Needs administrator rights for machine wide installation; updates
               still come from the in-app updater.</td>
         </tr>
       </tbody>
@@ -257,19 +256,9 @@ footer nav { margin-left: auto; display: flex; gap: 18px; }
     <div class="grid">
       <div class="card">
         <h3>Does it need my connection string?</h3>
-        <p>No. EfAssist ships no database drivers at all — it asks <code>dotnet ef</code>, which resolves
+        <p>No. EfAssist ships no database drivers at all - it asks <code>dotnet ef</code>, which resolves
            the connection from your startup project's configuration and user-secrets exactly as it does on
            the command line.</p>
-      </div>
-      <div class="card">
-        <h3>Why does SmartScreen warn me?</h3>
-        <p>The installer is not code-signed yet, so Windows has no reputation for it. Choose
-           <em>More info</em>, then <em>Run anyway</em> — or use the portable zip.</p>
-      </div>
-      <div class="card">
-        <h3>macOS or Linux?</h3>
-        <p>Not published yet. The app is Avalonia and the whole codebase is cross-platform, so it is a
-           build-matrix job rather than a rewrite — parked in the roadmap, not ruled out.</p>
       </div>
       <div class="card">
         <h3>Which EF Core versions?</h3>
