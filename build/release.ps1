@@ -75,7 +75,7 @@ if (Test-Path $publishDir) {
 }
 
 # Tests gate the release. A broken build is not worth packaging.
-dotnet test (Join-Path $repo 'EfAssist.slnx') -c Release --nologo
+dotnet test (Join-Path $repo 'EfAssist.slnx') -c Release
 if ($LASTEXITCODE -ne 0) { throw "Tests failed; nothing packaged." }
 
 # Self-contained so the installer works on a machine with no .NET runtime. Not PublishSingleFile:
