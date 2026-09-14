@@ -12,7 +12,7 @@
          Compilation, no semantic model, and no reference to the user's assemblies — so nothing here
          needs the target project to build. Do not add Microsoft.CodeAnalysis.Workspaces on the
          assumption a compilation is available; there isn't one. -->
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
   </ItemGroup>
 
 </Project>
