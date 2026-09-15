@@ -16,13 +16,13 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
 
-      # The app shells out to dotnet-ef, and so do the tests — they drive the real CLI against
+      # The app shells out to dotnet-ef, and so do the tests - they drive the real CLI against
       # samples/SampleEfApp rather than mocking it.
       - name: Install dotnet-ef
         run: dotnet tool install --global dotnet-ef
