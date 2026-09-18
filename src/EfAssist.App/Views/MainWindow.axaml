@@ -1186,9 +1186,7 @@
                             <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,8">
                                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6"
                                             VerticalAlignment="Center">
-                                    <!-- Both halves bound, the same segmented switch the SQL
-                                         direction and the console views use. A button that relabels
-                                         itself never says which view is on screen now. -->
+                                    <!-- Classes / Tables View segmented switch -->
                                     <Border Classes="segments"
                                             ToolTip.Tip="Switch between the table view and the class view. Each keeps its own arrangement.">
                                         <StackPanel Orientation="Horizontal">
@@ -1200,7 +1198,7 @@
                                                          IsChecked="{Binding Diagrams.IsClassView}" />
                                         </StackPanel>
                                     </Border>
-                                    <Button Content="{Binding Diagrams.FlowLabel}"
+                                    <Button Content="Rotate"
                                             Command="{Binding Diagrams.SwitchFlowCommand}"
                                             ToolTip.Tip="Run the ranks the other way: left to right, or top to bottom. A shallow model reads better top to bottom. Each direction keeps its own arrangement." />
 

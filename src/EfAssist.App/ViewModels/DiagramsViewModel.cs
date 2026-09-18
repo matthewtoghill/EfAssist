@@ -382,11 +382,6 @@ public partial class DiagramsViewModel : ObservableObject
     [ObservableProperty]
     private DiagramFlow _flow;
 
-    /// <summary>What pressing the button does, in the same voice as the view and lock buttons.</summary>
-    public string FlowLabel => Flow == DiagramFlow.LeftToRight
-        ? "Top to bottom"
-        : "Left to right";
-
     // ---- View options ----
 
     public IReadOnlyList<PropertyDetail> PropertyDetails { get; } = Enum.GetValues<PropertyDetail>();
@@ -1908,7 +1903,6 @@ public partial class DiagramsViewModel : ObservableObject
 
     partial void OnFlowChanged(DiagramFlow value)
     {
-        OnPropertyChanged(nameof(FlowLabel));
         Rebuild();
         Persist();
 
