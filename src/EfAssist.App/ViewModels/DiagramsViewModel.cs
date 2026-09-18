@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -42,6 +43,30 @@ public enum DiagramFormat
 public sealed record DetailGroup(string Title, IReadOnlyList<DetailRow> Rows)
 {
     public bool HasRows => Rows.Count > 0;
+}
+
+/// <summary>One entity in the class filter: its tick, and whether the list's search box leaves it
+/// on screen.</summary>
+/// <param name="label">
+/// What the row reads as. The short name, except for an owned type, where it is the short name
+/// followed by its owner: two entities can own the same type, and "Address" twice over says nothing
+/// about which is which.
+/// </param>
+public sealed partial class ClassFilterItem(string name, string shortName, string label)
+    : ObservableObject
+{
+    /// <summary>The full <see cref="DiagramEntity.Name"/>, which is the identity everything else uses.</summary>
+    public string Name { get; } = name;
+
+    public string ShortName { get; } = shortName;
+
+    public string Label { get; } = label;
+
+    [ObservableProperty]
+    private bool _isShown = true;
+
+    [ObservableProperty]
+    private bool _matchesSearch = true;
 }
 
 /// <summary>
@@ -99,6 +124,23 @@ public partial class DiagramsViewModel : ObservableObject
 
     /// <summary>Where the last export went, so the next Save As dialog opens somewhere useful.</summary>
     private string? _lastSaveAsFolder;
+
+    /// <summary>The entities to draw, or null — the normal case — for all of them.</summary>
+    private HashSet<string>? _visibleEntities;
+
+    /// <summary>What <see cref="ClassFilter"/> was built from, so it is rebuilt only when the model
+    /// or one of the options that fold entities away changes, rather than on every re-render.</summary>
+    private (DiagramModel? Model, bool Inline, bool Collapse, DiagramKind Kind) _classFilterSource;
+
+    /// <summary>
+    /// Entities the options fold away, and so are not in <see cref="ClassFilter"/> to be ticked. Kept
+    /// because they still belong in the filter set: turning the option off has to bring them back
+    /// rather than find them silently unticked.
+    /// </summary>
+    private IReadOnlyCollection<string> _unlistedEntities = [];
+
+    /// <summary>Suppresses the tick handler while the ticks are being set from the filter.</summary>
+    private bool _syncingTicks;
 
     public DiagramsViewModel(
         CommandSession session,
@@ -306,9 +348,34 @@ public partial class DiagramsViewModel : ObservableObject
         ? "Entity relationships"
         : "Classes";
 
-    public string SwitchViewLabel => Kind == DiagramKind.EntityRelationship
-        ? "Show classes"
-        : "Show tables";
+    /// <summary>
+    /// The two halves of the view switch. Both are bound, so the segments read as one choice rather
+    /// than as a button that relabels itself; setting one is what selects it, and the false the other
+    /// segment writes on its way out is ignored.
+    /// </summary>
+    public bool IsTableView
+    {
+        get => Kind == DiagramKind.EntityRelationship;
+        set
+        {
+            if (value)
+            {
+                Kind = DiagramKind.EntityRelationship;
+            }
+        }
+    }
+
+    public bool IsClassView
+    {
+        get => Kind == DiagramKind.Class;
+        set
+        {
+            if (value)
+            {
+                Kind = DiagramKind.Class;
+            }
+        }
+    }
 
     // ---- Rank direction ----
 
@@ -364,6 +431,34 @@ public partial class DiagramsViewModel : ObservableObject
     public string LockTooltip => IsUnlocked
         ? "Locked: the diagram pans and zooms, but nodes cannot be moved."
         : "Unlocked: drag nodes to arrange them. Their positions are remembered.";
+
+    // ---- Class filter ----
+
+    /// <summary>
+    /// Every entity in the model with a tick. One list whose rows the filter's own search box hides,
+    /// rather than a second filtered collection, so a tick survives typing in that box.
+    /// </summary>
+    public ObservableCollection<ClassFilterItem> ClassFilter { get; } = [];
+
+    /// <summary>Narrows the filter list itself. Nothing to do with what is drawn.</summary>
+    [ObservableProperty]
+    private string _classFilterSearch = "";
+
+    public bool IsFiltered => _visibleEntities is not null;
+
+    /// <summary>
+    /// Expanding from one class needs both a class and something to expand into: with no filter on,
+    /// everything is drawn already and the step has nowhere to go.
+    /// </summary>
+    public bool CanExpandFromSelected => IsFiltered && HasSelection;
+
+    /// <summary>
+    /// Says a narrowed diagram is narrowed. A filtered diagram looks exactly like a small model, and
+    /// mistaking one for the other is the whole risk of this feature.
+    /// </summary>
+    public string? FilterSummary => _visibleEntities is null
+        ? null
+        : $"{ClassFilter.Count(i => i.IsShown)} of {ClassFilter.Count} classes";
 
     // ---- Search ----
 
@@ -450,8 +545,13 @@ public partial class DiagramsViewModel : ObservableObject
 
     public bool ShowsPendingChangesWarning => ModelCheckState == ModelCheckState.Pending;
 
+    /// <summary>
+    /// What was read, and how much of it there is to draw. The count is of entities the diagram can
+    /// actually show: a collapsed join table and an inlined owned type are in the snapshot but never
+    /// on screen, so counting them makes the figure disagree with the diagram and with the filter.
+    /// </summary>
     public string? SourceSummary => _saved.Model is { } model && model.Entities.Count > 0
-        ? $"{model.Entities.Count} entities from {Path.GetFileName(model.SourcePath)}"
+        ? $"{model.Entities.Count - _unlistedEntities.Count} entities from {Path.GetFileName(model.SourcePath)}"
           + (model.EfVersion is null ? "" : $" (EF {model.EfVersion})")
         : null;
 
@@ -545,7 +645,7 @@ public partial class DiagramsViewModel : ObservableObject
         saved.DiagramView = Kind;
         saved.DiagramLayoutFlow = Flow;
         saved.DiagramLocked = !IsUnlocked;
-        saved.DiagramOptions = CurrentOptions();
+        saved.DiagramOptions = CurrentOptions() with { VisibleEntities = null };
         saved.DiagramSaveFolder = _lastSaveAsFolder;
     }
 
@@ -916,6 +1016,267 @@ public partial class DiagramsViewModel : ObservableObject
     [RelayCommand]
     private void ToggleDetail() => DetailVisible = !DetailVisible;
 
+    // ---- Class filter ----
+
+    [RelayCommand]
+    private void ShowAllClasses() => ApplyFilter(null, fit: true);
+
+    /// <summary>Starting point for ticking a handful back on.</summary>
+    [RelayCommand]
+    private void HideAllClasses() => ApplyFilter([], fit: false);
+
+    /// <summary>Draw the selected entity and nothing else. Expand outwards from there.</summary>
+    [RelayCommand(CanExecute = nameof(HasSelection))]
+    private void FocusSelected()
+    {
+        if (SelectedEntity is { } entity)
+        {
+            ApplyFilter([entity], fit: true);
+        }
+    }
+
+    /// <summary>
+    /// Brings in everything one relationship away from what is already drawn, so the whole diagram
+    /// grows outwards a ring at a time.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(IsFiltered))]
+    private void ExpandOneLevel() =>
+        ExpandFrom(_visibleEntities ?? [], "the classes on screen");
+
+    /// <summary>
+    /// The same step from one class only, so a diagram can be grown along the branch being read
+    /// rather than on every side at once.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanExpandFromSelected))]
+    private void ExpandFromSelected()
+    {
+        if (SelectedEntity is { } entity)
+        {
+            ExpandFrom([entity], Short(entity));
+        }
+    }
+
+    /// <summary>
+    /// Adds everything one relationship away from <paramref name="seeds"/> - either direction, and
+    /// inheritance as well as foreign keys - to what is already drawn.
+    /// </summary>
+    /// <param name="what">
+    /// What found nothing, for the status line. A step that adds nothing has to say so, or it reads
+    /// as a dead menu item.
+    /// </param>
+    private void ExpandFrom(IEnumerable<string> seeds, string what)
+    {
+        if (_visibleEntities is not { } shown || Rendered is not { } model)
+        {
+            return;
+        }
+
+        var from = seeds.ToHashSet(StringComparer.Ordinal);
+
+        // The seeds themselves, so expanding from a class reached through the detail pane brings that
+        // class in rather than only its neighbours.
+        var next = new HashSet<string>(shown, StringComparer.Ordinal);
+        next.UnionWith(from);
+
+        foreach (var relationship in model.Relationships)
+        {
+            if (from.Contains(relationship.DependentEntity))
+            {
+                next.Add(relationship.PrincipalEntity);
+            }
+
+            if (from.Contains(relationship.PrincipalEntity))
+            {
+                next.Add(relationship.DependentEntity);
+            }
+        }
+
+        foreach (var entity in model.Entities.Where(e => e.BaseType is not null))
+        {
+            if (from.Contains(entity.Name))
+            {
+                next.Add(entity.BaseType!);
+            }
+
+            if (from.Contains(entity.BaseType!))
+            {
+                next.Add(entity.Name);
+            }
+        }
+
+        // A collapsed join entity is not drawn, so arriving at one is not a level. Its far end comes
+        // in the same step, or expanding across a many-to-many would appear to do nothing.
+        if (CollapseJoinEntities)
+        {
+            var joins = model.Entities
+                .Where(e => e.IsImplicitJoin && next.Contains(e.Name) && !shown.Contains(e.Name))
+                .Select(e => e.Name)
+                .ToHashSet(StringComparer.Ordinal);
+
+            foreach (var relationship in model.Relationships.Where(r => joins.Contains(r.DependentEntity)))
+            {
+                next.Add(relationship.PrincipalEntity);
+            }
+        }
+
+        if (next.Count == shown.Count)
+        {
+            _session.StatusMessage = $"Nothing further connects to {what}.";
+            return;
+        }
+
+        ApplyFilter(next, fit: true);
+    }
+
+    /// <param name="entities">The entities to draw, or null for all of them.</param>
+    /// <param name="fit">
+    /// Whether to reframe afterwards. True for the commands, which change the extent wholesale; false
+    /// for a single tick, where the view jumping under the pointer would be a nuisance.
+    /// </param>
+    private void ApplyFilter(IEnumerable<string>? entities, bool fit)
+    {
+        _visibleEntities = entities is null
+            ? null
+            : new HashSet<string>(entities, StringComparer.Ordinal);
+
+        SyncTicks();
+        NotifyFilterChanged();
+        Rebuild();
+        Persist();
+
+        if (fit)
+        {
+            FitToWindow?.Invoke();
+        }
+    }
+
+    private void NotifyFilterChanged()
+    {
+        OnPropertyChanged(nameof(IsFiltered));
+        OnPropertyChanged(nameof(FilterSummary));
+        OnPropertyChanged(nameof(CanExpandFromSelected));
+        ExpandOneLevelCommand.NotifyCanExecuteChanged();
+        ExpandFromSelectedCommand.NotifyCanExecuteChanged();
+    }
+
+    private void SyncTicks()
+    {
+        _syncingTicks = true;
+        try
+        {
+            foreach (var item in ClassFilter)
+            {
+                item.IsShown = _visibleEntities?.Contains(item.Name) ?? true;
+            }
+        }
+        finally
+        {
+            _syncingTicks = false;
+        }
+    }
+
+    /// <summary>
+    /// Rebuilds the tick list when the model behind it changes, and drops filtered names that model
+    /// no longer has.
+    /// </summary>
+    private void RefreshClassFilter(DiagramModel model)
+    {
+        _visibleEntities?.IntersectWith(model.Entities.Select(e => e.Name));
+
+        var source = (model, InlineOwnedTypes, CollapseJoinEntities, Kind);
+        if (_classFilterSource == source)
+        {
+            return;
+        }
+
+        _classFilterSource = source;
+
+        // A collapsed join table and an inlined owned type are not drawn whatever the filter says, so
+        // a tick against one would do nothing. They stay out of the list and in the filter set.
+        var folded = DiagramNodeContent.FoldedAway(model, CurrentOptions());
+        _unlistedEntities = folded;
+
+        foreach (var item in ClassFilter)
+        {
+            item.PropertyChanged -= OnClassFilterItemChanged;
+        }
+
+        ClassFilter.Clear();
+
+        var listed = model.Entities
+            .Where(e => !folded.Contains(e.Name))
+            .OrderBy(e => e.ShortName, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var entity in listed)
+        {
+            // Ticked before the handler is attached, so restoring a saved filter is not mistaken for
+            // the user clicking every box in turn.
+            var item = new ClassFilterItem(entity.Name, entity.ShortName, ClassFilterLabel(entity, model))
+            {
+                IsShown = _visibleEntities?.Contains(entity.Name) ?? true,
+            };
+
+            item.PropertyChanged += OnClassFilterItemChanged;
+            ClassFilter.Add(item);
+        }
+
+        ApplyClassFilterSearch();
+
+        // Both counts are of this list, and it has just been rebuilt. Without this a filter restored
+        // on load reads "0 of 0": the filter is notified about before the first render fills the list
+        // in, and nothing raised them again afterwards.
+        OnPropertyChanged(nameof(FilterSummary));
+
+        // The folded-away set is what the source summary counts, and an option toggle has just
+        // changed it.
+        OnPropertyChanged(nameof(SourceSummary));
+    }
+
+    /// <summary>
+    /// What a row reads as. An owned type is named after the type it owns, which two owners can share,
+    /// so it says whose it is.
+    /// </summary>
+    private static string ClassFilterLabel(DiagramEntity entity, DiagramModel model)
+    {
+        if (!entity.IsOwned || entity.OwnerName is null)
+        {
+            return entity.ShortName;
+        }
+
+        var owner = model.Entity(entity.OwnerName)?.ShortName ?? Short(entity.OwnerName);
+        return $"{entity.ShortName} (owned by {owner})";
+    }
+
+    private void OnClassFilterItemChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (_syncingTicks || e.PropertyName != nameof(ClassFilterItem.IsShown))
+        {
+            return;
+        }
+
+        // Everything ticked is not a filter but the whole model, and saying so keeps the summary and
+        // the Show all button honest.
+        var shown = ClassFilter.Where(i => i.IsShown).Select(i => i.Name).ToList();
+
+        ApplyFilter(
+            shown.Count == ClassFilter.Count ? null : [.. shown, .. _unlistedEntities],
+            fit: false);
+    }
+
+    private void ApplyClassFilterSearch()
+    {
+        var term = ClassFilterSearch.Trim();
+
+        foreach (var item in ClassFilter)
+        {
+            item.MatchesSearch = term.Length == 0
+                || item.Label.Contains(term, StringComparison.OrdinalIgnoreCase)
+                || item.Name.Contains(term, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    partial void OnClassFilterSearchChanged(string value) => ApplyClassFilterSearch();
+
     /// <summary>Jumps to a related entity from the detail pane.</summary>
     [RelayCommand]
     private void SelectEntity(string? entityName)
@@ -971,7 +1332,7 @@ public partial class DiagramsViewModel : ObservableObject
             switch (chosen)
             {
                 case DiagramFormat.Json:
-                    File.WriteAllText(path, DiagramStore.ToJson(model));
+                    File.WriteAllText(path, DiagramStore.ToJson(Filtered(model)));
                     break;
 
                 case DiagramFormat.Svg:
@@ -1005,6 +1366,20 @@ public partial class DiagramsViewModel : ObservableObject
     }
 
     private bool CanExport(string? format) => HasDiagram;
+
+    /// <summary>
+    /// The model narrowed to what is on screen, so the JSON export describes the same diagram the
+    /// image exports do. The others go through the scene or the view options and follow the filter
+    /// already.
+    /// </summary>
+    private DiagramModel Filtered(DiagramModel model) => _visibleEntities is not { } shown
+        ? model
+        : model with
+        {
+            Entities = [.. model.Entities.Where(e => shown.Contains(e.Name))],
+            Relationships = [.. model.Relationships.Where(r =>
+                shown.Contains(r.DependentEntity) && shown.Contains(r.PrincipalEntity))],
+        };
 
     /// <summary>
     /// Mermaid to the clipboard, since pasting it into a pull request description is what it is for.
@@ -1112,6 +1487,10 @@ public partial class DiagramsViewModel : ObservableObject
                 : SnapshotOptionFor(loaded.MigrationId);
 
             ApplyOptions(loaded.Options ?? new DiagramViewOptions());
+
+            _visibleEntities = loaded.VisibleEntities is { } filtered
+                ? new HashSet<string>(filtered, StringComparer.Ordinal)
+                : null;
         }
         finally
         {
@@ -1124,6 +1503,7 @@ public partial class DiagramsViewModel : ObservableObject
 
         IsStale = DiagramStore.IsStale(loaded.Model);
         EmptyReason = null;
+        NotifyFilterChanged();
         Rebuild();
         FitToWindow?.Invoke();
         OnPropertyChanged(nameof(SourceSummary));
@@ -1140,7 +1520,8 @@ public partial class DiagramsViewModel : ObservableObject
         _saved.Flow = Flow;
         _saved.Locked = !IsUnlocked;
         _saved.HighlightChanges = HighlightChanges;
-        _saved.Options = CurrentOptions();
+        _saved.Options = CurrentOptions() with { VisibleEntities = null };
+        _saved.VisibleEntities = _visibleEntities?.ToList();
 
         DiagramStore.Save(_settingsRoot, _workspacePath, _contextName(), _saved);
     }
@@ -1158,6 +1539,8 @@ public partial class DiagramsViewModel : ObservableObject
             Scene = null;
             return;
         }
+
+        RefreshClassFilter(model);
 
         var options = CurrentOptions();
         _content = DiagramNodeContent.Build(model, options, _comparison?.Diff);
@@ -1194,6 +1577,11 @@ public partial class DiagramsViewModel : ObservableObject
     {
         _saved = new SavedDiagram();
         _comparison = null;
+        _visibleEntities = null;
+        _classFilterSource = default;
+        _unlistedEntities = [];
+        ClassFilter.Clear();
+        NotifyFilterChanged();
         SetWithoutRegenerating(() => SelectedSnapshot = CurrentModel);
         _content = new DiagramNodeContent.Content([], []);
         _layout = DiagramLayout.Empty;
@@ -1233,6 +1621,7 @@ public partial class DiagramsViewModel : ObservableObject
         InlineOwnedTypes = InlineOwnedTypes,
         ShowDeleteBehavior = ShowDeleteBehavior,
         ShowInheritance = ShowInheritance,
+        VisibleEntities = _visibleEntities,
     };
 
     private void ApplyOptions(DiagramViewOptions options)
@@ -1510,7 +1899,8 @@ public partial class DiagramsViewModel : ObservableObject
     partial void OnKindChanged(DiagramKind value)
     {
         OnPropertyChanged(nameof(KindLabel));
-        OnPropertyChanged(nameof(SwitchViewLabel));
+        OnPropertyChanged(nameof(IsTableView));
+        OnPropertyChanged(nameof(IsClassView));
         OnPropertyChanged(nameof(CanShowNavigations));
         Rebuild();
         Persist();
@@ -1547,6 +1937,9 @@ public partial class DiagramsViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(HasSelection));
         OnPropertyChanged(nameof(SelectedEntityTitle));
+        FocusSelectedCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanExpandFromSelected));
+        ExpandFromSelectedCommand.NotifyCanExecuteChanged();
         RefreshDetail();
 
         // Only the highlight changes, so the layout is left alone and the diagram does not jump.

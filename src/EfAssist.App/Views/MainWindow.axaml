@@ -1,4 +1,4 @@
-<Window xmlns="https://github.com/avaloniaui"
+﻿<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:EfAssist.App.ViewModels"
         xmlns:app="using:EfAssist.App"
@@ -1186,9 +1186,20 @@
                             <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,8">
                                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6"
                                             VerticalAlignment="Center">
-                                    <Button Content="{Binding Diagrams.SwitchViewLabel}"
-                                            Command="{Binding Diagrams.SwitchViewCommand}"
-                                            ToolTip.Tip="Switch between the table view and the class view. Each keeps its own arrangement." />
+                                    <!-- Both halves bound, the same segmented switch the SQL
+                                         direction and the console views use. A button that relabels
+                                         itself never says which view is on screen now. -->
+                                    <Border Classes="segments"
+                                            ToolTip.Tip="Switch between the table view and the class view. Each keeps its own arrangement.">
+                                        <StackPanel Orientation="Horizontal">
+                                            <RadioButton Classes="segment" GroupName="DiagramView"
+                                                         Content="Tables"
+                                                         IsChecked="{Binding Diagrams.IsTableView}" />
+                                            <RadioButton Classes="segment" GroupName="DiagramView"
+                                                         Content="Classes"
+                                                         IsChecked="{Binding Diagrams.IsClassView}" />
+                                        </StackPanel>
+                                    </Border>
                                     <Button Content="{Binding Diagrams.FlowLabel}"
                                             Command="{Binding Diagrams.SwitchFlowCommand}"
                                             ToolTip.Tip="Run the ranks the other way: left to right, or top to bottom. A shallow model reads better top to bottom. Each direction keeps its own arrangement." />
@@ -1241,6 +1252,64 @@
                                             </Flyout>
                                         </Button.Flyout>
                                     </Button>
+
+                                    <!-- Which classes are drawn. A tick list rather than a second
+                                         search box: the set is chosen once and then grown a level at
+                                         a time, and a text pattern cannot express that set. -->
+                                    <Button ToolTip.Tip="Choose which classes the diagram draws. Relationships between the classes left on screen are kept; a class with none is drawn on its own.">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <PathIcon Data="{StaticResource filter_regular}"
+                                                      Width="13" Height="13" VerticalAlignment="Center" />
+                                            <TextBlock Text="Filter" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                        <Button.Flyout>
+                                            <Flyout Placement="BottomEdgeAlignedLeft">
+                                                <Grid RowDefinitions="Auto,*,Auto" Width="300"
+                                                      MaxHeight="420" RowSpacing="8">
+                                                    <TextBox Grid.Row="0" PlaceholderText="Find a class"
+                                                             Text="{Binding Diagrams.ClassFilterSearch}" />
+
+                                                    <ScrollViewer Grid.Row="1">
+                                                        <ItemsControl ItemsSource="{Binding Diagrams.ClassFilter}">
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate x:DataType="vm:ClassFilterItem">
+                                                                    <CheckBox Content="{Binding Label}"
+                                                                              IsChecked="{Binding IsShown}"
+                                                                              IsVisible="{Binding MatchesSearch}"
+                                                                              ToolTip.Tip="{Binding Name}" />
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                    </ScrollViewer>
+
+                                                    <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="6">
+                                                        <Button Content="All"
+                                                                Command="{Binding Diagrams.ShowAllClassesCommand}"
+                                                                ToolTip.Tip="Draw every class again." />
+                                                        <Button Content="None"
+                                                                Command="{Binding Diagrams.HideAllClassesCommand}"
+                                                                ToolTip.Tip="Untick everything, ready to pick a few back." />
+                                                        <Button Content="Only selected"
+                                                                Command="{Binding Diagrams.FocusSelectedCommand}"
+                                                                ToolTip.Tip="Draw the selected class on its own." />
+                                                        <Button Content="Expand"
+                                                                Command="{Binding Diagrams.ExpandOneLevelCommand}"
+                                                                ToolTip.Tip="Bring in everything one relationship away from what is drawn. Right-click a class to expand from that one only." />
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Flyout>
+                                        </Button.Flyout>
+                                    </Button>
+
+                                    <!-- A filtered diagram looks exactly like a small model, so it
+                                         says how much is missing and offers the way back. -->
+                                    <TextBlock Text="{Binding Diagrams.FilterSummary}" Classes="hint"
+                                               IsVisible="{Binding Diagrams.IsFiltered}"
+                                               VerticalAlignment="Center" />
+                                    <Button Content="Show all" Classes="detailLink"
+                                            IsVisible="{Binding Diagrams.IsFiltered}"
+                                            Command="{Binding Diagrams.ShowAllClassesCommand}"
+                                            ToolTip.Tip="Clear the class filter." />
 
                                     <TextBlock Text="{Binding Diagrams.SourceSummary}" Classes="hint"
                                                VerticalAlignment="Center" Margin="4,0,0,0"
@@ -1306,7 +1375,23 @@
                                         <views:DiagramSurface x:Name="DiagramView"
                                                               Scene="{Binding Diagrams.Scene}"
                                                               IsUnlocked="{Binding Diagrams.IsUnlocked}"
-                                                              IsVisible="{Binding Diagrams.HasDiagram}" />
+                                                              IsVisible="{Binding Diagrams.HasDiagram}">
+                                            <!-- Right-clicking selects what it is over first, so
+                                                 these act on the node under the pointer. -->
+                                            <views:DiagramSurface.ContextMenu>
+                                                <ContextMenu>
+                                                    <MenuItem Header="Show only this class"
+                                                              Command="{Binding Diagrams.FocusSelectedCommand}" />
+                                                    <MenuItem Header="Expand one level from this class"
+                                                              Command="{Binding Diagrams.ExpandFromSelectedCommand}" />
+                                                    <MenuItem Header="Expand every class one level"
+                                                              Command="{Binding Diagrams.ExpandOneLevelCommand}" />
+                                                    <Separator />
+                                                    <MenuItem Header="Show all classes"
+                                                              Command="{Binding Diagrams.ShowAllClassesCommand}" />
+                                                </ContextMenu>
+                                            </views:DiagramSurface.ContextMenu>
+                                        </views:DiagramSurface>
 
                                         <!-- Empty state. Never an error: a context with no migrations
                                              legitimately has no snapshot to draw. -->

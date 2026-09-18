@@ -1,4 +1,4 @@
-# EfAssist — Progress
+﻿# EfAssist — Progress
 
 What is actually built and verified. `PLAN.md` is the agreed plan and spec; this is the record of implementation, and the only place implementation detail is written down.
 
@@ -1939,6 +1939,79 @@ shapes because the actions differ in whether they already have a dialog:
   confirm button now that it is not always red, both want a look.
 
 ---
+
+## Diagram class filter — Done
+
+Drawing every entity is the right default and the wrong way to read a large model. The tab now draws
+a chosen subset, and grows that subset outwards one ring of relationships at a time.
+
+### Built
+
+- `DiagramViewOptions.VisibleEntities` — the entities to draw, or null for all of them. Applied in
+  `DiagramNodeContent.HiddenEntities`, which already existed for collapsed join tables and inlined
+  owned types, so a filtered entity disappears by the same route. Edge building already required both
+  ends to be visible, so relationships between what is left survive and everything else goes; an
+  entity with no visible neighbour is drawn on its own.
+- A **Classes** flyout on the toolbar: a search box over the tick list, a tick per entity, and
+  All / None / Only selected / Expand. The list is one collection whose rows the search box hides
+  rather than a second filtered collection, so a tick survives typing in the box.
+- The same four actions on the diagram's own right-click menu. `DiagramSurface` selects the node
+  under the pointer on a right press, so the menu acts on what was right-clicked rather than on
+  whatever was selected last.
+- **Expand one level** takes every entity one relationship away from what is drawn — either
+  direction, inheritance as well as foreign keys. A collapsed join entity is not a level: its far end
+  comes in the same step, or expanding across a many-to-many would appear to do nothing.
+- Two versions of that step, because they are different questions: the toolbar's grows every class on
+  screen, and the right-click menu's **Expand one level from this class** grows the one clicked. One
+  method with a seed set behind both. Growing on every side at once is no way to follow one branch,
+  and a step that adds nothing says so on the status line rather than looking like a dead menu item.
+- A `FilterSummary` ("12 of 40 classes") and a **Show all** link, both only while filtered. The same
+  convention the migrations filter already follows: a narrowed list must not read as the whole one.
+- Exports follow the filter. SVG, PNG and PDF replay the scene and Mermaid goes through the view
+  options, so all four came free; the JSON export narrows the model itself.
+- `DiagramNodeContent.FoldedAway` — the collapsed and inlined set, split out of the old private
+  `HiddenEntities` and made public. The tick list leaves those entities out: they are not drawn
+  whatever the filter says, so a tick against one does nothing and reads as a bug. They stay in the
+  filter set, so turning the option back off brings them back ticked rather than silently unticked.
+- The source summary counts entities the diagram can draw, not rows in the snapshot. A collapsed join
+  table and an inlined owned type were being counted into a figure that then disagreed with both the
+  diagram and the filter.
+- The view switch is the segmented control the SQL direction and the console views already use, so the
+  toolbar says which view is on screen rather than what the button would do next. The filter button is
+  a funnel icon and reads **Filter**, since a second control labelled "Classes" beside a segment
+  labelled "Classes" was two different things with one name.
+- An owned type's row reads `Address (owned by Author)`. EF names an owned entity after the type it
+  owns, and two owners can own the same type, so a list of bare short names had "Address" in it twice
+  with nothing to tell them apart.
+
+### Decisions worth recording
+
+- **The filter is persisted on the diagram, not in the view options.** `SavedDiagram.VisibleEntities`
+  rather than a field of the `DiagramViewOptions` that is also saved as a workspace-wide default —
+  one context's entity names as a default would hide every entity of the next context wholesale.
+  `CurrentOptions()` composes the two, so everything built from the options still follows the filter.
+- **The detail pane was already right.** It builds from the model rather than from the drawn content,
+  so a focused class still lists every relationship it has, including the ones no longer on screen.
+- **Both counts are raised when the class list is rebuilt**, not only when the filter changes. A
+  restored filter is applied before the first render has built the list, so a load that only raised
+  them at that point left the toolbar reading "0 of 0 classes" beside a diagram full of nodes. The
+  property is a getter, so the regression test records the value at each notification rather than
+  reading it afterwards, which would pass whether or not anything was raised.
+- **Filtered names that the model no longer has are dropped on load**, so a saved filter against a
+  since-changed snapshot narrows to what exists rather than to nothing.
+
+### Verified
+
+- Core: a two-entity filter keeps the edge between them and drops the edges to what is gone; a
+  one-entity filter draws a node and no edges.
+- View model: a step from one class takes that class's neighbours and not those of everything else on
+  screen, and is offered only while there is both a selection and a filter to grow; an owned type is
+  named after its owner, an inlined one and a collapsed join table are
+  absent from the list, and both come back ticked when their option is turned off mid-filter; focus
+  then two expands walks Comment → Post → Blog and Author, and reaches Tag across the collapsed join
+  entity in one step; unticking all but one matches focusing it, and ticking
+  everything back on is "not filtered" rather than a filter that includes everything; the filter
+  comes back on reopen and never reaches the workspace defaults.
 
 ## Deliberate shortcuts
 

@@ -1,4 +1,4 @@
-using EfAssist.Core.Diagrams;
+﻿using EfAssist.Core.Diagrams;
 
 namespace EfAssist.Core.Tests;
 
@@ -16,6 +16,41 @@ public class DiagramNodeContentTests
 
     private static DiagramNode Node(DiagramNodeContent.Content content, string shortName) =>
         content.Nodes.Single(n => n.EntityName.EndsWith("." + shortName, StringComparison.Ordinal));
+
+    // ---- Class filter ----
+
+    [Fact]
+    public void DrawsOnlyTheEntitiesTheFilterNames()
+    {
+        var content = Build(new DiagramViewOptions
+        {
+            VisibleEntities = new HashSet<string>(["SampleRichModel.Post", "SampleRichModel.Blog"]),
+        });
+
+        Assert.Equal(
+            ["SampleRichModel.Blog", "SampleRichModel.Post"],
+            content.Nodes.Select(n => n.EntityName).Order());
+
+        // The relationship between the two survives; the one to the author that is no longer drawn
+        // goes with it, because an edge to nothing is not a relationship a reader can follow.
+        Assert.Contains(
+            content.Edges,
+            e => e.From == "SampleRichModel.Post" && e.To == "SampleRichModel.Blog");
+
+        Assert.DoesNotContain(content.Edges, e => e.To == "SampleRichModel.Author");
+    }
+
+    [Fact]
+    public void DrawsAFilteredEntityWithNoVisibleNeighbourOnItsOwn()
+    {
+        var content = Build(new DiagramViewOptions
+        {
+            VisibleEntities = new HashSet<string>(["SampleRichModel.Tag"]),
+        });
+
+        Assert.Equal(["SampleRichModel.Tag"], content.Nodes.Select(n => n.EntityName));
+        Assert.Empty(content.Edges);
+    }
 
     // ---- Entity-relationship view ----
 

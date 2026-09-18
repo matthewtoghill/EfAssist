@@ -70,4 +70,15 @@ public sealed record DiagramViewOptions
 
     /// <summary>Draw the derived-to-base edges of a type-per-hierarchy mapping.</summary>
     public bool ShowInheritance { get; init; } = true;
+
+    /// <summary>
+    /// The entities to draw, by <see cref="DiagramEntity.Name"/>. Null — the normal case — draws
+    /// every entity the other options have not already folded away.
+    /// </summary>
+    /// <remarks>
+    /// Only ever removes nodes: an entity named here is still subject to the join-table and owned-type
+    /// folding above. Relationships survive whenever both ends do, so a filtered diagram keeps the
+    /// edges between what is left and an entity with no visible neighbour is drawn on its own.
+    /// </remarks>
+    public IReadOnlySet<string>? VisibleEntities { get; init; }
 }

@@ -1,4 +1,4 @@
-namespace EfAssist.Core.Diagrams;
+﻿namespace EfAssist.Core.Diagrams;
 
 /// <summary>What a row in a node represents.</summary>
 public enum RowKind
@@ -101,7 +101,16 @@ public static class DiagramNodeContent
 
         diff ??= DiagramDiff.Empty;
 
-        var hidden = HiddenEntities(model, options);
+        var hidden = new HashSet<string>(FoldedAway(model, options), StringComparer.Ordinal);
+
+        if (options.VisibleEntities is { } shown)
+        {
+            foreach (var entity in model.Entities.Where(e => !shown.Contains(e.Name)))
+            {
+                hidden.Add(entity.Name);
+            }
+        }
+
         var inlined = InlinedOwnedTypes(model, options, diff);
 
         var nodes = model.Entities
@@ -120,8 +129,15 @@ public static class DiagramNodeContent
     /// Entities the options fold away: collapsed many-to-many join tables, and owned references
     /// inlined into their owner.
     /// </summary>
-    private static HashSet<string> HiddenEntities(DiagramModel model, DiagramViewOptions options)
+    /// <remarks>
+    /// Public because a class filter has to leave these out of whatever it offers to tick: they are
+    /// not drawn whatever it says, so a tick against one does nothing and reads as a bug.
+    /// </remarks>
+    public static IReadOnlySet<string> FoldedAway(DiagramModel model, DiagramViewOptions options)
     {
+        ArgumentNullException.ThrowIfNull(model);
+        ArgumentNullException.ThrowIfNull(options);
+
         var hidden = new HashSet<string>(StringComparer.Ordinal);
 
         if (options.CollapseJoinEntities)
