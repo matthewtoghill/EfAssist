@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 using System.Linq;
 using Avalonia;
@@ -188,6 +188,15 @@ public class DiagramSurface : Control
         Focus();
 
         var point = e.GetCurrentPoint(this);
+
+        // A right-click selects what it is over before the context menu opens, so the menu's items
+        // act on the node under the pointer rather than on whatever was selected last.
+        if (point.Properties.IsRightButtonPressed)
+        {
+            SelectionRequested?.Invoke(this, NodeAt(ToScene(point.Position)));
+            return;
+        }
+
         if (!point.Properties.IsLeftButtonPressed)
         {
             return;

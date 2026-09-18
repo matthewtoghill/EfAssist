@@ -53,6 +53,13 @@ public sealed class SavedDiagram
     public DiagramViewOptions? Options { get; set; }
 
     /// <summary>
+    /// The entities the class filter leaves on screen, or null for all of them. Kept out of
+    /// <see cref="Options"/>, which is also saved as a workspace-wide default where one context's
+    /// entity names would hide every entity of the next.
+    /// </summary>
+    public List<string>? VisibleEntities { get; set; }
+
+    /// <summary>
     /// The key one view's arrangement is stored under. Left-to-right keeps the bare view name it has
     /// always had, so a diagram arranged before there was a second orientation still loads.
     /// </summary>

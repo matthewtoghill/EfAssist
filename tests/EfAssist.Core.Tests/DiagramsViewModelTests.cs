@@ -433,6 +433,248 @@ public class DiagramsViewModelTests : IDisposable
         Assert.Contains("PostTag", harness.ViewModel.Scene!.Nodes.Keys);
     }
 
+    // ---- Class filter ----
+
+    [Fact]
+    public async Task ShowsOnlyTheSelectedClassAndThenExpandsOneLevelAtATime()
+    {
+        var harness = Build();
+        await harness.ViewModel.GenerateCommand.ExecuteAsync(null);
+
+        harness.ViewModel.Select("SampleRichModel.Comment");
+        harness.ViewModel.FocusSelectedCommand.Execute(null);
+
+        Assert.True(harness.ViewModel.IsFiltered);
+        Assert.Equal(["SampleRichModel.Comment"], harness.ViewModel.Scene!.Nodes.Keys);
+
+        // One level out: the post a comment belongs to. Not yet the blog that post belongs to.
+        harness.ViewModel.ExpandOneLevelCommand.Execute(null);
+
+        Assert.Contains("SampleRichModel.Post", harness.ViewModel.Scene!.Nodes.Keys);
+        Assert.DoesNotContain("SampleRichModel.Blog", harness.ViewModel.Scene!.Nodes.Keys);
+
+        // And the next level brings it in, from both ends of the post's relationships.
+        harness.ViewModel.ExpandOneLevelCommand.Execute(null);
+
+        Assert.Contains("SampleRichModel.Blog", harness.ViewModel.Scene!.Nodes.Keys);
+        Assert.Contains("SampleRichModel.Author", harness.ViewModel.Scene!.Nodes.Keys);
+
+        // A many-to-many is one level even though a hidden join entity sits in the middle of it.
+        Assert.Contains("SampleRichModel.Tag", harness.ViewModel.Scene!.Nodes.Keys);
+
+        harness.ViewModel.ShowAllClassesCommand.Execute(null);
+
+        Assert.False(harness.ViewModel.IsFiltered);
+        Assert.Contains("SampleRichModel.Person", harness.ViewModel.Scene!.Nodes.Keys);
+    }
+
+    [Fact]
+    public async Task KeepsTheFullDetailOfAClassWhileTheDiagramIsFiltered()
+    {
+        var harness = Build();
+        await harness.ViewModel.GenerateCommand.ExecuteAsync(null);
+
+        harness.ViewModel.Select("SampleRichModel.Post");
+        harness.ViewModel.FocusSelectedCommand.Execute(null);
+
+        // Nothing the post relates to is drawn, but the pane still lists every relationship it has.
+        var groups = harness.ViewModel.Detail.ToList();
+        Assert.Contains(groups, g => g.Title == "References");
+        Assert.Contains(groups, g => g.Title == "Referenced by");
+    }
+
+    [Fact]
+    public async Task UntickingEveryClassButOneIsTheSameAsFocusingIt()
+    {
+        var harness = Build();
+        await harness.ViewModel.GenerateCommand.ExecuteAsync(null);
+
+        Assert.NotEmpty(harness.ViewModel.ClassFilter);
+        Assert.All(harness.ViewModel.ClassFilter, item => Assert.True(item.IsShown));
+
+        foreach (var item in harness.ViewModel.ClassFilter.Where(i => i.Name != "SampleRichModel.Tag"))
+        {
+            item.IsShown = false;
+        }
+
+        Assert.Equal(["SampleRichModel.Tag"], harness.ViewModel.Scene!.Nodes.Keys);
+        Assert.Contains("1 of", harness.ViewModel.FilterSummary);
+
+        // Ticking the last one back on is the whole model again, not a filter that happens to
+        // include everything.
+        foreach (var item in harness.ViewModel.ClassFilter)
+        {
+            item.IsShown = true;
+        }
+
+        Assert.False(harness.ViewModel.IsFiltered);
+        Assert.Null(harness.ViewModel.FilterSummary);
+    }
+
+    [Fact]
+    public async Task NamesAnOwnedTypeAfterItsOwnerAndLeavesOutWhateverTheOptionsFoldAway()
+    {
+        var harness = Build();
+        await harness.ViewModel.GenerateCommand.ExecuteAsync(null);
+
+        // An owned collection has a table of its own, so it is drawn and can be ticked. Two owners can
+        // own the same type, so the row says whose it is.
+        var contacts = harness.ViewModel.ClassFilter
+            .Single(i => i.Name.EndsWith("#SampleRichModel.ContactMethod", StringComparison.Ordinal));
+
+        Assert.Equal("ContactMethod (owned by Author)", contacts.Label);
+
+        // The inlined owned reference and the collapsed join table are not drawn whatever the filter
+        // says, so neither is offered to tick.
+        Assert.DoesNotContain(
+            harness.ViewModel.ClassFilter,
+            i => i.Name.EndsWith("#SampleRichModel.Address", StringComparison.Ordinal));
+
+        Assert.DoesNotContain(harness.ViewModel.ClassFilter, i => i.Name == "PostTag");
+
+        // Turning the options off puts them back, ticked, because they were never unticked.
+        harness.ViewModel.InlineOwnedTypes = false;
+        harness.ViewModel.CollapseJoinEntities = false;
+
+        var address = harness.ViewModel.ClassFilter
+            .Single(i => i.Name.EndsWith("#SampleRichModel.Address", StringComparison.Ordinal));
+
+        Assert.Equal("Address (owned by Author)", address.Label);
+        Assert.True(address.IsShown);
+        Assert.Contains(harness.ViewModel.ClassFilter, i => i.Name == "PostTag");
+    }
+
+    [Fact]
+    public async Task TellsTheSummaryAboutTheFilterAfterTheClassListIsFilledInNotBefore()
+    {
+        var harness = Build();
+        await harness.ViewModel.GenerateCommand.ExecuteAsync(null);
+
+        harness.ViewModel.Select("SampleRichModel.Tag");
+        harness.ViewModel.FocusSelectedCommand.Execute(null);
+
+        // The value as of each notification, because that is all a binding ever sees. Reading the
+        // property afterwards would pass whether or not anything was raised.
+        string? last = null;
+        harness.ViewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(DiagramsViewModel.FilterSummary))
+            {
+                last = harness.ViewModel.FilterSummary;
+            }
+        };
+
+        // Reopening: the restored filter is notified about before the first render has built the
+        // class list, so the last word on the subject has to come after it, not before.
+        harness.ViewModel.Restore(harness.Workspace, _root, Workspace);
+
+        Assert.Equal($"1 of {harness.ViewModel.ClassFilter.Count} classes", last);
+    }
+
+    [Fact]
+    public async Task ExpandsFromOneClassRatherThanFromEverythingOnScreen()
+    {
+        var harness = Build();
+        await harness.ViewModel.GenerateCommand.ExecuteAsync(null);
+
+        harness.ViewModel.Select("SampleRichModel.Comment");
+        harness.ViewModel.FocusSelectedCommand.Execute(null);
+
+        foreach (var item in harness.ViewModel.ClassFilter.Where(i => i.Name == "SampleRichModel.Blog"))
+        {
+            item.IsShown = true;
+        }
+
+        // A step from the comment only. The blog is on screen too, but this is not its step, so the
+        // person who owns it stays out.
+        harness.ViewModel.Select("SampleRichModel.Comment");
+        harness.ViewModel.ExpandFromSelectedCommand.Execute(null);
+
+        Assert.Contains("SampleRichModel.Post", harness.ViewModel.Scene!.Nodes.Keys);
+        Assert.DoesNotContain("SampleRichModel.Person", harness.ViewModel.Scene!.Nodes.Keys);
+
+        // The whole-diagram step does take the blog's side as well.
+        harness.ViewModel.ExpandOneLevelCommand.Execute(null);
+
+        Assert.Contains("SampleRichModel.Person", harness.ViewModel.Scene!.Nodes.Keys);
+    }
+
+    [Fact]
+    public async Task OffersExpandingFromAClassOnlyWhileThereIsOneAndAFilterToGrow()
+    {
+        var harness = Build();
+        await harness.ViewModel.GenerateCommand.ExecuteAsync(null);
+
+        // Everything is drawn, so a step from the selected class has nowhere to go.
+        harness.ViewModel.Select("SampleRichModel.Comment");
+        Assert.False(harness.ViewModel.CanExpandFromSelected);
+
+        harness.ViewModel.FocusSelectedCommand.Execute(null);
+        Assert.True(harness.ViewModel.CanExpandFromSelected);
+
+        harness.ViewModel.Select(null);
+        Assert.False(harness.ViewModel.CanExpandFromSelected);
+    }
+
+    [Fact]
+    public async Task CountsOnlyTheEntitiesTheDiagramCanActuallyDraw()
+    {
+        var harness = Build();
+        await harness.ViewModel.GenerateCommand.ExecuteAsync(null);
+
+        var total = harness.ViewModel.Model!.Entities.Count;
+        var drawn = harness.ViewModel.Scene!.Nodes.Count;
+
+        // The snapshot has more entities in it than the diagram has nodes: a collapsed join table and
+        // an inlined owned reference. Counting those makes the figure disagree with the diagram.
+        Assert.True(drawn < total);
+        Assert.StartsWith($"{drawn} entities from", harness.ViewModel.SourceSummary);
+
+        harness.ViewModel.CollapseJoinEntities = false;
+        harness.ViewModel.InlineOwnedTypes = false;
+
+        Assert.StartsWith($"{total} entities from", harness.ViewModel.SourceSummary);
+    }
+
+    [Fact]
+    public async Task BringsBackAFoldedEntityWhenItsOptionIsTurnedOffMidFilter()
+    {
+        var harness = Build();
+        await harness.ViewModel.GenerateCommand.ExecuteAsync(null);
+
+        // Untick one listed class while the join table is folded away and unlistable.
+        harness.ViewModel.ClassFilter.Single(i => i.Name == "SampleRichModel.Comment").IsShown = false;
+
+        harness.ViewModel.CollapseJoinEntities = false;
+
+        // The join table was never unticked, so showing it again draws it rather than leaving it out
+        // of a filter it was never offered to.
+        Assert.Contains("PostTag", harness.ViewModel.Scene!.Nodes.Keys);
+        Assert.DoesNotContain("SampleRichModel.Comment", harness.ViewModel.Scene!.Nodes.Keys);
+    }
+
+    [Fact]
+    public async Task RemembersTheFilterForTheDiagramButNotForTheNextWorkspace()
+    {
+        var harness = Build();
+        await harness.ViewModel.GenerateCommand.ExecuteAsync(null);
+
+        harness.ViewModel.Select("SampleRichModel.Tag");
+        harness.ViewModel.FocusSelectedCommand.Execute(null);
+
+        // Reopened on the same context, the saved diagram comes back filtered.
+        var reopened = Build();
+        Assert.True(reopened.ViewModel.IsFiltered);
+        Assert.Equal(["SampleRichModel.Tag"], reopened.ViewModel.Scene!.Nodes.Keys);
+
+
+        // The workspace-wide view options carry no entity names, so they cannot hide a different
+        // context's model wholesale.
+        var workspace = new WorkspaceSettings();
+        harness.ViewModel.Store(workspace);
+        Assert.Null(workspace.DiagramOptions!.VisibleEntities);
+    }
+
     // ---- Selection and detail ----
 
     [Fact]
