@@ -34,7 +34,7 @@
       <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
     </PackageReference>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
-    <PackageReference Include="SkiaSharp" Version="4.152.0" />
+    <PackageReference Include="SkiaSharp" Version="4.152.1" />
     <PackageReference Include="Velopack" Version="1.2.0" />
   </ItemGroup>
 
