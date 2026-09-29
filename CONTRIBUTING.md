@@ -5,14 +5,23 @@ change is either "make the app easier to drive" or "explain an EF failure better
 
 ## Getting set up
 
-You need the .NET 10 SDK and the `dotnet-ef` global tool — the app shells out to it, and so do the
-tests:
+You need the .NET 10 SDK and the `dotnet-ef` global tool. The app shells out to it, and so do the tests:
 
 ```
 dotnet tool install --global dotnet-ef
 ```
 
-Then:
+The tests expect `samples/SampleEfApp/blog.db` in its fixture state, and `blog.db` is not
+committed. Create it once. The sample is outside the solution, so it needs its own restore first:
+
+```
+cd samples/SampleEfApp
+dotnet restore
+dotnet ef database update InitialCreate --context BlogContext
+cd ../..
+```
+
+Then, from the repository root:
 
 ```
 dotnet build EfAssist.slnx
@@ -22,14 +31,14 @@ dotnet run --project src/EfAssist.App
 
 `samples/SampleEfApp` and `samples/SampleRichModel` are throwaway EF Core projects, deliberately
 outside the solution. The tests build and migrate `SampleEfApp` for real, so a first `dotnet test`
-takes a minute or so. Each sample has a `README.md` explaining what it is there to prove; read it
+takes a minute or so. Each sample has a `README.md` explaining what it is there to prove. Read it
 before changing one, because several tests assert on its exact migration list.
 
 ## Before you open a pull request
 
-- `dotnet build EfAssist.slnx` — no new warnings.
-- `dotnet test EfAssist.slnx` — all green. Add tests for what you changed; `EfAssist.Core` is
-  covered by unit tests and by fixtures captured from the real CLI, in
+- `dotnet build EfAssist.slnx`, with no new warnings.
+- `dotnet test EfAssist.slnx`, all green. Add tests for what you changed. `EfAssist.Core` is covered
+  by unit tests and by fixtures captured from the real CLI, in
   `tests/EfAssist.Core.Tests/Fixtures/`.
 - If your change touches how `dotnet ef` output is parsed, add a fixture rather than a hand-written
   string. The fixtures are the only defence against EF changing its output format.
@@ -42,23 +51,24 @@ before changing one, because several tests assert on its exact migration list.
 | --- | --- |
 | `src/EfAssist.Core` | Everything with no UI in it: process launching, `dotnet ef` output parsing, EF error diagnostics, model-snapshot parsing, diagram layout, settings. |
 | `src/EfAssist.App` | Avalonia views and the view models. |
-| `tests/EfAssist.Core.Tests` | Tests for both of the above — the shell view models hold real logic and touch no Avalonia type, so they are tested here rather than in a second project. |
+| `tests/EfAssist.Core.Tests` | Tests for both of the above. The shell view models hold real logic and touch no Avalonia type, so they are tested here rather than in a second project. |
 
 `docs/dev/` holds the development record: `PLAN.md` for the agreed scope and the reasoning behind
 it, `PROGRESS.md` for what is built and verified, `ROADMAP.md` for ideas parked with a reason and a
-trigger to revisit. If you are about to propose something big, check `ROADMAP.md` first — it may
+trigger to revisit. If you are about to propose something big, check `ROADMAP.md` first. It may
 already be there with an explanation of why it is waiting.
 
 ## Conventions
 
-- Commits: `type: summary` — `feat`, `fix`, `docs`, `refactor`, `test`, `chore`.
+- Commits use `type: summary`, where type is one of `feat`, `fix`, `docs`, `refactor`, `test`,
+  `chore`.
 - Nullable reference types are on everywhere. Keep them on.
-- Comments explain *why*, not what. The codebase is fairly heavily commented where a decision would
-  otherwise look arbitrary; match that where you are recording a decision, and skip it where the
+- Comments explain *why*, not what. The codebase is heavily commented where a decision would
+  otherwise look arbitrary. Match that where you are recording a decision, and skip it where the
   code already says it.
 
 ## Bugs and ideas
 
 Open an issue. For a bug, the app's **Copy diagnostics** button puts the command line, working
-directory, exit code, full output and the tool and SDK versions on your clipboard — paste that in.
+directory, exit code, full output and the tool and SDK versions on your clipboard. Paste that in.
 It saves a round trip.
