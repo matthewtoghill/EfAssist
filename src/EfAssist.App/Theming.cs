@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Themes.Fluent;
@@ -19,15 +22,18 @@ namespace EfAssist.App;
 /// the window behind it.
 /// </para>
 /// <para>
-/// The palette can only be set once, before the theme loads, which is why <see cref="Initialise"/> is
-/// separate from <see cref="Apply"/>. Fluent reads its palette while loading, so nothing short of a
-/// fresh <see cref="FluentTheme"/> repaints a running app - and swapping the theme re-applies every
-/// control template, which leaves each ComboBox popup presenter attached to a template that has been
-/// discarded. The next time that dropdown opens, Avalonia throws "already has a visual parent". Open
-/// upstream with no fix, and the only suggested workaround drops the ScrollViewer from the ComboBox
-/// theme, which would cost scrolling in the project and context lists: AvaloniaUI/Avalonia#17917 and
-/// #15115. So colours apply at startup and a change asks for a restart, while the variant and the font
-/// sizes need no reload and stay live.
+/// Fluent reads its palette while loading - its brushes take the palette colours by StaticResource -
+/// so changing a <see cref="ColorPaletteResources"/> in place repaints nothing. Swapping in a whole
+/// new <see cref="FluentTheme"/> does repaint, but it re-applies every control template, and any
+/// template detached at that moment - a closed ComboBox dropdown, a closed ColorPicker flyout - comes
+/// back with its content still parented to the old one: "already has a visual parent". Avalonia 12.1.3
+/// fixed that for ComboBox (AvaloniaUI/Avalonia#22189) but not for the TabControl inside ColorPicker.
+/// </para>
+/// <para>
+/// So a colour change keeps the loaded theme and recolours its brushes instead. Every control key in
+/// Fluent is an alias for one of its mutable base brushes, so setting those brushes' colours repaints
+/// everything with no template touched. A throwaway theme built from the new palette works out what
+/// each brush's colour should be.
 /// </para>
 /// </remarks>
 public static class Theming
@@ -43,33 +49,123 @@ public static class Theming
     private const double Low = 0.2;
 
     /// <summary>
-    /// Hands Fluent its palette, then applies everything <see cref="Apply"/> does. Must run before the
-    /// first window is constructed: that is the only point at which the palette is read, and it also
-    /// means a dark-theme user never sees a white flash.
+    /// Hands Fluent its palette, then applies everything <see cref="Apply"/> does. Runs before the
+    /// first window is constructed, so a dark-theme user never sees a white flash.
     /// </summary>
     public static void Initialise(DisplaySettings display)
     {
-        if (Application.Current is { } app)
+        if (FindFluent() is { } fluent)
         {
-            for (var i = 0; i < app.Styles.Count; i++)
-            {
-                if (app.Styles[i] is FluentTheme fluent)
-                {
-                    // Both variants, not only the active one: a System user's OS can flip while the app
-                    // is running, and the palette it flips to has to already be right.
-                    fluent.Palettes[ThemeVariant.Light] = BuildPalette(display, dark: false);
-                    fluent.Palettes[ThemeVariant.Dark] = BuildPalette(display, dark: true);
-                    break;
-                }
-            }
+            SetPalettes(fluent, display);
         }
 
         Apply(display);
     }
 
     /// <summary>
-    /// Applies the part of the display configuration that can change while the app runs: the variant
-    /// and the font sizes. Colours are not here - see the remarks on this class. Does nothing when
+    /// Repaints a running app in the configured colours by recolouring the loaded
+    /// <see cref="FluentTheme"/>'s brushes - see the remarks on this class. False when there is no theme
+    /// to recolour or working out the new colours throws, which leaves the screen as it was and the
+    /// caller to offer a restart instead.
+    /// </summary>
+    public static bool ApplyColours(DisplaySettings display)
+    {
+        if (FindFluent() is not { } fluent)
+        {
+            return false;
+        }
+
+        // Everything that can throw - loading the throwaway theme, reading both sides - happens before
+        // any live brush changes, so a failure leaves the app wholly in the colours it already had
+        // rather than half in each.
+        List<(SolidColorBrush Brush, Color Colour)> changes = [];
+        try
+        {
+            var fresh = new FluentTheme();
+            SetPalettes(fresh, display);
+            Collect(fluent.Resources, fresh.Resources, changes);
+
+            // For whatever reads a palette colour by DynamicResource rather than through a brush: the
+            // accent shades, AppAccentBrush and AvaloniaEdit's brushes.
+            SetPalettes(fluent, display);
+        }
+        catch (Exception ex)
+        {
+            Trace.TraceWarning($"Live recolour failed, falling back to a restart: {ex}");
+            return false;
+        }
+
+        foreach (var (brush, colour) in changes)
+        {
+            brush.Color = colour;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Pairs each brush in <paramref name="live"/> with the colour its namesake in
+    /// <paramref name="fresh"/> has, variant by variant. The two are the same XAML loaded twice, so
+    /// every key lines up. The merged dictionaries are not walked: in Fluent they hold colours and the
+    /// palette, not brushes.
+    /// </summary>
+    private static void Collect(
+        IResourceDictionary live,
+        IResourceDictionary fresh,
+        List<(SolidColorBrush Brush, Color Colour)> changes)
+    {
+        foreach (var key in live.Keys)
+        {
+            // An empty colour on the fresh side is a DynamicResource that never resolved, because the
+            // throwaway theme belongs to no app: the accent brushes. Their live twins follow the
+            // palette on their own, so they are left to it.
+            if (live.TryGetValue(key, out var target) && target is SolidColorBrush brush
+                && fresh.TryGetValue(key, out var source) && source is ISolidColorBrush wanted
+                && wanted.Color != default
+                && brush.Color != wanted.Color)
+            {
+                changes.Add((brush, wanted.Color));
+            }
+        }
+
+        foreach (var (variant, provider) in live.ThemeDictionaries)
+        {
+            if (provider is IResourceDictionary liveVariant
+                && fresh.ThemeDictionaries.TryGetValue(variant, out var other)
+                && other is IResourceDictionary freshVariant)
+            {
+                Collect(liveVariant, freshVariant, changes);
+            }
+        }
+    }
+
+    private static FluentTheme? FindFluent()
+    {
+        if (Application.Current is { } app)
+        {
+            foreach (var style in app.Styles)
+            {
+                if (style is FluentTheme fluent)
+                {
+                    return fluent;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static void SetPalettes(FluentTheme fluent, DisplaySettings display)
+    {
+        // Both variants, not only the active one: a System user's OS can flip while the app is
+        // running, and the palette it flips to has to already be right.
+        fluent.Palettes[ThemeVariant.Light] = BuildPalette(display, dark: false);
+        fluent.Palettes[ThemeVariant.Dark] = BuildPalette(display, dark: true);
+    }
+
+    /// <summary>
+    /// Applies the cheap part of the display configuration: the variant and the font sizes, which are
+    /// plain resource changes. Colours go through <see cref="ApplyColours"/>. Does nothing when
     /// there is no application, so view models constructed directly in tests and in the XAML previewer
     /// can set theme properties freely.
     /// </summary>
@@ -189,7 +285,7 @@ public static class Theming
 
     /// <summary>
     /// The handful of colours a preview of a palette needs. Derived by the same rules
-    /// <see cref="BuildPalette"/> uses, so a sample cannot drift from what a restart will produce.
+    /// <see cref="BuildPalette"/> uses, so a sample cannot drift from what the app will paint.
     /// Opaque throughout: a preview tile is composited over the settings window rather than over the
     /// new surface, so the alpha-based members of Fluent's palette are flattened against it here.
     /// </summary>

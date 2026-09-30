@@ -1459,7 +1459,13 @@ public partial class MainWindowViewModel : ObservableObject
     /// theme change would be indefensible.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanRestart))]
-    private void Restart() => RestartRequested?.Invoke();
+    private void Restart()
+    {
+        // The new process reads the settings file as it starts, so a colour change still settling
+        // has to be on disk first.
+        Appearance.FlushSave();
+        RestartRequested?.Invoke();
+    }
 
     private bool CanRestart() => !Session.IsRunning;
 }

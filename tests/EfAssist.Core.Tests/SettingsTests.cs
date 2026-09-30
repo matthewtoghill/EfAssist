@@ -29,6 +29,34 @@ public class SettingsTests : IDisposable
         Assert.Empty(settings.RecentWorkspaces);
     }
 
+    /// <summary>
+    /// Stands in for a virus scanner holding the file just written: open without delete sharing,
+    /// which is what makes Windows refuse to replace it, and let go shortly after the save starts.
+    /// </summary>
+    [Fact]
+    public void A_save_waits_out_a_brief_hold_on_the_file()
+    {
+        var settings = SettingsStore.Load(SettingsPath);
+        SettingsStore.Save(settings, SettingsPath);
+
+        settings.Display.UiFontSize = 17;
+        var held = new FileStream(SettingsPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+
+        // A thread of its own rather than a thread-pool continuation, so a busy pool cannot hold the
+        // file past the retry budget, and the only thread that disposes the stream.
+        var release = new Thread(() =>
+        {
+            Thread.Sleep(30);
+            held.Dispose();
+        });
+        release.Start();
+
+        SettingsStore.Save(settings, SettingsPath);
+        release.Join();
+
+        Assert.Equal(17, SettingsStore.Load(SettingsPath).Display.UiFontSize);
+    }
+
     [Fact]
     public void Round_trips_per_workspace_choices()
     {

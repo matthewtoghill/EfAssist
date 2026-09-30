@@ -220,4 +220,32 @@ public class SettingsViewModelTests
         Assert.True(app.Display.LightColours.IsDefault);
         Assert.False(settings.NeedsRestart);
     }
+
+    /// <summary>
+    /// The settings window snapshots the theme each time it opens, so undo goes back to the start of
+    /// this visit, not to how the app launched.
+    /// </summary>
+    [Fact]
+    public void Undoing_goes_back_to_when_the_window_last_opened()
+    {
+        var app = new AppSettings { Display = { Preset = ThemePreset.Nord, Theme = AppTheme.Light } };
+        var settings = Create(app);
+        settings.EditingDark = false;
+
+        settings.Preset = ThemePreset.GitHub;
+        settings.Background = Color.Parse("#123456");
+        settings.SnapshotTheme();
+        Assert.False(settings.HasThemeChanges);
+
+        settings.Preset = ThemePreset.MonokaiPro;
+        settings.Theme = AppTheme.Dark;
+        Assert.True(settings.HasThemeChanges);
+
+        settings.RevertColoursCommand.Execute(null);
+
+        Assert.Equal(ThemePreset.GitHub, app.Display.Preset);
+        Assert.Equal(AppTheme.Light, app.Display.Theme);
+        Assert.Equal("#123456", app.Display.LightColours.Background);
+        Assert.False(settings.HasThemeChanges);
+    }
 }
