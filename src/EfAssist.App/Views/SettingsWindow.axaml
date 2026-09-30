@@ -151,8 +151,9 @@
 
     <Grid RowDefinitions="Auto,*,Auto">
 
-        <!-- Above the panes rather than inside Theme, so switching category cannot hide the fact that
-             a restart is owed. The colours are already saved; only the repaint is outstanding. -->
+        <!-- Colours normally repaint live; this only shows if that repaint failed. Above the panes
+             rather than inside Theme, so switching category cannot hide the fact that a restart is
+             owed. The colours are already saved; only the repaint is outstanding. -->
         <Border Grid.Row="0" Classes="caution" CornerRadius="4" Padding="12,10" Margin="12"
                 IsVisible="{Binding Appearance.NeedsRestart}">
             <Grid ColumnDefinitions="*,Auto">
@@ -167,7 +168,7 @@
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                     <Button Content="Undo theme changes"
                             Command="{Binding Appearance.RevertColoursCommand}"
-                            ToolTip.Tip="Puts the variant, palette and colours back to what the app is running with, so nothing changes on the next start. Leaves every other setting alone." />
+                            ToolTip.Tip="Puts the variant, palette and colours back to how they were when this window opened. Leaves every other setting alone." />
                     <Button Content="Restart now" Classes="accent"
                             Command="{Binding RestartCommand}"
                             ToolTip.Tip="Unavailable while a command is running - a restart would kill it." />
@@ -265,6 +266,12 @@
 
                                 <TextBlock Classes="hint" VerticalAlignment="Center" MaxWidth="300"
                                            Text="System follows the operating system, including a change made while the app is running." />
+
+                                <!-- Changes save and repaint as they are made; this is the way back. -->
+                                <Button Content="Undo theme changes" VerticalAlignment="Center"
+                                        IsEnabled="{Binding Appearance.HasThemeChanges}"
+                                        Command="{Binding Appearance.RevertColoursCommand}"
+                                        ToolTip.Tip="Puts the variant, palette and colours back to how they were when this window opened. Leaves every other setting alone." />
                             </StackPanel>
 
                             <!-- Each tile is the palette applied to a scrap of the real UI rather than
@@ -479,8 +486,6 @@
                                             </Border>
                                         </StackPanel>
                                     </Border>
-                                    <TextBlock Classes="hint" MaxWidth="420"
-                                               Text="What the next start will look like, derived by the same rules the real theme uses." />
                                 </StackPanel>
                             </Grid>
                         </StackPanel>

@@ -47,15 +47,16 @@ configurable font sizes are all in, reachable from a settings modal on both scre
   configurable colours per variant (background, accent, text) over a choice of four palettes, so custom
   colours reach the inside of Fluent's controls rather than only the window. Font sizes are two
   configurable bases — UI and monospace — exposed as named resources the XAML reads by role.
-- **Not done:** repainting a colour change without a restart. Fluent only reads its palette while
-  loading, and reloading it corrupts every ComboBox (AvaloniaUI/Avalonia#17917, open), so colours apply
-  at startup and the settings screen offers a restart plus a live preview tile. The variant and the font
-  sizes need no reload and do apply immediately. Also not done: per-workspace themes, and importing or
-  sharing a palette as a file.
-- **Revisit when:** AvaloniaUI/Avalonia#17917 is fixed, which turns the restart into a live repaint and
-  makes the preview tile redundant. Separately, when someone wants to carry a palette between machines —
-  the three colours per variant already in `settings.json` are most of that format.
-- **Cost:** hours to drop the restart once upstream allows it. An afternoon for import/export.
+  Colour changes repaint live: about 300ms after the last change, `Theming.ApplyColours` recolours the
+  loaded `FluentTheme`'s brushes in place, taking the colours from a throwaway theme built with the new
+  palette. It does not swap the theme: re-applying templates corrupts any that are detached at the time,
+  and 12.1.3 fixed that for ComboBox (AvaloniaUI/Avalonia#22189) but not for ColorPicker's TabControl.
+  The restart notice stays as a fallback for a recolour that throws.
+- **Not done:** per-workspace themes, and importing or sharing a palette as a file.
+- **Revisit when:** someone wants to carry a palette between machines — the three colours per variant
+  already in `settings.json` are most of that format. Separately, drop the restart fallback once live
+  repainting has proved itself.
+- **Cost:** an afternoon for import/export.
 
 ### Multi-context tree view
 Show every `DbContext` in the solution side by side with its migrations, instead of one active context selected from a dropdown.

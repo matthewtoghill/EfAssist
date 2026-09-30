@@ -64,6 +64,9 @@ public partial class SettingsWindow : Window
             _settings = viewModel.Appearance;
             _settings.PropertyChanged += OnSettingsPropertyChanged;
 
+            // Each opening is a fresh experiment: Undo theme changes goes back to here.
+            _settings.SnapshotTheme();
+
             _settings.PickFolderAsync = PickScriptFolderAsync;
             _settings.PickExportFileAsync = PickExportFileAsync;
             _settings.PickImportFileAsync = PickImportFileAsync;
@@ -212,6 +215,8 @@ public partial class SettingsWindow : Window
 
     private void OnClosing(object? sender, WindowClosingEventArgs e)
     {
+        _settings?.FlushSave();
+
         if (_settings is null || WindowState == WindowState.Minimized)
         {
             return;

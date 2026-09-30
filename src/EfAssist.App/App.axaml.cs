@@ -18,8 +18,7 @@ public partial class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var viewModel = new MainWindowViewModel();
-            // Before the window exists: the only moment Fluent will accept a palette, and it also
-            // means a dark-theme user never sees a white flash.
+            // Before the window exists, so a dark-theme user never sees a white flash.
             viewModel.Appearance.Initialise();
             desktop.MainWindow = new MainWindow { DataContext = viewModel };
 

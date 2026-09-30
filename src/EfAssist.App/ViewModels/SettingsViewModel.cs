@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Media;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EfAssist.Core;
@@ -21,9 +22,9 @@ namespace EfAssist.App.ViewModels;
 public sealed record PaletteChoice(ThemePreset Preset, string Name, Theming.ThemeSample Sample);
 
 /// <summary>
-/// The settings screen. Every change saves immediately - there is no OK button. The variant and the
-/// font sizes also take effect immediately; the colours cannot, so they are shown in a preview tile
-/// and applied on the next start. See the remarks on <see cref="Theming"/> for why.
+/// The settings screen. Every change saves as it is made - there is no OK button - and takes effect
+/// immediately. Colours save and repaint once a change settles, so a colour picker drag is not one
+/// save and one repaint per tick; see the remarks on <see cref="Theming"/> for how they repaint.
 /// </summary>
 /// <remarks>
 /// Named for the appearance half it started as, and still owns it, but it is now the whole screen:
@@ -46,24 +47,48 @@ public partial class SettingsViewModel : ObservableObject
     private bool _loading;
 
     /// <summary>
-    /// The colours the app was actually started with. Compared against the current choice to decide
-    /// whether a restart is owed, so reverting a change by hand clears the notice rather than leaving
-    /// it up for the rest of the session.
+    /// The colours the app is actually painting with. Compared against the current choice to decide
+    /// whether a repaint, or failing that a restart, is owed - so reverting a change by hand clears the
+    /// notice rather than leaving it up for the rest of the session.
     /// </summary>
-    private readonly string _startedWith;
+    private string _applied;
 
     /// <summary>
-    /// The theme as the app started: the variant, the palette and both variants' overrides, so the
-    /// whole experiment can be put back. Kept as values rather than as the live objects, which are
-    /// what gets edited.
+    /// Whether colour changes can be repainted live. False with no running app - tests and the XAML
+    /// previewer - where colours save at once and the restart notice stands in for the repaint.
     /// </summary>
-    private readonly AppTheme _startedTheme;
+    private readonly bool _canRepaint = Application.Current is not null;
 
-    private readonly ThemePreset _startedPreset;
+    /// <summary>
+    /// Whether the last live repaint failed. The restart notice shows while it has, and the next
+    /// colour change tries again.
+    /// </summary>
+    private bool _repaintFailed;
 
-    private readonly ThemeColours _startedLight;
+    /// <summary>A colour change not yet written to disk; see <see cref="FlushSave"/>.</summary>
+    private bool _savePending;
 
-    private readonly ThemeColours _startedDark;
+    /// <summary>
+    /// Holds a colour save and repaint back until the choice settles, rather than doing both on each
+    /// tick of a colour picker drag.
+    /// </summary>
+    private DispatcherTimer? _settle;
+
+    /// <summary>
+    /// The theme as it was when the settings window last opened: the variant, the palette and both
+    /// variants' overrides, so the whole experiment can be put back. In memory only - the changes
+    /// themselves are saved as they are made. Kept as values rather than as the live objects, which
+    /// are what gets edited.
+    /// </summary>
+    private AppTheme _openedTheme;
+
+    private ThemePreset _openedPreset;
+
+    private ThemeColours _openedLight = new();
+
+    private ThemeColours _openedDark = new();
+
+    private string _openedSignature = "";
 
     /// <summary>Parameterless constructor exists only for the XAML previewer.</summary>
     public SettingsViewModel() : this(new AppSettings(), () => { })
@@ -82,11 +107,8 @@ public partial class SettingsViewModel : ObservableObject
         _uiFontSize = _display.UiFontSize;
         _editorFontSize = _display.EditorFontSize;
         _checkForUpdatesOnLaunch = _display.CheckForUpdatesOnLaunch;
-        _startedWith = ColourSignature(_display);
-        _startedTheme = _display.Theme;
-        _startedPreset = _display.Preset;
-        _startedLight = Copy(_display.LightColours);
-        _startedDark = Copy(_display.DarkColours);
+        _applied = ColourSignature(_display);
+        SnapshotTheme();
 
         // Start on whichever variant the user is actually looking at, so the first colour they change
         // is the one they can see change.
@@ -122,7 +144,7 @@ public partial class SettingsViewModel : ObservableObject
     /// </summary>
     public IReadOnlyList<SettingsSection> Sections { get; } =
     [
-        new(SettingsCategory.Theme, "Theme", "A palette sets three colours per variant. Borders, panels, hover states and the accent's own shades are derived from them; errors and warnings keep their own colours, so a failure always reads as one.", "palette colour color variant dark light system accent background contrast default high nord dracula solarized github monokai owl one restart"),
+        new(SettingsCategory.Theme, "Theme", "A palette sets three colours per variant. Borders, panels, hover states and the accent's own shades are derived from them; errors and warnings keep their own colours.", "palette colour color variant dark light system accent background contrast default high nord dracula solarized github monokai owl one restart"),
         new(SettingsCategory.TextAndLayout, "Text and layout", "Sizes apply immediately, everywhere they are used.", "font size interface code window maximised"),
         new(SettingsCategory.CodeAndConsole, "Code and console", "The migration source, the generated SQL and the output console.", "wrap line numbers sort order"),
         new(SettingsCategory.WorkspaceDefaults, "Workspace defaults", "What a workspace's own settings start from the first time it is opened. A workspace you have already used keeps its own choices.", "discovery offline idempotent build script folder no-connect no-build"),
@@ -294,10 +316,11 @@ public partial class SettingsViewModel : ObservableObject
     private Theming.ThemeSample _preview = Sample(ThemePreset.Default, dark: false, overrides: null);
 
     /// <summary>
-    /// True once the chosen colours differ from the ones the app started with. Drives the notice
-    /// offering a restart - the colours are already saved either way.
+    /// True once the chosen colours differ from the ones on screen and cannot be repainted live.
+    /// Drives the notice offering a restart - the colours are already saved either way.
     /// </summary>
-    public bool NeedsRestart => ColourSignature(_display) != _startedWith;
+    public bool NeedsRestart =>
+        (!_canRepaint || _repaintFailed) && ColourSignature(_display) != _applied;
 
     // ---- The legibility check on the three colours ----
 
@@ -484,7 +507,7 @@ public partial class SettingsViewModel : ObservableObject
         }
 
         Reload();
-        ActionMessage = $"Imported from {path}. Colours take effect on the next start.";
+        ActionMessage = $"Imported from {path}.";
     }
 
     /// <summary>
@@ -505,7 +528,7 @@ public partial class SettingsViewModel : ObservableObject
             "Reset settings",
             "Puts the theme, colours, font sizes, workspace defaults and the recent list back to how EfAssist shipped.",
             "Reset everything",
-            Detail: "Each workspace keeps its own remembered projects, migrations and diagrams. Colours take effect on the next start."));
+            Detail: "Each workspace keeps its own remembered projects, migrations and diagrams."));
 
         if (!confirmed)
         {
@@ -514,7 +537,7 @@ public partial class SettingsViewModel : ObservableObject
 
         SettingsStore.Reset(_settings);
         Reload();
-        ActionMessage = "Settings reset. Colours take effect on the next start.";
+        ActionMessage = "Settings reset.";
     }
 
     /// <summary>
@@ -584,18 +607,34 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Records the theme as it stands, as the point <see cref="RevertColoursCommand"/> goes back to.
+    /// The settings window calls this each time it opens.
+    /// </summary>
+    public void SnapshotTheme()
+    {
+        _openedTheme = _display.Theme;
+        _openedPreset = _display.Preset;
+        _openedLight = Copy(_display.LightColours);
+        _openedDark = Copy(_display.DarkColours);
+        _openedSignature = ColourSignature(_display);
+        OnPropertyChanged(nameof(HasThemeChanges));
+    }
+
+    /// <summary>True once the variant, palette or colours differ from the last snapshot.</summary>
+    public bool HasThemeChanges =>
+        _display.Theme != _openedTheme || ColourSignature(_display) != _openedSignature;
+
+    /// <summary>
     /// Abandons the theme experiment: the variant, the palette and both variants' overrides go back to
-    /// what the app is running with, which clears the restart notice.
+    /// how they were when the settings window opened.
     /// </summary>
     /// <remarks>
     /// <para>
     /// The theme and nothing else. Font sizes, the code and console toggles, the workspace defaults and
-    /// everything else on this screen are left exactly as they are — they are not what the notice is
-    /// about, and several of them are already applied.
+    /// everything else on this screen are left exactly as they are, and several of them are already
+    /// applied.
     /// </para>
     /// <para>
-    /// Back to the running theme rather than to whatever was showing when this window opened, because
-    /// the running colours are the ones the user can see and the ones "no restart needed" has to mean.
     /// A custom palette survives it: the overrides are restored as they were, not dropped.
     /// </para>
     /// </remarks>
@@ -605,9 +644,9 @@ public partial class SettingsViewModel : ObservableObject
         _loading = true;
         try
         {
-            Preset = _startedPreset;
-            Restore(_display.LightColours, _startedLight);
-            Restore(_display.DarkColours, _startedDark);
+            Preset = _openedPreset;
+            Restore(_display.LightColours, _openedLight);
+            Restore(_display.DarkColours, _openedDark);
         }
         finally
         {
@@ -616,7 +655,7 @@ public partial class SettingsViewModel : ObservableObject
 
         // Outside the loading guard: the variant is the one theme choice that applies to the running
         // app, so putting it back has to actually repaint.
-        Theme = _startedTheme;
+        Theme = _openedTheme;
 
         _save();
         LoadColours();
@@ -705,14 +744,70 @@ public partial class SettingsViewModel : ObservableObject
 
     /// <summary>
     /// Recomputes everything that follows from the three colours: the preview, the contrast check,
-    /// whether a restart is owed, and whether there is anything to reset.
+    /// the repaint, whether a restart is owed, and whether there is anything to reset.
     /// </summary>
     private void RefreshDerived()
     {
         Preview = Sample(Preset, EditingDark, _display.ColoursFor(EditingDark));
+        ScheduleRepaint();
 
         OnPropertyChanged(nameof(HasOverrides));
         OnPropertyChanged(nameof(NeedsRestart));
+        OnPropertyChanged(nameof(HasThemeChanges));
+    }
+
+    /// <summary>
+    /// Restarts the countdown to a save and repaint whenever a colour change is unsaved or the colours
+    /// differ from the ones on screen. The timer is created only once one is needed: a timer claims
+    /// Avalonia's dispatcher for whichever thread builds it.
+    /// </summary>
+    private void ScheduleRepaint()
+    {
+        _settle?.Stop();
+
+        if (!_canRepaint || (!_savePending && ColourSignature(_display) == _applied))
+        {
+            return;
+        }
+
+        if (_settle is null)
+        {
+            _settle = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
+            _settle.Tick += (_, _) => Settle();
+        }
+
+        _settle.Start();
+    }
+
+    private void Settle()
+    {
+        _settle?.Stop();
+        FlushSave();
+
+        var signature = ColourSignature(_display);
+        if (signature != _applied)
+        {
+            _repaintFailed = !Theming.ApplyColours(_display);
+            if (!_repaintFailed)
+            {
+                _applied = signature;
+            }
+        }
+
+        OnPropertyChanged(nameof(NeedsRestart));
+    }
+
+    /// <summary>
+    /// Writes a colour change that is still waiting for the choice to settle. The settings window
+    /// calls this as it closes, and a restart before relaunching, so neither loses the last change.
+    /// </summary>
+    public void FlushSave()
+    {
+        if (_savePending)
+        {
+            _savePending = false;
+            _save();
+        }
     }
 
     /// <summary>The preview colours for one preset and variant, with the user's overrides applied.</summary>
@@ -761,7 +856,16 @@ public partial class SettingsViewModel : ObservableObject
         var hex = ToHex(value);
         write(_display.ColoursFor(EditingDark), SameColour(hex, presetDefault) ? null : hex);
 
-        _save();
+        // With no app there is no timer to settle on, so the save happens now.
+        if (_canRepaint)
+        {
+            _savePending = true;
+        }
+        else
+        {
+            _save();
+        }
+
         RefreshDerived();
     }
 
@@ -774,13 +878,13 @@ public partial class SettingsViewModel : ObservableObject
 
     /// <summary>
     /// Hands the whole configuration, colours included, to Avalonia. Called once before the first
-    /// window exists - the only moment Fluent will accept a palette.
+    /// window exists, so the first paint is already in the right colours.
     /// </summary>
     public void Initialise() => Theming.Initialise(_display);
 
     /// <summary>
-    /// Applies what can be applied to a running app - the variant and the font sizes - and saves.
-    /// Colour changes go through <see cref="_save"/> alone and wait for a restart.
+    /// Applies the variant and the font sizes, and saves. Colour changes save and repaint through
+    /// <see cref="ScheduleRepaint"/>.
     /// </summary>
     private void ApplyAndSave()
     {
@@ -805,6 +909,7 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnThemeChanged(AppTheme value)
     {
         _display.Theme = value;
+        OnPropertyChanged(nameof(HasThemeChanges));
         OnPropertyChanged(nameof(CanChooseHalf));
         OnPropertyChanged(nameof(VariantIsSystem));
         OnPropertyChanged(nameof(VariantIsLight));

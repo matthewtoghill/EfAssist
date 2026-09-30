@@ -716,7 +716,22 @@ public static class SettingsStore
 
         var temp = path + ".tmp";
         File.WriteAllText(temp, JsonSerializer.Serialize(value, Options));
-        File.Move(temp, path, overwrite: true);
+
+        // Antivirus and the search indexer open a freshly written file for a few milliseconds, and
+        // Windows refuses to replace a file while they hold it. Saves that follow each other closely
+        // can land in that window, so a brief hold is waited out.
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                File.Move(temp, path, overwrite: true);
+                return;
+            }
+            catch (Exception ex) when (attempt < 5 && ex is IOException or UnauthorizedAccessException)
+            {
+                Thread.Sleep(10 * attempt);
+            }
+        }
     }
 
     private static void TryPreserveCorrupt(string path)
