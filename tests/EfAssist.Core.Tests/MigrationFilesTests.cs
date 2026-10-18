@@ -38,6 +38,24 @@ public class MigrationFilesTests : IDisposable
         return path;
     }
 
+    [Theory]
+    [InlineData("C:/p/Migrations/20260101000000_InitialCreate.cs", "20260101000000_InitialCreate")]
+    [InlineData("C:/p/Migrations/20260101000000_InitialCreate.Designer.cs", null)]
+    [InlineData("C:/p/Migrations/BlogContextModelSnapshot.cs", null)]
+    [InlineData("C:/p/Migrations/20260101000000_.cs", null)]
+    [InlineData("C:/p/Migrations/2026010100000X_InitialCreate.cs", null)]
+    [InlineData("C:/p/Migrations/20260101000000_InitialCreate.cs~RF1a2b.TMP", null)]
+    public void Reads_the_migration_id_from_a_file_name(string path, string? expected) =>
+        Assert.Equal(expected, MigrationFiles.IdFromPath(path));
+
+    [Theory]
+    [InlineData("C:/p/Migrations/20260101000000_InitialCreate.cs", false)]
+    [InlineData("C:/p/obj/Debug/20260101000000_InitialCreate.cs", true)]
+    [InlineData("C:/p/src/Bin/20260101000000_InitialCreate.cs", true)]
+    [InlineData("C:/p/obj.cs", false)]
+    public void Ignores_paths_through_build_output(string path, bool expected) =>
+        Assert.Equal(expected, MigrationFiles.IsIgnored("C:/p", path));
+
     [Fact]
     public void Finds_the_migration_in_the_conventional_folder()
     {

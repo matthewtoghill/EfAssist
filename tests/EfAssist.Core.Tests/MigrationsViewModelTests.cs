@@ -1,4 +1,4 @@
-using EfAssist.App.ViewModels;
+﻿using EfAssist.App.ViewModels;
 using EfAssist.Core;
 
 namespace EfAssist.Core.Tests;
@@ -183,6 +183,79 @@ public class MigrationsViewModelTests
         runner.Calls.Any(a => string.Join(' ', a.Skip(1).Take(2)) == key);
 
     // ---- Listing ----
+
+    [Fact]
+    public async Task Offers_a_refresh_when_a_migration_is_added_on_disk_but_never_runs_one()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "EfAssistTests", Guid.NewGuid().ToString("N"));
+        var migrations = Path.Combine(root, "Migrations");
+        Directory.CreateDirectory(migrations);
+        File.WriteAllText(Path.Combine(root, "Data.csproj"), "<Project />");
+        File.WriteAllText(
+            Path.Combine(migrations, "BlogContextModelSnapshot.cs"),
+            "[DbContext(typeof(BlogContext))] partial class BlogContextModelSnapshot { }");
+
+        try
+        {
+            var (tab, runner, _, _) = Build(target: Target with { Project = Path.Combine(root, "Data.csproj") });
+            await tab.RefreshCommand.ExecuteAsync(null);
+            var calls = runner.Calls.Count;
+
+            // The watcher starts once the folder lookup comes back from the thread pool.
+            await Task.Delay(500);
+
+            // Saving a listed migration is not a change to the list.
+            File.WriteAllText(Path.Combine(migrations, "20260101000000_InitialCreate.cs"), "// edited");
+            await Task.Delay(1500);
+            Assert.False(tab.ChangedOnDisk);
+
+            File.WriteAllText(Path.Combine(migrations, "20260301000000_AddTags.cs"), "// from git pull");
+            for (var i = 0; i < 50 && !tab.ChangedOnDisk; i++)
+            {
+                await Task.Delay(100);
+            }
+
+            Assert.True(tab.ChangedOnDisk);
+            Assert.Equal(calls, runner.Calls.Count);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Ignores_build_output_when_the_whole_project_is_watched()
+    {
+        // No snapshot, so the watcher falls back to the project folder — bin and obj included.
+        var root = Path.Combine(Path.GetTempPath(), "EfAssistTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, "obj", "Debug"));
+        File.WriteAllText(Path.Combine(root, "Data.csproj"), "<Project />");
+
+        try
+        {
+            var (tab, _, _, _) = Build(target: Target with { Project = Path.Combine(root, "Data.csproj") });
+            await tab.RefreshCommand.ExecuteAsync(null);
+            await Task.Delay(500);
+
+            File.WriteAllText(Path.Combine(root, "obj", "Debug", "20260301000000_AddTags.cs"), "// stale copy");
+            await Task.Delay(1500);
+            Assert.False(tab.ChangedOnDisk);
+
+            // Proves the watcher was listening all along, so the assertion above is not vacuous.
+            File.WriteAllText(Path.Combine(root, "20260301000000_AddTags.cs"), "// from a terminal");
+            for (var i = 0; i < 50 && !tab.ChangedOnDisk; i++)
+            {
+                await Task.Delay(100);
+            }
+
+            Assert.True(tab.ChangedOnDisk);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
 
     [Fact]
     public async Task Lists_migrations_with_their_applied_state()

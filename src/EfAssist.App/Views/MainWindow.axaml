@@ -775,10 +775,26 @@
                                 </StackPanel>
                             </Grid>
 
-                            <Border Grid.Row="1" IsVisible="{Binding Migrations.HasConnectionWarning}"
+                            <StackPanel Grid.Row="1">
+                            <Border IsVisible="{Binding Migrations.HasConnectionWarning}"
                                     Classes="caution" CornerRadius="4" Padding="10,8" Margin="0,0,0,8">
                                 <TextBlock Text="{Binding Migrations.ConnectionWarning}" TextWrapping="Wrap" FontSize="{DynamicResource AppFontSizeSmall}" />
                             </Border>
+
+                            <!-- Offers a refresh, never runs one: refreshing builds the project. -->
+                            <Border IsVisible="{Binding Migrations.ChangedOnDisk}"
+                                    Classes="caution" CornerRadius="4" Padding="10,4" Margin="0,0,0,8">
+                                <Grid ColumnDefinitions="*,Auto,Auto">
+                                    <TextBlock Text="Migrations changed on disk. Refresh?" VerticalAlignment="Center"
+                                               TextWrapping="Wrap" FontSize="{DynamicResource AppFontSizeSmall}" />
+                                    <Button Grid.Column="1" Content="Refresh" Margin="8,0,0,0"
+                                            Command="{Binding Migrations.RefreshCommand}"
+                                            ToolTip.Tip="Build the project and reload the migration list (F5)" />
+                                    <Button Grid.Column="2" Content="Dismiss" Margin="6,0,0,0"
+                                            Command="{Binding Migrations.DismissChangedOnDiskCommand}" />
+                                </Grid>
+                            </Border>
+                            </StackPanel>
 
                             <!-- List on the left, the selected migration's detail on the right, with
                                  a draggable divider between them. -->

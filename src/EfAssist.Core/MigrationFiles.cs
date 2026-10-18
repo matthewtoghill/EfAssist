@@ -55,6 +55,37 @@ public static class MigrationFiles
         }
     }
 
+    /// <summary>
+    /// The migration id a source file is named after: a 14-digit timestamp, an underscore and a name,
+    /// for example <c>20260818140933_InitialCreate.cs</c>.
+    /// </summary>
+    /// <returns>
+    /// The id, or null for anything else — the <c>.Designer.cs</c> sibling, the model snapshot, or
+    /// any other file that happens to sit in the folder.
+    /// </returns>
+    public static string? IdFromPath(string path)
+    {
+        var name = Path.GetFileName(path);
+        if (!name.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
+            || name.EndsWith(".Designer.cs", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var id = name[..^3];
+        return id.Length > 15 && id[14] == '_' && id[..14].All(char.IsAsciiDigit) ? id : null;
+    }
+
+    /// <summary>
+    /// Whether a path under <paramref name="root"/> passes through a directory the search never
+    /// looks in — a build output, for instance, which writes files in bursts and holds stale copies.
+    /// </summary>
+    public static bool IsIgnored(string root, string path) =>
+        Path.GetRelativePath(root, path)
+            .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            .SkipLast(1)
+            .Any(segment => IgnoredDirectories.Contains(segment, StringComparer.OrdinalIgnoreCase));
+
     /// <summary>The first file with this name, in <see cref="Walk"/> order.</summary>
     private static string? Search(string directory, string fileName) =>
         Walk(directory).FirstOrDefault(f => string.Equals(

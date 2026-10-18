@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EfAssist.Core;
+using EfAssist.Core.Diagrams;
 
 namespace EfAssist.App.ViewModels;
 
@@ -34,6 +35,25 @@ public partial class MigrationsViewModel : ObservableObject
 
     /// <summary>What each migration's Up may lose, by id. Rescanned whenever the list is replaced.</summary>
     private Dictionary<string, IReadOnlyList<string>> _dataLoss = [];
+
+    /// <summary>
+    /// Watches the context's migrations folder for files added or removed outside the app. Only ever
+    /// raises <see cref="ChangedOnDisk"/>: refreshing builds the project, which is not something to
+    /// start behind the user's back.
+    /// </summary>
+    private FileSystemWatcher? _watcher;
+
+    /// <summary>Bumped on every stop, so a folder lookup still in flight knows it was overtaken.</summary>
+    private int _watchGeneration;
+
+    /// <summary>Migration files the watcher has seen touched and not yet checked against the list.</summary>
+    private readonly HashSet<string> _touched = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// How long to let the disk settle before looking. An editor's save renames the file away and
+    /// back, and a <c>git pull</c> writes in a burst; the check wants the state after, not during.
+    /// </summary>
+    private static readonly TimeSpan SettleDelay = TimeSpan.FromMilliseconds(500);
 
     public MigrationsViewModel(
         CommandSession session,
@@ -123,6 +143,16 @@ public partial class MigrationsViewModel : ObservableObject
     [ObservableProperty]
     private bool _isStale;
 
+    /// <summary>
+    /// A migration file appeared on disk that the list does not have, or one it has disappeared —
+    /// from the IDE, a terminal or a <c>git pull</c>. Offers a refresh; never runs one.
+    /// </summary>
+    [ObservableProperty]
+    private bool _changedOnDisk;
+
+    [RelayCommand]
+    private void DismissChangedOnDisk() => ChangedOnDisk = false;
+
     [ObservableProperty]
     private string _newMigrationName = "";
 
@@ -206,6 +236,7 @@ public partial class MigrationsViewModel : ObservableObject
         _dataLoss = ScanDataLoss(_ordered, "Up");
         Detail.Clear();
         RebuildDisplay();
+        Watch();
     }
 
     /// <summary>Copies current state into the settings object the shell is about to save.</summary>
@@ -233,7 +264,149 @@ public partial class MigrationsViewModel : ObservableObject
         NewMigrationName = "";
         ForceRemove = false;
         Detail.Clear();
+        StopWatching();
         NotifyListChanged();
+    }
+
+    // ---- Watching the disk ----
+
+    /// <summary>
+    /// Starts watching where the selected context's migrations live: the folder holding its model
+    /// snapshot, so another context's migrations in their own folder never raise the strip. A
+    /// context with no migrations yet has no snapshot, so the whole project is watched instead.
+    /// </summary>
+    private void Watch()
+    {
+        StopWatching();
+
+        var target = _target();
+        if (target is null)
+        {
+            return;
+        }
+
+        // Finding the snapshot walks the project and parses every snapshot in it, which on a large
+        // model is worth keeping off the UI thread. A newer Watch or a Clear in the meantime wins.
+        var generation = _watchGeneration;
+        _ = Task.Run(() => WatchedFolder(target)).ContinueWith(found => _session.PostToUiThread(() =>
+        {
+            if (generation == _watchGeneration && found.IsCompletedSuccessfully && found.Result is { } folder)
+            {
+                StartWatcher(folder);
+            }
+        }));
+    }
+
+    private static string? WatchedFolder(EfTarget target)
+    {
+        var snapshot = ModelSnapshotLocator.Find(target.Project, target.Context);
+        var folder = snapshot is not null
+            ? Path.GetDirectoryName(snapshot)
+            : Directory.Exists(target.Project)
+                ? target.Project
+                : Path.GetDirectoryName(Path.GetFullPath(target.Project));
+
+        return folder is not null && Directory.Exists(folder) ? folder : null;
+    }
+
+    private void StartWatcher(string folder)
+    {
+        try
+        {
+            _watcher = new FileSystemWatcher(folder, "*.cs")
+            {
+                IncludeSubdirectories = true,
+                NotifyFilter = NotifyFilters.FileName,
+
+                // The largest Windows allows. A git checkout, or a build when the whole project is
+                // watched, can outrun the 8 KB default, and an overflow shows the strip regardless.
+                InternalBufferSize = 64 * 1024,
+            };
+            _watcher.Created += (_, e) => Touched(folder, e.FullPath);
+            _watcher.Deleted += (_, e) => Touched(folder, e.FullPath);
+            _watcher.Renamed += (_, e) =>
+            {
+                Touched(folder, e.OldFullPath);
+                Touched(folder, e.FullPath);
+            };
+
+            // The buffer overflowed and events were lost, so whatever changed is unknown.
+            _watcher.Error += (_, _) => _session.PostToUiThread(() => ChangedOnDisk = true);
+            _watcher.EnableRaisingEvents = true;
+        }
+        catch (Exception ex) when (ex is IOException or ArgumentException or UnauthorizedAccessException)
+        {
+            StopWatching();
+        }
+    }
+
+    private void StopWatching()
+    {
+        _watchGeneration++;
+        _watcher?.Dispose();
+        _watcher = null;
+        ChangedOnDisk = false;
+    }
+
+    /// <summary>
+    /// Called on the watcher's thread. Queues the file and schedules one check per burst. Build
+    /// output is dropped here: when the whole project is watched, every build writes into it.
+    /// </summary>
+    private void Touched(string folder, string path)
+    {
+        if (MigrationFiles.IdFromPath(path) is null || MigrationFiles.IsIgnored(folder, path))
+        {
+            return;
+        }
+
+        lock (_touched)
+        {
+            var first = _touched.Count == 0;
+            _touched.Add(path);
+            if (!first)
+            {
+                return;
+            }
+        }
+
+        ScheduleCheck();
+    }
+
+    private void ScheduleCheck() =>
+        _ = Task.Delay(SettleDelay).ContinueWith(_ => _session.PostToUiThread(CheckTouched));
+
+    /// <summary>
+    /// Compares each touched file with the list: on disk but not listed, or listed but gone. Judged
+    /// on what is there now rather than which event fired, so a save that renames a file away and
+    /// back is not mistaken for a removal.
+    /// </summary>
+    private void CheckTouched()
+    {
+        // The app's own command is writing these files and reloads the list when it is done. Look
+        // again afterwards, against the list it produced, rather than flash the strip meanwhile.
+        if (_session.IsRunning)
+        {
+            ScheduleCheck();
+            return;
+        }
+
+        string[] paths;
+        lock (_touched)
+        {
+            paths = [.. _touched];
+            _touched.Clear();
+        }
+
+        if (_watcher is null)
+        {
+            return;
+        }
+
+        var listed = _ordered.Select(m => m.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (paths.Any(path => File.Exists(path) != listed.Contains(MigrationFiles.IdFromPath(path)!)))
+        {
+            ChangedOnDisk = true;
+        }
     }
 
     /// <summary>
@@ -907,6 +1080,7 @@ public partial class MigrationsViewModel : ObservableObject
         Detail.InvalidateSql();
 
         RebuildDisplay();
+        Watch();
         _persist();
 
         if (!HasConnectionWarning)
