@@ -517,6 +517,46 @@ public class MigrationsViewModelTests
     }
 
     [Fact]
+    public async Task Data_loss_is_marked_on_the_row_and_named_when_applying_or_rolling_back()
+    {
+        var root = Directory.CreateTempSubdirectory("efassist-dataloss").FullName;
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(root, "Migrations"));
+            File.WriteAllText(
+                Path.Combine(root, "Migrations", "20260101000001_DropUrl.cs"),
+                """
+                class DropUrl {
+                    void Up(MigrationBuilder b) { b.DropColumn(name: "Url", table: "Blogs"); }
+                    void Down(MigrationBuilder b) { b.DropTable(name: "Archive"); }
+                }
+                """);
+
+            var (tab, runner, confirm, _) = Build(target: Target with { Project = Path.Combine(root, "Data.csproj") });
+            runner.Rows = [("InitialCreate", true), ("DropUrl", false)];
+            await tab.RefreshCommand.ExecuteAsync(null);
+
+            Assert.False(tab.Migrations[0].HasDataLoss);
+            Assert.Contains("drops column Blogs.Url", tab.Migrations[1].DataLossTip);
+
+            await tab.UpdateToLatestCommand.ExecuteAsync(null);
+            Assert.Contains("DropUrl drops column Blogs.Url", confirm.Last!.Detail);
+
+            // Rolling back runs Down, so that is what the confirmation names.
+            runner.Rows = [("InitialCreate", true), ("DropUrl", true)];
+            await tab.RefreshCommand.ExecuteAsync(null);
+            tab.SelectedMigration = tab.Migrations.First(m => m.Name == "InitialCreate");
+            await tab.UpdateToSelectedCommand.ExecuteAsync(null);
+            Assert.Contains("DropUrl drops table Archive", confirm.Last!.Detail);
+            Assert.DoesNotContain("Blogs.Url", confirm.Last.Detail);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task Moving_forward_to_a_pending_migration_confirms_as_an_apply_not_a_rollback()
     {
         var (tab, runner, confirm, _) = Build();

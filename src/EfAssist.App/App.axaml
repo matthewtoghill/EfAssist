@@ -82,6 +82,7 @@
                     <!-- Migration state badges -->
                     <SolidColorBrush x:Key="StateAppliedBrush" Color="#2E7D32" />
                     <SolidColorBrush x:Key="StatePendingBrush" Color="#9A6600" />
+                    <SolidColorBrush x:Key="DataLossBrush" Color="#bd4e3f" />
                     <SolidColorBrush x:Key="StateUnknownBrush" Color="#6E6E6E" />
                     <SolidColorBrush x:Key="StateBadgeForegroundBrush" Color="White" />
 
@@ -137,6 +138,7 @@
 
                     <SolidColorBrush x:Key="StateAppliedBrush" Color="#3A8F3F" />
                     <SolidColorBrush x:Key="StatePendingBrush" Color="#B87A00" />
+                    <SolidColorBrush x:Key="DataLossBrush" Color="#bd4e3f" />
                     <SolidColorBrush x:Key="StateUnknownBrush" Color="#7A7A7A" />
                     <SolidColorBrush x:Key="StateBadgeForegroundBrush" Color="White" />
 

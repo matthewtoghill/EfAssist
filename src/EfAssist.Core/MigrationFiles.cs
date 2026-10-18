@@ -55,43 +55,79 @@ public static class MigrationFiles
         }
     }
 
+    /// <summary>The first file with this name, in <see cref="Walk"/> order.</summary>
+    private static string? Search(string directory, string fileName) =>
+        Walk(directory).FirstOrDefault(f => string.Equals(
+            Path.GetFileName(f), fileName, StringComparison.OrdinalIgnoreCase));
+
     /// <summary>
-    /// Walks the tree explicitly rather than with <see cref="SearchOption.AllDirectories"/>, so an
-    /// unreadable subdirectory skips itself instead of aborting the whole search, and so bin and obj
-    /// are never descended into at all.
+    /// Every migration source file in the project, keyed by migration id, from one walk rather than
+    /// one <see cref="FindSource"/> per migration. Where two files share a name, the one
+    /// <see cref="FindSource"/> would pick wins.
     /// </summary>
-    private static string? Search(string directory, string fileName)
+    /// <remarks>
+    /// Keyed by file name, so it also holds non-migration files; look up by id and the rest are
+    /// never seen.
+    /// </remarks>
+    public static IReadOnlyDictionary<string, string> FindSources(string migrationsProjectPath)
     {
-        var match = Path.Combine(directory, fileName);
-        if (File.Exists(match))
+        var sources = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var root = Directory.Exists(migrationsProjectPath)
+            ? migrationsProjectPath
+            : Path.GetDirectoryName(Path.GetFullPath(migrationsProjectPath));
+
+        if (root is null || !Directory.Exists(root))
         {
-            return match;
+            return sources;
         }
 
-        foreach (var child in Directory.EnumerateDirectories(directory))
+        foreach (var file in Walk(root))
+        {
+            if (file.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
+                && !file.EndsWith(".Designer.cs", StringComparison.OrdinalIgnoreCase))
+            {
+                sources.TryAdd(Path.GetFileNameWithoutExtension(file), file);
+            }
+        }
+
+        return sources;
+    }
+
+    /// <summary>
+    /// A directory's own files first, then each child in turn. Explicit rather than
+    /// <see cref="SearchOption.AllDirectories"/>, so an unreadable subdirectory skips itself instead
+    /// of aborting the whole walk, and so bin and obj are never descended into at all.
+    /// </summary>
+    private static IEnumerable<string> Walk(string directory)
+    {
+        string[] files, children;
+        try
+        {
+            files = Directory.GetFiles(directory);
+            children = Directory.GetDirectories(directory);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            yield break;
+        }
+
+        foreach (var file in files)
+        {
+            yield return file;
+        }
+
+        foreach (var child in children)
         {
             if (IgnoredDirectories.Contains(Path.GetFileName(child), StringComparer.OrdinalIgnoreCase))
             {
                 continue;
             }
 
-            string? found;
-            try
+            foreach (var file in Walk(child))
             {
-                found = Search(child, fileName);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                continue;
-            }
-
-            if (found is not null)
-            {
-                return found;
+                yield return file;
             }
         }
-
-        return null;
     }
 
     /// <summary>

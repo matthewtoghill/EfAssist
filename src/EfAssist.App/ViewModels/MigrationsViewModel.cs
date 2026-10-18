@@ -32,6 +32,9 @@ public partial class MigrationsViewModel : ObservableObject
     /// </summary>
     private readonly List<MigrationInfo> _ordered = [];
 
+    /// <summary>What each migration's Up may lose, by id. Rescanned whenever the list is replaced.</summary>
+    private Dictionary<string, IReadOnlyList<string>> _dataLoss = [];
+
     public MigrationsViewModel(
         CommandSession session,
         Func<EfTarget?> target,
@@ -200,6 +203,7 @@ public partial class MigrationsViewModel : ObservableObject
 
         _ordered.Clear();
         _ordered.AddRange(saved.KnownMigrations.Select(m => m with { Applied = null }));
+        _dataLoss = ScanDataLoss(_ordered, "Up");
         Detail.Clear();
         RebuildDisplay();
     }
@@ -221,6 +225,7 @@ public partial class MigrationsViewModel : ObservableObject
     public void Clear()
     {
         _ordered.Clear();
+        _dataLoss = [];
         Migrations.Clear();
         SelectedMigration = null;
         ConnectionWarning = null;
@@ -672,16 +677,17 @@ public partial class MigrationsViewModel : ObservableObject
                 "Revert migrations",
                 $"Roll {where} back to '{targetMigration}'?",
                 "Roll back",
-                uncertain
+                (uncertain
                     ? $"{undone.Count} later migration(s) would be reverted if they have been applied. "
                       + "The applied state is unknown because the list was loaded without a database "
                       + "connection, so this is being confirmed to be safe."
                     : $"{undone.Count} later migration(s) will be reverted: "
                       + string.Join(", ", undone.Select(m => m.Name))
-                      + ". Their Down methods run and data in the tables they created is lost.");
+                      + ". Their Down methods run and data in the tables they created is lost.")
+                + DataLossDetail(undone, "Down"));
         }
 
-        // Forward only. Still confirmed, but the wording says so rather than warning about loss.
+        // Forward only. Still confirmed, but loss is only warned about when an Up scan finds some.
         var applying = (index < 0 ? _ordered : _ordered.Take(index + 1))
             .Where(m => m.State != MigrationState.Applied)
             .ToList();
@@ -696,7 +702,7 @@ public partial class MigrationsViewModel : ObservableObject
                 + "connection, so some may already be in place.",
             _ => $"{applying.Count} migration(s) will be applied: "
                  + string.Join(", ", applying.Select(m => m.Name)) + ".",
-        };
+        } + DataLossDetail(applying, "Up");
 
         return new ConfirmRequest(
             "Apply migrations",
@@ -705,6 +711,78 @@ public partial class MigrationsViewModel : ObservableObject
                 : $"Update {where} to '{targetMigration}'?",
             "Apply",
             detail);
+    }
+
+    /// <summary>
+    /// The data-loss operations among <paramref name="migrations"/>, as lines to append to a
+    /// confirmation. Read fresh rather than from <see cref="_dataLoss"/>: the file may have been
+    /// edited since the list loaded — removing the drop is the usual response to the warning — and
+    /// a rollback runs Down, which the list never scans.
+    /// </summary>
+    private string DataLossDetail(IReadOnlyList<MigrationInfo> migrations, string method)
+    {
+        var found = ScanDataLoss(migrations, method);
+        var lines = migrations
+            .SelectMany(m => found.GetValueOrDefault(m.Id, []).Select(op => $"• {m.Name} {op}"))
+            .ToList();
+
+        // ponytail: a fixed cap keeps the dialog on screen. The Preview SQL button shows the rest.
+        const int shown = 8;
+        return lines.Count == 0
+            ? ""
+            : "\n\nMay lose data:\n" + string.Join("\n", lines.Take(shown))
+              + (lines.Count > shown ? $"\n…and {lines.Count - shown} more." : "");
+    }
+
+    /// <summary>
+    /// Scans each migration's source for operations that may lose data, keeping only those with
+    /// some. A migration whose file cannot be found or read is left out — the scan is a warning, and
+    /// failing to warn must not block anything.
+    /// </summary>
+    /// <remarks>
+    /// ponytail: synchronous, on the UI thread. One project walk, then a parse only for files that
+    /// mention an operation of interest. Move to a background task if a large project makes the list
+    /// load noticeably slower.
+    /// </remarks>
+    private Dictionary<string, IReadOnlyList<string>> ScanDataLoss(IEnumerable<MigrationInfo> migrations, string method)
+    {
+        var found = new Dictionary<string, IReadOnlyList<string>>();
+        var project = _target()?.Project;
+        if (string.IsNullOrWhiteSpace(project))
+        {
+            return found;
+        }
+
+        var sources = MigrationFiles.FindSources(project);
+        foreach (var migration in migrations)
+        {
+            if (!sources.TryGetValue(migration.Id, out var path))
+            {
+                continue;
+            }
+
+            string source;
+            try
+            {
+                source = File.ReadAllText(path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                continue;
+            }
+
+            if (!(source.Contains("Drop") || source.Contains("AlterColumn") || source.Contains("RenameColumn")))
+            {
+                continue;
+            }
+
+            if (DataLoss.Scan(source, method) is { Count: > 0 } operations)
+            {
+                found[migration.Id] = operations;
+            }
+        }
+
+        return found;
     }
 
     private int IndexOf(string migrationName)
@@ -822,6 +900,7 @@ public partial class MigrationsViewModel : ObservableObject
 
         _ordered.Clear();
         _ordered.AddRange(migrations);
+        _dataLoss = ScanDataLoss(_ordered, "Up");
         IsStale = false;
 
         // The files behind the list may have changed since the SQL was generated from them.
@@ -855,7 +934,8 @@ public partial class MigrationsViewModel : ObservableObject
             .Select((migration, index) => new MigrationRow(
                 index + 1,
                 migration,
-                IsDatabaseHead: headName is not null && migration.Name == headName))
+                IsDatabaseHead: headName is not null && migration.Name == headName,
+                DataLoss: _dataLoss.GetValueOrDefault(migration.Id)))
             .Where(Matches);
 
         Migrations.Clear();

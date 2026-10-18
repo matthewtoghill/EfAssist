@@ -1,4 +1,5 @@
 ﻿using EfAssist.Core;
+using System.Collections.Generic;
 
 namespace EfAssist.App.ViewModels;
 
@@ -16,11 +17,22 @@ namespace EfAssist.App.ViewModels;
 /// badges. False for every row when applied state is unknown, which is what Offline leaves it as:
 /// the app cannot point at a head it did not ask the database about.
 /// </param>
-public sealed record MigrationRow(int Index, MigrationInfo Info, bool IsDatabaseHead = false)
+/// <param name="DataLoss">
+/// What this migration's Up does that may lose data — see <see cref="Core.DataLoss"/>. Empty when
+/// nothing was found or the source could not be read.
+/// </param>
+public sealed record MigrationRow(
+    int Index, MigrationInfo Info, bool IsDatabaseHead = false, IReadOnlyList<string>? DataLoss = null)
 {
     public string Id => Info.Id;
 
     public string Name => Info.Name;
 
     public MigrationState State => Info.State;
+
+    public bool HasDataLoss => DataLoss is { Count: > 0 };
+
+    public string DataLossTip => HasDataLoss
+        ? "Applying this may lose data. It " + string.Join("; ", DataLoss!) + "."
+        : "";
 }

@@ -841,7 +841,7 @@
                                                  IsVisible="{Binding Migrations.HasMigrations}">
                                             <ListBox.ItemTemplate>
                                                 <DataTemplate x:DataType="vm:MigrationRow">
-                                                    <Grid ColumnDefinitions="34,86,*,Auto">
+                                                    <Grid ColumnDefinitions="34,86,*,Auto,Auto">
                                                         <!-- Chronological position, so it does not
                                                              renumber when the sort order flips. -->
                                                         <TextBlock Grid.Column="0" Text="{Binding Index}"
@@ -876,6 +876,18 @@
                                                                 ToolTip.Tip="The newest migration the database has. Everything below it in the apply order is pending.">
                                                             <TextBlock Text="Database is here"
                                                                        Foreground="{DynamicResource StateBadgeForegroundBrush}"
+                                                                       FontSize="{DynamicResource AppFontSizeTiny}" />
+                                                        </Border>
+
+                                                        <!-- What migrations add warned about once in
+                                                             the console. From a scan of Up, so it
+                                                             shows offline too. -->
+                                                        <Border Grid.Column="4" IsVisible="{Binding HasDataLoss}"
+                                                                CornerRadius="3" Padding="6,2" Margin="8,0,0,0"
+                                                                Background="{DynamicResource DataLossBrush}"
+                                                                VerticalAlignment="Center"
+                                                                ToolTip.Tip="{Binding DataLossTip}">
+                                                            <TextBlock Text="May lose data" Foreground="{DynamicResource StateBadgeForegroundBrush}"
                                                                        FontSize="{DynamicResource AppFontSizeTiny}" />
                                                         </Border>
                                                     </Grid>
