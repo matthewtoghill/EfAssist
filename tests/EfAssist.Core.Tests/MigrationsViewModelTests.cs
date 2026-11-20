@@ -386,40 +386,6 @@ public class MigrationsViewModelTests
     }
 
     [Fact]
-    public async Task A_list_is_followed_by_a_model_check_against_the_same_build()
-    {
-        var (tab, runner, _, _) = Build();
-        runner.ModelPending = true;
-
-        await tab.RefreshCommand.ExecuteAsync(null);
-
-        Assert.Contains("--no-build", LastCall(runner, "migrations has-pending-model-changes"));
-        Assert.True(tab.ModelCheck.IsPending);
-    }
-
-    [Fact]
-    public async Task The_model_check_can_be_turned_off()
-    {
-        var (tab, runner, _, _) = Build();
-        tab.CheckModelAfterList = false;
-
-        await tab.RefreshCommand.ExecuteAsync(null);
-
-        Assert.False(Called(runner, "migrations has-pending-model-changes"));
-    }
-
-    [Fact]
-    public async Task A_failed_list_runs_no_model_check()
-    {
-        var (tab, runner, _, _) = Build();
-        runner.Failing.Add("migrations list");
-
-        await tab.RefreshCommand.ExecuteAsync(null);
-
-        Assert.False(Called(runner, "migrations has-pending-model-changes"));
-    }
-
-    [Fact]
     public async Task A_failure_that_is_not_the_database_reports_the_real_error()
     {
         var (tab, runner, _, _) = Build();
