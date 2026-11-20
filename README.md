@@ -16,7 +16,9 @@ needing to remember which project is `--project` and which is `--startup-project
 
 - **Migrations.** Every migration with its applied or pending state, and what its `Up` and `Down`
   change, in source or as the SQL either direction would run. Add, apply, roll back to any point,
-  remove, drop.
+  remove, drop. Migrations that may lose data are marked and named before you apply or roll back
+  them. The tab notices migrations added outside the app, and flags model changes that are not in a
+  migration yet.
 - **Script.** `migrations script` between any two migrations, idempotent or not, in a
   syntax-highlighted viewer with Copy and Save As.
 - **Diagrams.** Your model drawn as an entity-relationship or class diagram, read from the EF model
