@@ -244,6 +244,41 @@ no SDK and no source. **Done**, as a fifth card on the Tools screen.
   than waiting, because without them "no SDK needed" is only half true: a plain bundle still wants a
   matching runtime already installed.
 
+### Data-loss warnings — done
+`migrations add` prints "An operation was scaffolded that may result in the loss of data" once, in
+the console, and nothing else ever says it again.
+
+- **Current state:** each migration's `Up` is read off disk (`Core/DataLoss.cs`, Roslyn, no build) for
+  drops, renames and narrowing `AlterColumn`s. A row with any gets a red marker naming them, and the
+  confirmations for update and roll back list them — `Down` for what a roll back reverts. See
+  `PROGRESS.md` § Data loss, disk changes and the model check.
+- **Known limit:** only EF's scaffolded call shapes are recognised. Destructive SQL passed to
+  `migrationBuilder.Sql` is invisible, so no marker means nothing was found, not that it is safe.
+- **Cost:** as estimated — low. The source reading and the confirmation's destructive flag were
+  already there.
+
+### Notice migrations changed outside the app — done
+The list went out of date silently when a migration was added from the IDE, a terminal or a
+`git pull`.
+
+- **Current state:** the snapshot's folder is watched. A migration added or removed outside the app
+  raises a "Migrations changed on disk. Refresh?" strip and never refreshes on its own, because a
+  refresh builds. An edit to a listed migration is re-read straight away instead — data-loss
+  markers, source and cached SQL — since that needs no build.
+- **Cost:** about an hour for the strip, as estimated; the edit handling was a small follow-up.
+
+### Flag unmigrated model changes — done
+Editing an entity and forgetting `migrations add` went unnoticed unless someone pressed the check on
+Tools.
+
+- **Current state:** the Migrations tab runs `has-pending-model-changes` with `--no-build` after
+  every successful list, against the build the list just used. A pending answer shows a strip with an
+  **Add migration** button. One result is shared by Migrations, Tools and Diagrams. **Check for model
+  changes after listing** in Run options turns it off per workspace; it is on by default.
+- **Not done:** a default for the toggle in Settings, and a hint when entity source files change
+  between lists. Either is small once someone asks for it.
+- **Cost:** low, as estimated.
+
 ### A build warning on `migrations add`
 `database update`, `migrations remove`, `database drop` and `migrations bundle` all ask before running
 against a stale build. `migrations add` does not.

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
@@ -138,6 +138,7 @@ public partial class MainWindowViewModel : ObservableObject
             idempotentRequested: () => Idempotent,
             onIdempotentUnsupported: () => Idempotent = false,
             selectedMigration: () => Migrations!.SelectedMigration?.Name);
+        var modelCheck = new ModelCheck(Session);
         Migrations = new MigrationsViewModel(
             Session,
             BuildTargetForCommands,
@@ -145,16 +146,18 @@ public partial class MainWindowViewModel : ObservableObject
             settings.Display,
             idempotentRequested: () => Idempotent,
             canUseIdempotent: () => Script.CanUseIdempotent,
-            ensureProviderKnownAsync: Script.EnsureProviderKnownAsync);
+            ensureProviderKnownAsync: Script.EnsureProviderKnownAsync,
+            modelCheck: modelCheck);
         Migrations.PropertyChanged += OnMigrationsPropertyChanged;
-        Tools = new ToolsViewModel(Session, BuildTargetForCommands);
+        Tools = new ToolsViewModel(Session, BuildTargetForCommands, modelCheck);
         Diagrams = new DiagramsViewModel(
             Session,
             BuildTargetForCommands,
             () => SelectedContext?.Name ?? _savedContextName,
             () => Migrations.Ordered,
             Persist,
-            settings.Display);
+            settings.Display,
+            modelCheck);
         Update = new UpdateViewModel(updater ?? new VelopackUpdater());
 
         // A failure used to announce itself with a banner pinned above the console. The Activity

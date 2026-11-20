@@ -1,4 +1,4 @@
-using EfAssist.App.ViewModels;
+﻿using EfAssist.App.ViewModels;
 using EfAssist.Core;
 
 namespace EfAssist.Core.Tests;
@@ -44,7 +44,7 @@ public class ToolsViewModelTests
 
         await tools.CheckPendingModelChangesCommand.ExecuteAsync(null);
 
-        Assert.Equal(ModelCheckState.UpToDate, tools.ModelCheckState);
+        Assert.Equal(ModelCheckState.UpToDate, tools.ModelCheck.State);
         Assert.Null(session.Diagnosis);
     }
 
@@ -67,8 +67,11 @@ public class ToolsViewModelTests
 
         await tools.CheckPendingModelChangesCommand.ExecuteAsync(null);
 
-        Assert.Equal(ModelCheckState.Pending, tools.ModelCheckState);
+        Assert.Equal(ModelCheckState.Pending, tools.ModelCheck.State);
         Assert.Null(session.Diagnosis);
+
+        // Recorded as a failure, it would open the Activity pane every time the Migrations tab checks.
+        Assert.False(session.Runs[0].Failed);
     }
 
     [Fact]
@@ -86,7 +89,7 @@ public class ToolsViewModelTests
 
         await tools.CheckPendingModelChangesCommand.ExecuteAsync(null);
 
-        Assert.Equal(ModelCheckState.Unknown, tools.ModelCheckState);
+        Assert.Equal(ModelCheckState.Unknown, tools.ModelCheck.State);
         Assert.NotEqual("Ready.", session.StatusMessage);
     }
 
@@ -97,7 +100,7 @@ public class ToolsViewModelTests
 
         tools.NotifyTargetChanged();
 
-        Assert.Equal(ModelCheckState.Unknown, tools.ModelCheckState);
+        Assert.Equal(ModelCheckState.Unknown, tools.ModelCheck.State);
     }
 
     // ---- Migrations bundle ----

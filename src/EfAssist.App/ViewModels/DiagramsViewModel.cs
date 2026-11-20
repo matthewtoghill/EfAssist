@@ -148,9 +148,11 @@ public partial class DiagramsViewModel : ObservableObject
         Func<string?> contextName,
         Func<IReadOnlyList<MigrationInfo>> migrations,
         Action persist,
-        DisplaySettings display)
+        DisplaySettings display,
+        ModelCheck? modelCheck = null)
     {
         _session = session;
+        ModelCheck = modelCheck ?? new ModelCheck(session);
         _target = target;
         _contextName = contextName;
         _migrations = migrations;
@@ -533,12 +535,10 @@ public partial class DiagramsViewModel : ObservableObject
 
     /// <summary>
     /// The second, weaker staleness signal: the code has changed since the last migration, so even a
-    /// current snapshot is behind the model. Costs a build, so it only runs on request.
+    /// current snapshot is behind the model. Shared with the Migrations and Tools screens: run from here
+    /// on request, and by the Migrations tab after each list unless the workspace turns that off.
     /// </summary>
-    [ObservableProperty]
-    private ModelCheckState _modelCheckState = ModelCheckState.Unknown;
-
-    public bool ShowsPendingChangesWarning => ModelCheckState == ModelCheckState.Pending;
+    public ModelCheck ModelCheck { get; }
 
     /// <summary>
     /// What was read, and how much of it there is to draw. The count is of entities the diagram can
@@ -654,7 +654,7 @@ public partial class DiagramsViewModel : ObservableObject
     /// <summary>Called by the shell when the project or context selection changes.</summary>
     public void NotifyTargetChanged()
     {
-        ModelCheckState = ModelCheckState.Unknown;
+        ModelCheck.Reset();
         NotifyCommandStates();
     }
 
@@ -964,25 +964,19 @@ public partial class DiagramsViewModel : ObservableObject
             return;
         }
 
-        ModelCheckState = ModelCheckState.Unknown;
-
-        var result = await _session.RunAsync(
-            EfArgs.MigrationsHasPendingModelChanges(target),
-            "Checking for pending model changes");
+        var result = await ModelCheck.RunAsync(target);
 
         if (result is null)
         {
             return;
         }
 
-        if (result.Success)
+        if (ModelCheck.State == ModelCheckState.UpToDate)
         {
-            ModelCheckState = ModelCheckState.UpToDate;
             _session.StatusMessage = "The diagram is up to date with the model.";
         }
-        else if (EfDiagnostics.IsPendingModelChanges(result))
+        else if (ModelCheck.IsPending)
         {
-            ModelCheckState = ModelCheckState.Pending;
             _session.StatusMessage = "The model has changed since the last migration.";
         }
         else
@@ -1583,7 +1577,6 @@ public partial class DiagramsViewModel : ObservableObject
         Scene = null;
         SelectedEntity = null;
         IsStale = false;
-        ModelCheckState = ModelCheckState.Unknown;
         EmptyReason = null;
         _matches.Clear();
         OnPropertyChanged(nameof(SourceSummary));

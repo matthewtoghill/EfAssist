@@ -32,6 +32,9 @@ public class MigrationsViewModelTests
 
         public string DatabaseName { get; set; } = "AppDb";
 
+        /// <summary>When true, <c>has-pending-model-changes</c> answers the way EF does for pending changes.</summary>
+        public bool ModelPending { get; set; }
+
         public string Provider { get; set; } = "Microsoft.EntityFrameworkCore.SqlServer";
 
         /// <summary>What a generated script contains. Written to whatever --output asks for.</summary>
@@ -76,6 +79,15 @@ public class MigrationsViewModelTests
                 Directory.CreateDirectory(Path.GetDirectoryName(output)!);
                 File.WriteAllText(output, ScriptBody);
                 return Result(new EfResult(0, [], "fake", "."));
+            }
+
+            if (key == "migrations has-pending-model-changes" && ModelPending)
+            {
+                return Result(new EfResult(
+                    1,
+                    [new OutputLine(OutputChannel.Error, "Changes have been made to the model since the last migration.")],
+                    "fake",
+                    "."));
             }
 
             if (key == "dbcontext info")
@@ -225,6 +237,46 @@ public class MigrationsViewModelTests
     }
 
     [Fact]
+    public async Task Editing_a_listed_migration_rescans_it_without_running_anything()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "EfAssistTests", Guid.NewGuid().ToString("N"));
+        var migrations = Path.Combine(root, "Migrations");
+        var file = Path.Combine(migrations, "20260101000001_AddBlogUrl.cs");
+        Directory.CreateDirectory(migrations);
+        File.WriteAllText(Path.Combine(root, "Data.csproj"), "<Project />");
+        File.WriteAllText(
+            Path.Combine(migrations, "BlogContextModelSnapshot.cs"),
+            "[DbContext(typeof(BlogContext))] partial class BlogContextModelSnapshot { }");
+        File.WriteAllText(file, "class AddBlogUrl { void Up(MigrationBuilder b) { } }");
+
+        try
+        {
+            var (tab, runner, _, _) = Build(target: Target with { Project = Path.Combine(root, "Data.csproj") });
+            await tab.RefreshCommand.ExecuteAsync(null);
+            tab.SelectedMigration = tab.Migrations[1];
+            var calls = runner.Calls.Count;
+            Assert.False(tab.Migrations[1].HasDataLoss);
+            await Task.Delay(500);
+
+            const string edited = """class AddBlogUrl { void Up(MigrationBuilder b) { b.DropColumn(name: "Url", table: "Blogs"); } }""";
+            File.WriteAllText(file, edited);
+            for (var i = 0; i < 50 && !tab.Migrations[1].HasDataLoss; i++)
+            {
+                await Task.Delay(100);
+            }
+
+            Assert.True(tab.Migrations[1].HasDataLoss);
+            Assert.Equal(edited, tab.Detail.Source);
+            Assert.False(tab.ChangedOnDisk);
+            Assert.Equal(calls, runner.Calls.Count);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task Ignores_build_output_when_the_whole_project_is_watched()
     {
         // No snapshot, so the watcher falls back to the project folder — bin and obj included.
@@ -255,6 +307,40 @@ public class MigrationsViewModelTests
         {
             Directory.Delete(root, recursive: true);
         }
+    }
+
+    [Fact]
+    public async Task A_list_is_followed_by_a_model_check_against_the_same_build()
+    {
+        var (tab, runner, _, _) = Build();
+        runner.ModelPending = true;
+
+        await tab.RefreshCommand.ExecuteAsync(null);
+
+        Assert.Contains("--no-build", LastCall(runner, "migrations has-pending-model-changes"));
+        Assert.True(tab.ModelCheck.IsPending);
+    }
+
+    [Fact]
+    public async Task The_model_check_can_be_turned_off()
+    {
+        var (tab, runner, _, _) = Build();
+        tab.CheckModelAfterList = false;
+
+        await tab.RefreshCommand.ExecuteAsync(null);
+
+        Assert.False(Called(runner, "migrations has-pending-model-changes"));
+    }
+
+    [Fact]
+    public async Task A_failed_list_runs_no_model_check()
+    {
+        var (tab, runner, _, _) = Build();
+        runner.Failing.Add("migrations list");
+
+        await tab.RefreshCommand.ExecuteAsync(null);
+
+        Assert.False(Called(runner, "migrations has-pending-model-changes"));
     }
 
     [Fact]

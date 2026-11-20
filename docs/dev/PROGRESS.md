@@ -834,8 +834,9 @@ on request the SQL that migration alone would run.
   (`2*` / `3*`), so it comes back sensible at any window size, but a dragged width is lost on close.
 - **No Up/Down split and no diff between two migrations.** The whole file is shown; Up and Down are
   found by reading. A structured diff stays out of scope — see the roadmap's "Not planned".
-- **Editing a migration file mid-session does not invalidate its cached SQL.** Refreshing the
-  migrations list does. There is no file watcher.
+- ~~**Editing a migration file mid-session does not invalidate its cached SQL.**~~ Resolved: the
+  migrations folder is now watched, and an edit to a listed migration drops the cached SQL and
+  re-reads the source. See § Data loss, disk changes and the model check.
 
 ### Idempotent option moved to the shared workspace pane
 The migration detail pane's SQL preview initially ignored the idempotent flag entirely — `migrations
@@ -2013,6 +2014,71 @@ a chosen subset, and grows that subset outwards one ring of relationships at a t
   everything back on is "not filtered" rather than a filter that includes everything; the filter
   comes back on reopen and never reaches the workspace defaults.
 
+## Data loss, disk changes and the model check — Done
+
+Three ways the Migrations tab could show something out of date, or stay quiet about something that
+matters, without anyone pressing a button.
+
+### Built
+
+- **Data-loss markers.** `Core/DataLoss.cs` reads one method of a migration's source — `Up` or
+  `Down` — with Roslyn and names each operation that may lose data: `DropTable`, `DropColumn`,
+  `RenameColumn`, and an `AlterColumn` that narrows the type, shortens `maxLength` or makes a column
+  non-nullable. No build: it reads the file the list already points at. A row with any gets a red
+  marker whose tooltip names them, and the confirmations for `database update` and roll back list
+  them per migration — `Up` for what is being applied, `Down` for what is being reverted.
+- **Changes on disk.** A `FileSystemWatcher` on the folder holding the context's model snapshot (or
+  the whole project, with `bin` and `obj` ignored, when there is no snapshot yet). A migration added
+  or removed outside the app — IDE, terminal, `git pull` — raises a "Migrations changed on disk.
+  Refresh?" strip. It never refreshes by itself, because refreshing builds. A buffer overflow raises
+  the strip too, since what changed is then unknown.
+- **Edits on disk.** The watcher also reports writes. An edit to a listed migration needs no build to
+  re-read, so it does not raise the strip: the data-loss markers are rescanned, the selected
+  migration's source is reloaded, and cached SQL is dropped because regenerating it would need a
+  build. This closes the gap where a hand-edited migration kept showing its old warning, source and
+  SQL until the next refresh.
+- **Pending model changes after each list.** `ModelCheck` holds the outcome of
+  `migrations has-pending-model-changes` and is shared by Migrations, Tools and Diagrams, so a check
+  from any of them updates all three. The Migrations tab runs it after every successful list, with
+  `--no-build` so it describes the same build the list just used and costs seconds rather than a
+  build. While the answer is "pending", a strip reads "The model has changes that are not in a
+  migration" with an **Add migration** button that opens the Add flyout with the name box focused.
+  A workspace setting, **Check for model changes after listing** in Run options, turns it off. It
+  is on by default and saved per workspace (`WorkspaceSettings.CheckModelAfterList`).
+- **"Pending" is not a failed run.** `has-pending-model-changes` reports pending changes by exiting
+  non-zero. `CommandSession` now records that as a succeeded run. Recorded as a failure, it opened
+  the Activity pane on every list refresh once the check ran automatically, and it already did so
+  for the manual check on Tools.
+
+### Decisions worth recording
+
+- **The check reuses the list's build rather than building twice.** If the list ran with
+  `--no-build` against a stale build, the check is stale in the same way, which is consistent rather
+  than contradictory.
+- **A failed check is not reported.** The list is what was asked for. A check that fails for a reason
+  other than pending changes leaves the state at Unknown, keeps the list's summary on the status
+  line, and still leaves an Activity card. The Tools card is the place to look into it.
+- **No workspace default in Settings for the new toggle.** It defaults to on for every workspace.
+  Add it to `WorkspaceDefaults` and the Settings screen if someone wants it off everywhere.
+- **The model check result moved out of Tools.** `ModelCheckState` and the check itself now live in
+  `ViewModels/ModelCheck.cs`. Tools and Diagrams each had a copy of the same command; both now call
+  `ModelCheck.RunAsync` and keep only their own status wording.
+
+### Verified
+
+- Core: `DataLossTests` covers each operation, `Up` against `Down`, and an `AlterColumn` that widens
+  rather than narrows.
+- View model: a list is followed by a `--no-build` check whose pending answer shows on the tab; the
+  toggle turns it off; a failed list runs no check; a pending answer is not recorded as a failed run;
+  editing a listed migration on disk marks its data loss and reloads its source without running a
+  command or raising the strip; a new file raises the strip without running a command; build output
+  is ignored.
+
+### Not verified yet
+
+- Nobody has watched the strip and the auto-check against a real project, or seen how long the
+  extra check takes on a large one.
+
 ## Deliberate shortcuts
 
 Tracked so they do not rot into "later means never". Each is marked with a `ponytail:` comment at the site.
@@ -2032,7 +2098,10 @@ Tracked so they do not rot into "later means never". Each is marked with a `pony
 | `Highlighting/Sql-*.xshd` | The ~580-keyword list is duplicated across both variant files | Never, most likely — it is machine-generated and inert. Revisit only if the two files start diverging in rules as well as colours |
 | `MainWindow.axaml.cs` SQL document | Rebuilt from scratch on every `Sql` change rather than diffed into the existing document | Scripts get large enough that reallocating the document is visible; a few thousand lines is not |
 | `MigrationFiles.FindSource` | Walks the migrations project for `<id>.cs` on every selection, with no cache | A project is big enough that the walk is noticeable; it is a directory scan against a warm OS cache |
-| `MigrationDetailViewModel` | Cached SQL is invalidated by a list refresh, not by watching the migration files | Editing a migration and re-reading its SQL without refreshing proves confusing |
+| `DataLoss.Scan` | Matches EF's scaffolded call shapes only; raw `migrationBuilder.Sql("DROP …")` and operations built in helper methods are invisible, so no marker means "nothing found", not "safe" | Someone hand-writes destructive SQL in a migration and expects the marker |
+| `MigrationsViewModel.ScanDataLoss` | Synchronous on the UI thread: one project walk, then a parse only for files mentioning an operation of interest | A large project makes the list load, or saving a migration, noticeably slower |
+| `MigrationsViewModel.Reread` | An edit to one migration rescans them all and drops every cached script, not just that migration's | Same trigger as above; key the rescan and the cache drop by the edited id |
+| `MigrationsViewModel.DataLossDetail` | The confirmation lists at most eight operations, then "…and n more" | Someone needs the full list in the dialog rather than behind Preview SQL |
 | `MigrationsViewModel.PreviewUpdateAsync` | No cache at all, so every press of Preview SQL rebuilds and regenerates | Never, most likely — a stale preview of a pending database change is worse than waiting for a fresh one |
 | `MainWindow._confirm` | A field holding the live `ConfirmWindow`, rather than passing the owner through the view model | A second dialog needs to own a child window; one does not make a pattern |
 | Migrations tab splitter | Column widths are proportional and not persisted | Someone resizes it every session |

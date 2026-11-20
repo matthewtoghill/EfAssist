@@ -119,16 +119,20 @@ public partial class CommandSession : ObservableObject
             LastResult = result;
             Diagnosis = EfDiagnostics.Diagnose(result);
 
+            // Pending model changes exit non-zero, but that is the check's answer rather than a
+            // failure. Recorded as one, it would open the Activity pane on every list refresh.
+            var succeeded = result.Success || EfDiagnostics.IsPendingModelChanges(result);
+
             Record(new CommandRun
             {
                 Label = label,
                 Args = args,
-                Outcome = result.Success ? CommandOutcome.Succeeded : CommandOutcome.Failed,
+                Outcome = succeeded ? CommandOutcome.Succeeded : CommandOutcome.Failed,
                 ExitCode = result.ExitCode,
                 Duration = clock.Elapsed,
                 StartedAt = started,
                 Diagnosis = Diagnosis,
-                FailureLine = result.Success ? null : FirstLine(result.ErrorMessage),
+                FailureLine = succeeded ? null : FirstLine(result.ErrorMessage),
                 FirstOutputLine = firstLine,
                 Destructive = destructive,
             });
