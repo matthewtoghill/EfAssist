@@ -58,6 +58,13 @@ public sealed class WorkspaceSettings
     public bool Offline { get; set; }
 
     /// <summary>
+    /// Run <c>migrations has-pending-model-changes</c> after each successful migrations list, so an
+    /// entity edited without a migration is flagged without asking. On by default; a project slow
+    /// enough to start that the extra few seconds hurt can turn it off.
+    /// </summary>
+    public bool CheckModelAfterList { get; set; } = true;
+
+    /// <summary>
     /// Generate idempotent scripts, checking the migrations history table. Shared by the Script tab
     /// and the migration detail pane's SQL preview, so it lives once, per workspace, alongside
     /// <see cref="NoBuild"/> and <see cref="Offline"/> rather than on either view.

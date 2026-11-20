@@ -62,9 +62,11 @@ public partial class MigrationsViewModel : ObservableObject
         DisplaySettings? display = null,
         Func<bool>? idempotentRequested = null,
         Func<bool>? canUseIdempotent = null,
-        Func<Task>? ensureProviderKnownAsync = null)
+        Func<Task>? ensureProviderKnownAsync = null,
+        ModelCheck? modelCheck = null)
     {
         _session = session;
+        ModelCheck = modelCheck ?? new ModelCheck(session);
         _target = target;
         _persist = persist;
         _display = display ?? new DisplaySettings();
@@ -85,6 +87,9 @@ public partial class MigrationsViewModel : ObservableObject
     /// The pane beside the list: the selected migration's source, and on request its SQL.
     /// </summary>
     public MigrationDetailViewModel Detail { get; }
+
+    /// <summary>Shared with the Tools and Diagrams screens. Run after each list, see <see cref="CheckModelAfterList"/>.</summary>
+    public ModelCheck ModelCheck { get; }
 
     /// <summary>Supplied by the view: shows a modal confirmation and reports what the user chose.</summary>
     public Func<ConfirmRequest, Task<bool>>? ConfirmAsync { get; set; }
@@ -152,6 +157,10 @@ public partial class MigrationsViewModel : ObservableObject
 
     [RelayCommand]
     private void DismissChangedOnDisk() => ChangedOnDisk = false;
+
+    /// <inheritdoc cref="WorkspaceSettings.CheckModelAfterList"/>
+    [ObservableProperty]
+    private bool _checkModelAfterList = true;
 
     [ObservableProperty]
     private string _newMigrationName = "";
@@ -228,6 +237,7 @@ public partial class MigrationsViewModel : ObservableObject
     {
         RefreshMode = saved.MigrationRefresh;
         Offline = saved.Offline;
+        CheckModelAfterList = saved.CheckModelAfterList;
         ConnectionWarning = null;
         IsStale = false;
 
@@ -244,6 +254,7 @@ public partial class MigrationsViewModel : ObservableObject
     {
         saved.MigrationRefresh = RefreshMode;
         saved.Offline = Offline;
+        saved.CheckModelAfterList = CheckModelAfterList;
 
         if (_ordered.Count > 0)
         {
@@ -1046,7 +1057,7 @@ public partial class MigrationsViewModel : ObservableObject
                 ConnectionWarning =
                     "The database could not be reached, so applied state is unknown. Migration names "
                     + "below come from the project, not the database.";
-                Populate(offline);
+                await PopulateAndCheckAsync(offline, target);
                 return;
             }
         }
@@ -1058,17 +1069,37 @@ public partial class MigrationsViewModel : ObservableObject
             return;
         }
 
-        Populate(attempt);
+        await PopulateAndCheckAsync(attempt, target);
     }
 
-    private void Populate(EfResult result)
+    /// <summary>
+    /// Shows the list, then asks whether the model has moved on since its last migration. Always
+    /// <c>--no-build</c>: the list has just built, or deliberately used the last build, and the
+    /// check should describe the same compiled model the list did. A failure only clears the badge —
+    /// the list is what was asked for, and the Tools card is there to dig into the reason.
+    /// </summary>
+    private async Task PopulateAndCheckAsync(EfResult result, EfTarget target)
+    {
+        if (!Populate(result) || !CheckModelAfterList)
+        {
+            return;
+        }
+
+        var status = _session.StatusMessage;
+        if (await ModelCheck.RunAsync(target with { NoBuild = true }) is not null)
+        {
+            _session.StatusMessage = status;
+        }
+    }
+
+    private bool Populate(EfResult result)
     {
         var migrations = EfJson.Migrations(result);
         if (migrations is null)
         {
             IsStale = true;
             _session.StatusMessage = "Could not read the migrations list — use Copy diagnostics.";
-            return;
+            return false;
         }
 
         _ordered.Clear();
@@ -1087,6 +1118,8 @@ public partial class MigrationsViewModel : ObservableObject
         {
             _session.StatusMessage = Summary;
         }
+
+        return true;
     }
 
     /// <summary>Rebuilds the displayed list, keeping the selection where the migration still exists.</summary>
@@ -1204,4 +1237,6 @@ public partial class MigrationsViewModel : ObservableObject
     partial void OnRefreshModeChanged(DiscoveryMode value) => _persist();
 
     partial void OnOfflineChanged(bool value) => _persist();
+
+    partial void OnCheckModelAfterListChanged(bool value) => _persist();
 }

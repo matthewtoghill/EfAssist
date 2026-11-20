@@ -479,6 +479,11 @@
                                     <TextBlock Classes="hint"
                                                Text="List migration names without reaching the database. Applied state shows as Unknown." />
 
+                                    <CheckBox Content="Check for model changes after listing"
+                                              IsChecked="{Binding Migrations.CheckModelAfterList}" Margin="0,8,0,0" />
+                                    <TextBlock Classes="hint"
+                                               Text="Flags code changes not yet in a migration. Uses the build the list just made, so it costs a few seconds rather than a build." />
+
                                     <!-- Shared by the Script tab and a migration's SQL preview in the detail
                                          pane — one option, not two that could disagree. Disabled once the
                                          provider is known not to support it (SQLite); until then it defaults
@@ -792,6 +797,18 @@
                                             ToolTip.Tip="Build the project and reload the migration list (F5)" />
                                     <Button Grid.Column="2" Content="Dismiss" Margin="6,0,0,0"
                                             Command="{Binding Migrations.DismissChangedOnDiskCommand}" />
+                                </Grid>
+                            </Border>
+
+                            <!-- Cleared by the next check, from here, Tools or Diagrams. -->
+                            <Border IsVisible="{Binding Migrations.ModelCheck.IsPending}"
+                                    Classes="caution" CornerRadius="4" Padding="10,4" Margin="0,0,0,8">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock Text="The model has changes that are not in a migration." VerticalAlignment="Center"
+                                               TextWrapping="Wrap" FontSize="{DynamicResource AppFontSizeSmall}" />
+                                    <Button Grid.Column="1" Content="Add migration" Margin="8,0,0,0"
+                                            Command="{Binding StartAddMigrationCommand}"
+                                            ToolTip.Tip="Name a migration to capture the changes (Ctrl+N)" />
                                 </Grid>
                             </Border>
                             </StackPanel>
@@ -1377,7 +1394,7 @@
                                     <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource AppFontSizeSmall}"
                                                Text="The model snapshot has changed since this diagram was drawn. Choose Generate diagram to bring it up to date." />
                                 </Border>
-                                <Border IsVisible="{Binding Diagrams.ShowsPendingChangesWarning}" Classes="caution"
+                                <Border IsVisible="{Binding Diagrams.ModelCheck.IsPending}" Classes="caution"
                                         CornerRadius="4" Padding="10,8">
                                     <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource AppFontSizeSmall}"
                                                Text="Your code has changed since the last migration, so this diagram is behind it. Add a migration to capture the changes." />
@@ -1602,10 +1619,10 @@
                                                 <TextBlock Text="Pending model changes" Classes="group"
                                                            Margin="0" VerticalAlignment="Center" />
                                                 <Border CornerRadius="3" Padding="6,2" VerticalAlignment="Center"
-                                                        Classes.badgeApplied="{Binding Tools.ModelCheckState, Converter={x:Static app:OutputConverters.IsModelUpToDate}}"
-                                                        Classes.badgePending="{Binding Tools.ModelCheckState, Converter={x:Static app:OutputConverters.IsModelPending}}"
-                                                        Classes.badgeUnknown="{Binding Tools.ModelCheckState, Converter={x:Static app:OutputConverters.IsModelUnknown}}">
-                                                    <TextBlock Text="{Binding Tools.ModelCheckState, Converter={x:Static app:OutputConverters.ModelCheckLabel}}"
+                                                        Classes.badgeApplied="{Binding Tools.ModelCheck.State, Converter={x:Static app:OutputConverters.IsModelUpToDate}}"
+                                                        Classes.badgePending="{Binding Tools.ModelCheck.State, Converter={x:Static app:OutputConverters.IsModelPending}}"
+                                                        Classes.badgeUnknown="{Binding Tools.ModelCheck.State, Converter={x:Static app:OutputConverters.IsModelUnknown}}">
+                                                    <TextBlock Text="{Binding Tools.ModelCheck.State, Converter={x:Static app:OutputConverters.ModelCheckLabel}}"
                                                                Foreground="{DynamicResource StateBadgeForegroundBrush}"
                                                                FontSize="{DynamicResource AppFontSizeTiny}" />
                                                 </Border>

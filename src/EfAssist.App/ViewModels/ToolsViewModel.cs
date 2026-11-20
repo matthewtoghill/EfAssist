@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
@@ -7,17 +7,6 @@ using CommunityToolkit.Mvvm.Input;
 using EfAssist.Core;
 
 namespace EfAssist.App.ViewModels;
-
-/// <summary>Outcome of the last pending-model-changes check.</summary>
-public enum ModelCheckState
-{
-    /// <summary>Never run, or the workspace/context changed since the last run.</summary>
-    Unknown,
-
-    UpToDate,
-
-    Pending,
-}
 
 /// <summary>
 /// The Tools tab: cross-cutting checks and whole-workspace actions that do not belong to one
@@ -38,10 +27,11 @@ public partial class ToolsViewModel : ObservableObject
     /// </remarks>
     private string? _lastBundleFolder;
 
-    public ToolsViewModel(CommandSession session, Func<EfTarget?> target)
+    public ToolsViewModel(CommandSession session, Func<EfTarget?> target, ModelCheck? modelCheck = null)
     {
         _session = session;
         _target = target;
+        ModelCheck = modelCheck ?? new ModelCheck(session);
 
         _session.PropertyChanged += (_, e) =>
         {
@@ -61,8 +51,8 @@ public partial class ToolsViewModel : ObservableObject
 
     public Func<string, Task>? RevealFileAsync { get; set; }
 
-    [ObservableProperty]
-    private ModelCheckState _modelCheckState = ModelCheckState.Unknown;
+    /// <summary>Shared with the Migrations and Diagrams screens. Reset by the shell on a target change.</summary>
+    public ModelCheck ModelCheck { get; }
 
     public bool IsReady => !_session.IsRunning && _target() is not null;
 
@@ -131,32 +121,24 @@ public partial class ToolsViewModel : ObservableObject
             return;
         }
 
-        ModelCheckState = ModelCheckState.Unknown;
-
-        var result = await _session.RunAsync(
-            EfArgs.MigrationsHasPendingModelChanges(target),
-            "Checking for pending model changes");
-
+        var result = await ModelCheck.RunAsync(target);
         if (result is null)
         {
             return;
         }
 
-        if (result.Success)
+        if (ModelCheck.State == ModelCheckState.UpToDate)
         {
-            ModelCheckState = ModelCheckState.UpToDate;
             _session.StatusMessage = "No changes have been made to the model since the last migration.";
             return;
         }
 
-        if (EfDiagnostics.IsPendingModelChanges(result))
+        if (ModelCheck.IsPending)
         {
-            ModelCheckState = ModelCheckState.Pending;
             _session.StatusMessage = "The model has changes that are not captured in a migration.";
             return;
         }
 
-        ModelCheckState = ModelCheckState.Unknown;
         _session.ReportFailure(result, "Could not check for pending model changes.");
     }
 
@@ -267,7 +249,7 @@ public partial class ToolsViewModel : ObservableObject
     /// </summary>
     public void NotifyTargetChanged()
     {
-        ModelCheckState = ModelCheckState.Unknown;
+        ModelCheck.Reset();
         BundlePath = null;
         OnPropertyChanged(nameof(IsReady));
         NotifyCommandStates();
@@ -275,7 +257,7 @@ public partial class ToolsViewModel : ObservableObject
 
     public void Clear()
     {
-        ModelCheckState = ModelCheckState.Unknown;
+        ModelCheck.Reset();
         BundlePath = null;
     }
 
