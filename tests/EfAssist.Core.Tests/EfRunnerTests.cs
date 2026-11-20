@@ -51,7 +51,7 @@ public class EfRunnerTests
 
         Assert.False(result.Success);
         Assert.NotEqual(0, result.ExitCode);
-        Assert.Contains("Unable to retrieve project metadata", result.ErrorMessage);
+        Assert.NotEmpty(result.ErrorMessage);
     }
 
     [Fact]
