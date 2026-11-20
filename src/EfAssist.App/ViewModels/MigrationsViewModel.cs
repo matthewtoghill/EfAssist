@@ -37,9 +37,10 @@ public partial class MigrationsViewModel : ObservableObject
     private Dictionary<string, IReadOnlyList<string>> _dataLoss = [];
 
     /// <summary>
-    /// Watches the context's migrations folder for files added or removed outside the app. Only ever
-    /// raises <see cref="ChangedOnDisk"/>: refreshing builds the project, which is not something to
-    /// start behind the user's back.
+    /// Watches the context's migrations folder for files added, removed or edited outside the app.
+    /// An addition or removal only ever raises <see cref="ChangedOnDisk"/>: refreshing builds the
+    /// project, which is not something to start behind the user's back. An edit to a listed file
+    /// needs no build, so its data-loss scan, source and SQL are refreshed straight away.
     /// </summary>
     private FileSystemWatcher? _watcher;
 
@@ -327,13 +328,14 @@ public partial class MigrationsViewModel : ObservableObject
             _watcher = new FileSystemWatcher(folder, "*.cs")
             {
                 IncludeSubdirectories = true,
-                NotifyFilter = NotifyFilters.FileName,
+                NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite,
 
                 // The largest Windows allows. A git checkout, or a build when the whole project is
                 // watched, can outrun the 8 KB default, and an overflow shows the strip regardless.
                 InternalBufferSize = 64 * 1024,
             };
             _watcher.Created += (_, e) => Touched(folder, e.FullPath);
+            _watcher.Changed += (_, e) => Touched(folder, e.FullPath);
             _watcher.Deleted += (_, e) => Touched(folder, e.FullPath);
             _watcher.Renamed += (_, e) =>
             {
@@ -389,7 +391,8 @@ public partial class MigrationsViewModel : ObservableObject
     /// <summary>
     /// Compares each touched file with the list: on disk but not listed, or listed but gone. Judged
     /// on what is there now rather than which event fired, so a save that renames a file away and
-    /// back is not mistaken for a removal.
+    /// back is not mistaken for a removal. A listed file still on disk was edited, so what was read
+    /// from it is read again.
     /// </summary>
     private void CheckTouched()
     {
@@ -418,6 +421,27 @@ public partial class MigrationsViewModel : ObservableObject
         {
             ChangedOnDisk = true;
         }
+
+        if (paths.Any(path => File.Exists(path) && listed.Contains(MigrationFiles.IdFromPath(path)!)))
+        {
+            Reread();
+        }
+    }
+
+    /// <summary>
+    /// Re-reads the files behind the list without building: the data-loss markers, and the selected
+    /// migration's source. Generated SQL cannot be redone without a build, so it is dropped instead.
+    /// </summary>
+    /// <remarks>
+    /// ponytail: rescans every migration and drops every cached script rather than just the edited
+    /// one. One project walk; narrow it if a large project makes saving a migration feel slow.
+    /// </remarks>
+    private void Reread()
+    {
+        _dataLoss = ScanDataLoss(_ordered, "Up");
+        Detail.InvalidateSql();
+        RebuildDisplay();
+        Detail.Show(SelectedMigration);
     }
 
     /// <summary>
